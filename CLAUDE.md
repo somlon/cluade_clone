@@ -102,6 +102,17 @@ mju.capstone.ddingconnect
 | 프로필 | `member` + `techstack` + `interested_job` |
 | 커피챗 + 모달 | `coffeechat` (요청/수락/거절) |
 
+### Figma 원본 PNG (lazy 로딩)
+
+화면 구성·UI 플로우 관련 작업 시 아래 PNG를 `Read` 도구로 읽어 시각 정보를 확보한 뒤 작업한다. 위 매핑 표만으로 부족한 경우(픽셀 단위 배치, 색상, 컴포넌트 형태, 화면 전이 확인 등)에만 로드하여 토큰 소모를 줄인다.
+
+- `0409.png` — Figma export (레포 루트, 모든 환경에서 접근 가능)
+
+운영 규칙:
+- 텍스트 매핑·도메인 규칙으로 답이 나오면 PNG를 굳이 읽지 않는다 (lazy)
+- 화면 레이아웃/색상/컴포넌트 형태 질문, UI 명세 작성, 새 화면-도메인 매핑 추가 시에는 반드시 읽고 진행
+- 새 Figma export가 추가되면 위 목록에 경로를 같이 등재할 것 (CLAUDE.md 자동 유지관리 규칙 적용)
+
 ## 테스트
 
 - `src/test/java/.../EntityIntegrationTest.java` — 엔티티 관계 통합 검증 (649 lines)
