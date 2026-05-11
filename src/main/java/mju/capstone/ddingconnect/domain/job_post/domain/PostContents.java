@@ -25,7 +25,9 @@ import java.time.LocalDate;
  * 연결 관계:
  * - 졸업생이 생성한 구직공고(GraduateJobPost): 1:N (GraduateJobPost.PK3 → 구직공고.PK)
  * - 구직알람(JobAlarm): 1:N (JobAlarm.PK3 → 구직공고.PK)
- * - 관심직군(TargetJob): 1:N (TargetJob.FK2 → 구직공고.PK)
+ *
+ * 회원 관심 직군(TargetJob)과는 FK 관계 없음.
+ * 매칭이 필요하면 PostContents.jobType ↔ TargetJob.interestedJob enum 값 비교로 처리.
  */
 @Entity
 @Table(name = "post_contents")

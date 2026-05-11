@@ -49,9 +49,9 @@ class TargetJobControllerTest {
     @Test
     @DisplayName("POST /api/v1/target-jobs - 관심 직군 추가")
     void 관심직군_추가() throws Exception {
-        CreateTargetJobRequest req = new CreateTargetJobRequest(TargetJobCategory.BACKEND, 100L);
+        CreateTargetJobRequest req = new CreateTargetJobRequest(TargetJobCategory.BACKEND);
         given(targetJobService.create(any(), any()))
-                .willReturn(new TargetJobResponse(1L, TargetJobCategory.BACKEND, 100L, "k"));
+                .willReturn(new TargetJobResponse(1L, TargetJobCategory.BACKEND, "k"));
 
         mockMvc.perform(post("/api/v1/target-jobs")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -75,7 +75,7 @@ class TargetJobControllerTest {
     void 관심직군_수정() throws Exception {
         UpdateTargetJobRequest req = new UpdateTargetJobRequest(TargetJobCategory.FRONTEND);
         given(targetJobService.update(any(), eq(1L), any()))
-                .willReturn(new TargetJobResponse(1L, TargetJobCategory.FRONTEND, 100L, "k"));
+                .willReturn(new TargetJobResponse(1L, TargetJobCategory.FRONTEND, "k"));
 
         mockMvc.perform(patch("/api/v1/target-jobs/1")
                         .contentType(MediaType.APPLICATION_JSON)
