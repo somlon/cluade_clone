@@ -2,6 +2,9 @@ package mju.capstone.ddingconnect.domain.roadmap.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.domain.roadmap.dto.request.CreateRoadmapRequest;
@@ -17,12 +20,29 @@ public interface RoadmapSwagger {
 
     @Operation(
             summary = "로드맵 등록",
-            description = "AI가 생성한 로드맵을 등록합니다. 로그인된 회원만 호출할 수 있습니다."
+            description = "AI가 생성한 로드맵을 등록합니다. 로그인된 회원만 호출할 수 있습니다. " +
+                    "content 필드는 MySQL JSON 컬럼에 저장되므로 반드시 valid JSON 문자열이어야 합니다."
     )
     @PostMapping
     ApiResponse<RoadmapResponse> createRoadmap(
             @Parameter(hidden = true) @LoginMember Member member,
-            @Parameter(description = "로드맵 등록 정보 (AI가 생성한 JSON 형식의 content)")
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    description = "로드맵 등록 정보 (content는 JSON 문자열)",
+                    required = true,
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = CreateRoadmapRequest.class),
+                            examples = @ExampleObject(
+                                    name = "AI 생성 로드맵 예시",
+                                    summary = "JSON 형식 content 기본값",
+                                    value = """
+                                            {
+                                              "content": "{\\"steps\\":[{\\"order\\":1,\\"title\\":\\"기초 학습\\",\\"description\\":\\"Java 문법과 객체지향\\"},{\\"order\\":2,\\"title\\":\\"Spring Boot\\",\\"description\\":\\"REST API 설계\\"}]}"
+                                            }
+                                            """
+                            )
+                    )
+            )
             @RequestBody CreateRoadmapRequest request);
 
 
