@@ -2,6 +2,7 @@ package mju.capstone.ddingconnect.domain.job_post.service;
 
 import mju.capstone.ddingconnect.domain.job_post.domain.*;
 import mju.capstone.ddingconnect.domain.job_post.domain.repository.GraduateJobPostRepository;
+import mju.capstone.ddingconnect.domain.job_post.domain.repository.JobAlarmRepository;
 import mju.capstone.ddingconnect.domain.job_post.domain.repository.PostContentsRepository;
 import mju.capstone.ddingconnect.domain.job_post.dto.request.CreateJobPostRequest;
 import mju.capstone.ddingconnect.domain.job_post.dto.request.UpdateJobPostRequest;
@@ -16,6 +17,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -35,6 +37,7 @@ class JobPostServiceImplTest {
 
     @Mock PostContentsRepository postContentsRepository;
     @Mock GraduateJobPostRepository graduateJobPostRepository;
+    @Mock JobAlarmRepository jobAlarmRepository;
     @Mock GraduateRepository graduateRepository;
 
     @InjectMocks JobPostServiceImpl jobPostService;
@@ -162,19 +165,23 @@ class JobPostServiceImplTest {
     }
 
     @Test
-    @DisplayName("delete - 작성자가 정상 삭제한다")
+    @DisplayName("delete - 작성자가 정상 삭제하면 JobAlarm/GraduateJobPost/PostContents 순서로 삭제한다")
     void delete_정상삭제() {
         GraduateJobPost gjp = GraduateJobPost.builder().graduate(graduate).postContents(postContents).build();
+        List<GraduateJobPost> mappings = List.of(gjp);
         when(postContentsRepository.findById(100L)).thenReturn(Optional.of(postContents));
-        when(graduateJobPostRepository.findByPostContentsId(100L)).thenReturn(List.of(gjp));
+        when(graduateJobPostRepository.findByPostContentsId(100L)).thenReturn(mappings);
 
         jobPostService.delete(graduateMember, 100L);
 
-        verify(postContentsRepository).delete(postContents);
+        InOrder inOrder = inOrder(jobAlarmRepository, graduateJobPostRepository, postContentsRepository);
+        inOrder.verify(jobAlarmRepository).deleteByPostContentsId(100L);
+        inOrder.verify(graduateJobPostRepository).deleteAll(mappings);
+        inOrder.verify(postContentsRepository).delete(postContents);
     }
 
     @Test
-    @DisplayName("delete - 작성자가 아니면 UNAUTHORIZED 예외")
+    @DisplayName("delete - 작성자가 아니면 UNAUTHORIZED 예외 (자식 행도 삭제하지 않음)")
     void delete_권한없음_예외() {
         GraduateJobPost gjp = GraduateJobPost.builder().graduate(graduate).postContents(postContents).build();
         when(postContentsRepository.findById(100L)).thenReturn(Optional.of(postContents));
@@ -182,6 +189,8 @@ class JobPostServiceImplTest {
 
         assertThatThrownBy(() -> jobPostService.delete(otherMember, 100L))
                 .isInstanceOf(JobPostHandler.class);
+        verify(jobAlarmRepository, never()).deleteByPostContentsId(any());
+        verify(graduateJobPostRepository, never()).deleteAll(any());
         verify(postContentsRepository, never()).delete(any());
     }
 
