@@ -1,7 +1,11 @@
 package mju.capstone.ddingconnect.domain.job_post.service;
 
 import lombok.RequiredArgsConstructor;
+import mju.capstone.ddingconnect.domain.interested_job.domain.TargetJob;
+import mju.capstone.ddingconnect.domain.interested_job.domain.TargetJobCategory;
+import mju.capstone.ddingconnect.domain.interested_job.domain.repository.TargetJobRepository;
 import mju.capstone.ddingconnect.domain.job_post.domain.GraduateJobPost;
+import mju.capstone.ddingconnect.domain.job_post.domain.JobAlarm;
 import mju.capstone.ddingconnect.domain.job_post.domain.PostContents;
 import mju.capstone.ddingconnect.domain.job_post.domain.repository.GraduateJobPostRepository;
 import mju.capstone.ddingconnect.domain.job_post.domain.repository.JobAlarmRepository;
@@ -17,7 +21,9 @@ import mju.capstone.ddingconnect.global.response.exception.handler.JobPostHandle
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -27,6 +33,7 @@ public class JobPostServiceImpl implements JobPostService {
     private final GraduateJobPostRepository graduateJobPostRepository;
     private final JobAlarmRepository jobAlarmRepository;
     private final GraduateRepository graduateRepository;
+    private final TargetJobRepository targetJobRepository;
 
     @Override
     @Transactional
@@ -58,6 +65,25 @@ public class JobPostServiceImpl implements JobPostService {
                         .postContents(saved)
                         .build())
         );
+
+        // [알람 발행] PostContents.jobType 과 동일한 TargetJob.interestedJob 을 가진 학생에게 JobAlarm 발행.
+        // JobType ↔ TargetJobCategory 는 같은 원티드 taxonomy 의 같은 11개 값으로 enum 만 분리돼 있어 name() 으로 매칭.
+        // 본인(등록한 졸업생) 은 제외. 같은 멤버가 동일 카테고리를 중복 보유한 경우 1건만 발행.
+        TargetJobCategory matchedCategory = TargetJobCategory.valueOf(saved.getJobType().name());
+        Long creatorId = member.getId();
+        Set<Long> notifiedMemberIds = new HashSet<>();
+        List<TargetJob> matched = targetJobRepository.findByInterestedJob(matchedCategory);
+        for (TargetJob tj : matched) {
+            Long receiverId = tj.getMember().getId();
+            if (receiverId.equals(creatorId)) continue;
+            if (!notifiedMemberIds.add(receiverId)) continue;
+            jobAlarmRepository.save(JobAlarm.builder()
+                    .member(tj.getMember())
+                    .postContents(saved)
+                    .content("관심 직무에 새로운 공고가 등록되었습니다.")
+                    .isRead(false)
+                    .build());
+        }
 
         return JobPostResponse.from(saved);
     }

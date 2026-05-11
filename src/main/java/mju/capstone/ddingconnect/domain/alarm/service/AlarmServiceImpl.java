@@ -3,6 +3,7 @@ package mju.capstone.ddingconnect.domain.alarm.service;
 import lombok.RequiredArgsConstructor;
 import mju.capstone.ddingconnect.domain.alarm.domain.AlarmType;
 import mju.capstone.ddingconnect.domain.alarm.dto.response.AlarmResponse;
+import mju.capstone.ddingconnect.domain.alarm.util.RelativeTimeFormatter;
 import mju.capstone.ddingconnect.domain.coffeechat.domain.CoffeeChatAlarm;
 import mju.capstone.ddingconnect.domain.coffeechat.domain.repository.CoffeeChatAlarmRepository;
 import mju.capstone.ddingconnect.domain.job_post.domain.JobAlarm;
@@ -206,7 +207,8 @@ public class AlarmServiceImpl implements AlarmService {
         return new AlarmResponse(
                 AlarmType.ANSWER, a.getId(),
                 a.getAnswer().getId(), a.getContent(),
-                a.getIsRead(), a.getCreatedAt()
+                a.getIsRead(), a.getCreatedAt(),
+                RelativeTimeFormatter.format(a.getCreatedAt())
         );
     }
 
@@ -214,7 +216,8 @@ public class AlarmServiceImpl implements AlarmService {
         return new AlarmResponse(
                 AlarmType.JOB, a.getId(),
                 a.getPostContents().getId(), a.getContent(),
-                a.getIsRead(), a.getCreatedAt()
+                a.getIsRead(), a.getCreatedAt(),
+                RelativeTimeFormatter.format(a.getCreatedAt())
         );
     }
 
@@ -222,7 +225,8 @@ public class AlarmServiceImpl implements AlarmService {
         return new AlarmResponse(
                 AlarmType.ROADMAP, a.getId(),
                 a.getRoadmap().getId(), a.getContent(),
-                a.getIsRead(), a.getCreatedAt()
+                a.getIsRead(), a.getCreatedAt(),
+                RelativeTimeFormatter.format(a.getCreatedAt())
         );
     }
 
@@ -230,7 +234,8 @@ public class AlarmServiceImpl implements AlarmService {
         return new AlarmResponse(
                 AlarmType.COFFEE_CHAT, a.getId(),
                 a.getCoffeeChat().getId(), a.getContent(),
-                a.getIsRead(), a.getCreatedAt()
+                a.getIsRead(), a.getCreatedAt(),
+                RelativeTimeFormatter.format(a.getCreatedAt())
         );
     }
 }

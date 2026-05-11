@@ -15,4 +15,6 @@ public interface TargetJobRepository extends JpaRepository<TargetJob, Long> {
     List<TargetJob> findByMemberId(Long memberId);
 
     List<TargetJob> findByMemberIdAndInterestedJob(Long memberId, TargetJobCategory interestedJob);
+
+    List<TargetJob> findByInterestedJob(TargetJobCategory interestedJob);
 }

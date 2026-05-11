@@ -48,7 +48,7 @@ class AlarmControllerTest {
     @DisplayName("GET /api/v1/alarms - 내 알람 목록")
     void 알람_목록() throws Exception {
         AlarmResponse alarm = new AlarmResponse(AlarmType.ANSWER, 1L, 100L,
-                "답변 알람", false, LocalDateTime.now());
+                "답변 알람", false, LocalDateTime.now(), "방금 전");
         given(alarmService.getMyAlarms(any())).willReturn(List.of(alarm));
 
         mockMvc.perform(get("/api/v1/alarms"))
@@ -60,7 +60,7 @@ class AlarmControllerTest {
     @DisplayName("GET /api/v1/alarms/{type}/{id} - 알람 상세")
     void 알람_상세() throws Exception {
         AlarmResponse alarm = new AlarmResponse(AlarmType.JOB, 1L, 100L,
-                "구직 알람", false, LocalDateTime.now());
+                "구직 알람", false, LocalDateTime.now(), "방금 전");
         given(alarmService.getAlarmDetail(any(), eq(AlarmType.JOB), eq(1L))).willReturn(alarm);
 
         mockMvc.perform(get("/api/v1/alarms/JOB/1"))

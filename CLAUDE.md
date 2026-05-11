@@ -86,6 +86,12 @@ mju.capstone.ddingconnect
 - 정렬: `createdAt DESC`, null은 뒤로
 - 읽음 처리는 Builder 패턴으로 새 인스턴스 만들어 저장 (불변 스타일)
 - 각 타입별 소유자 검증 헬퍼 분리 (`verify*AlarmOwner`)
+- **알람 발행 위치 = 각 도메인 `*ServiceImpl` 의 본체 save 직후, 같은 `@Transactional` 안** (이벤트/AOP 미사용). 본체 저장 실패 시 알람도 롤백되어 원자성 보장.
+  - `AnswerAlarm` — `AnswerServiceImpl.create()`, 질문 작성자에게 발행. 단, **본인이 본인 질문에 답변한 경우는 미발행** (자기 자신 알람 방지).
+  - `RoadmapAlarm` — `RoadmapServiceImpl.create()`, **본인(생성자)** 에게 발행.
+  - `JobAlarm` — `JobPostServiceImpl.create()`, `PostContents.jobType` 과 `TargetJob.interestedJob` 이 같은 학생들에게 N건 발행. **등록한 졸업생 본인 제외**, 같은 멤버가 동일 카테고리 중복 보유 시 1건만. enum 매칭은 `TargetJobCategory.valueOf(jobType.name())` 으로 (CLAUDE.md `interested_job` 의 값 매칭 방침과 정합).
+  - `CoffeeChatAlarm` — `CoffeeChatServiceImpl.create()` / `updateStatus()`, PENDING 1건(수신자), ACCEPTED 2건(요청자+수신자, 카카오링크), REJECTED 1건(요청자).
+- **상대 시간 표시 (`AlarmResponse.relativeTime`)**: 응답 변환 시점에 `RelativeTimeFormatter.format(createdAt)` 으로 계산 ("방금 전 / N분 전 / N시간 전 / N일 전 / N개월 전 / N년 전"). 매 조회마다 재계산되어 시간 흐름에 따라 자연스럽게 업데이트됨. `createdAt` 도 함께 응답에 포함 (프론트 자체 포맷팅 여지 보존).
 
 ### Q&A
 - `Question` 1:N `Answer`

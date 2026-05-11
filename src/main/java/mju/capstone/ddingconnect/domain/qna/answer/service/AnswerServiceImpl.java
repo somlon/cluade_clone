@@ -3,8 +3,10 @@ package mju.capstone.ddingconnect.domain.qna.answer.service;
 import lombok.RequiredArgsConstructor;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.domain.qna.answer.domain.Answer;
+import mju.capstone.ddingconnect.domain.qna.answer.domain.AnswerAlarm;
 import mju.capstone.ddingconnect.domain.qna.answer.domain.AnswerLike;
 import mju.capstone.ddingconnect.domain.qna.answer.domain.AnswerLikeId;
+import mju.capstone.ddingconnect.domain.qna.answer.domain.repository.AnswerAlarmRepository;
 import mju.capstone.ddingconnect.domain.qna.answer.domain.repository.AnswerLikeRepository;
 import mju.capstone.ddingconnect.domain.qna.answer.domain.repository.AnswerRepository;
 import mju.capstone.ddingconnect.domain.qna.answer.dto.request.CreateAnswerRequest;
@@ -26,6 +28,7 @@ public class AnswerServiceImpl implements AnswerService {
 
     private final AnswerRepository answerRepository;
     private final AnswerLikeRepository answerLikeRepository;
+    private final AnswerAlarmRepository answerAlarmRepository;
     private final QuestionRepository questionRepository;
 
     @Override
@@ -40,7 +43,18 @@ public class AnswerServiceImpl implements AnswerService {
                 .content(request.content())
                 .build();
 
-        return AnswerResponse.from(answerRepository.save(answer));
+        Answer saved = answerRepository.save(answer);
+
+        // [알람 발행] 본인이 본인 질문에 답변한 경우는 제외
+        if (!question.getMember().getId().equals(member.getId())) {
+            answerAlarmRepository.save(AnswerAlarm.builder()
+                    .answer(saved)
+                    .content("내 질문에 새로운 답변이 달렸습니다.")
+                    .isRead(false)
+                    .build());
+        }
+
+        return AnswerResponse.from(saved);
     }
 
     @Override

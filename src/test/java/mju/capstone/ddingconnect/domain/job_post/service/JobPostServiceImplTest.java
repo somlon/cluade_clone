@@ -1,5 +1,8 @@
 package mju.capstone.ddingconnect.domain.job_post.service;
 
+import mju.capstone.ddingconnect.domain.interested_job.domain.TargetJob;
+import mju.capstone.ddingconnect.domain.interested_job.domain.TargetJobCategory;
+import mju.capstone.ddingconnect.domain.interested_job.domain.repository.TargetJobRepository;
 import mju.capstone.ddingconnect.domain.job_post.domain.*;
 import mju.capstone.ddingconnect.domain.job_post.domain.repository.GraduateJobPostRepository;
 import mju.capstone.ddingconnect.domain.job_post.domain.repository.JobAlarmRepository;
@@ -39,6 +42,7 @@ class JobPostServiceImplTest {
     @Mock GraduateJobPostRepository graduateJobPostRepository;
     @Mock JobAlarmRepository jobAlarmRepository;
     @Mock GraduateRepository graduateRepository;
+    @Mock TargetJobRepository targetJobRepository;
 
     @InjectMocks JobPostServiceImpl jobPostService;
 
@@ -68,10 +72,11 @@ class JobPostServiceImplTest {
     }
 
     @Test
-    @DisplayName("create - 졸업생이 구직 공고를 정상 등록한다")
+    @DisplayName("create - 졸업생이 구직 공고를 정상 등록한다 (매칭되는 TargetJob 없으면 알람 미발행)")
     void create_졸업생_정상등록() {
         when(postContentsRepository.save(any(PostContents.class))).thenReturn(postContents);
         when(graduateRepository.findByMemberId(graduateMember.getId())).thenReturn(Optional.of(graduate));
+        when(targetJobRepository.findByInterestedJob(TargetJobCategory.BACKEND)).thenReturn(List.of());
 
         JobPostResponse response = jobPostService.create(graduateMember, createReq());
 
@@ -79,6 +84,34 @@ class JobPostServiceImplTest {
         assertThat(response.companyName()).isEqualTo("네이버");
         verify(postContentsRepository).save(any(PostContents.class));
         verify(graduateJobPostRepository).save(any(GraduateJobPost.class));
+        verify(jobAlarmRepository, never()).save(any(JobAlarm.class));
+    }
+
+    @Test
+    @DisplayName("create - 매칭되는 학생 N명에게 JobAlarm 발행, 본인/중복 멤버는 제외")
+    void create_매칭학생에게_알람발행() {
+        Member studentA = Member.builder().id(11L).nickname("A").build();
+        Member studentB = Member.builder().id(12L).nickname("B").build();
+        // 본인 (등록한 졸업생) 도 같은 카테고리 관심을 가진 경우 → 제외돼야 함
+        TargetJob selfMatch = TargetJob.builder().id(1L).member(graduateMember)
+                .interestedJob(TargetJobCategory.BACKEND).build();
+        TargetJob aMatch = TargetJob.builder().id(2L).member(studentA)
+                .interestedJob(TargetJobCategory.BACKEND).build();
+        // 같은 멤버가 동일 카테고리 중복 등록 → 1건만 발행
+        TargetJob aDuplicate = TargetJob.builder().id(3L).member(studentA)
+                .interestedJob(TargetJobCategory.BACKEND).build();
+        TargetJob bMatch = TargetJob.builder().id(4L).member(studentB)
+                .interestedJob(TargetJobCategory.BACKEND).build();
+
+        when(postContentsRepository.save(any(PostContents.class))).thenReturn(postContents);
+        when(graduateRepository.findByMemberId(graduateMember.getId())).thenReturn(Optional.of(graduate));
+        when(targetJobRepository.findByInterestedJob(TargetJobCategory.BACKEND))
+                .thenReturn(List.of(selfMatch, aMatch, aDuplicate, bMatch));
+
+        jobPostService.create(graduateMember, createReq());
+
+        // A, B 각각 1건씩 = 총 2건. self 와 duplicate 는 제외
+        verify(jobAlarmRepository, times(2)).save(any(JobAlarm.class));
     }
 
     @Test
@@ -90,6 +123,7 @@ class JobPostServiceImplTest {
                 .isInstanceOf(JobPostHandler.class);
 
         verify(postContentsRepository, never()).save(any());
+        verify(jobAlarmRepository, never()).save(any(JobAlarm.class));
     }
 
     @Test
