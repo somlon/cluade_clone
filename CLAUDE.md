@@ -181,3 +181,124 @@ mju.capstone.ddingconnect
 - 단순 버그 수정·리팩터링이라 구조/규칙 변동이 없으면 갱신 불필요 (불필요한 diff 금지)
 - 커밋 메시지에 `docs(CLAUDE.md): ...` 항목을 함께 남기거나, 코드 커밋 본문에 갱신 사실 명시
 - 의심스러우면 갱신하는 쪽을 택할 것 — 문서 누락보다 과기록이 낫다
+
+## 진행 예정 작업 (To-do)
+
+> 사용자가 "to-do 리스트 수행" / "to-do 진행" / "TODO #N 작업" 등 유사 명령을 내리면 아래 항목을 **즉시 코드 작성 → 테스트 보강 → CLAUDE.md 갱신 → 커밋/푸시 → PR 생성까지 일사천리로** 수행한다. 결정 사항은 이미 확정돼 있으니 다시 묻지 말고 명시된 디폴트로 진행할 것.
+>
+> 각 항목은 완료(머지) 후 이 섹션에서 삭제하거나 "완료" 로 표시하고, 본문 도메인 섹션에 정식 규칙으로 통합 기록한다.
+
+### TODO #1: 구직 공고 jobType 변경 시 JobAlarm 디스패치
+
+**배경**
+현재 `JobPostServiceImpl.create()` 에서만 `JobAlarm` 을 발행함. `update()` 로 `jobType` 이 바뀌면 알람 변화가 반영되지 않음. update 시점에:
+- 기존 알람을 받았지만 새 `jobType` 에 매칭 안 되는 멤버 → "벗어남" 알람 추가
+- 매칭되지 않았다가 새 `jobType` 에 매칭되는 멤버 → "새 공고" 알람 추가
+가 동작해야 함.
+
+**확정된 결정 사항 (재논의 금지)**
+
+| # | 결정 |
+|---|---|
+| 1 | Removed 유저의 **기존 `JobAlarm` row 는 그대로 유지**. 새 "벗어남" 알람을 추가 INSERT. (삭제·갱신 아님) |
+| 2 | Removed 알람 `content` = `"관심 직군에서 벗어난 공고로 변경되었습니다."` |
+| 3 | Added 알람 `content` = `"관심 직무에 새로운 공고가 등록되었습니다."` (POST 시 메시지와 동일) |
+| 4 | **prev 집합** = `jobAlarmRepository.findByPostContentsId(jobPostId)` 결과에서 멤버 ID 기준 중복 제거. **`JobAlarm` 만** 본다 — 다른 알람 타입(`CoffeeChatAlarm`/`AnswerAlarm`/`RoadmapAlarm`) 무관, 다른 공고의 `JobAlarm` 무관. 멤버가 이 공고에 대한 `JobAlarm` 을 1건이라도 가지면 prev. |
+| 5 | `jobType` 이 안 바뀐 경우(`newType == oldType`) → 아무것도 안 함 (현재 update 동작 유지) |
+| 6 | 등록 졸업생 본인(`creatorId`) 은 prev/curr 어느 쪽에도 포함되지 않게 **항상 제외** |
+| 7 | enum 매칭은 `TargetJobCategory.valueOf(newJobType.name())` — 기존 패턴 동일 |
+
+**구현 단계**
+
+#### Step 1: `JobAlarmRepository.findByPostContentsId(Long)` 추가
+파일: `src/main/java/mju/capstone/ddingconnect/domain/job_post/domain/repository/JobAlarmRepository.java`
+
+기존 메서드 옆에 추가:
+```java
+List<JobAlarm> findByPostContentsId(Long postContentsId);
+```
+
+#### Step 2: `JobPostServiceImpl.update()` 에 알람 디스패치 로직
+파일: `src/main/java/mju/capstone/ddingconnect/domain/job_post/service/JobPostServiceImpl.java`
+
+`update()` 메서드 흐름:
+1. `oldJobType = postContents.getJobType()` 을 빌더 호출 **전에** 추출 (영속 엔티티의 값)
+2. `newJobType` 변수 추출 = `request.jobType() != null ? request.jobType() : postContents.getJobType()`
+3. 기존 빌더로 `updated` 생성, `save(updated)` 호출 후 `saved` 변수에 보관
+4. `if (newJobType != oldJobType)` 일 때만 `dispatchJobTypeChangeAlarms(saved, member.getId())` 호출
+5. `return JobPostResponse.from(saved);`
+
+private 헬퍼 `dispatchJobTypeChangeAlarms(PostContents post, Long creatorId)` 시그니처:
+- `existing = jobAlarmRepository.findByPostContentsId(post.getId())` 호출
+- `prevIds` = `existing` 에서 `member.id` 추출한 `Set<Long>` (자동 중복 제거)
+- `prevMemberById` = `existing` 의 `Map<Long, Member>` (멤버 ID → Member, 중복 시 첫 값 유지)
+- `newCategory = TargetJobCategory.valueOf(post.getJobType().name())`
+- `matched = targetJobRepository.findByInterestedJob(newCategory)`
+- `currIds`, `currMemberById` 를 구축하면서 `creatorId` 와 같으면 건너뛰고 중복 제거
+- Removed 루프: `prevIds` 의 각 `mid` 에 대해 `currIds` 에 없고 `creatorId` 아니면 "벗어남" 알람 발행 (`prevMemberById.get(mid)` 사용)
+- Added 루프: `currIds` 의 각 `mid` 에 대해 `prevIds` 에 없으면 "새 공고" 알람 발행 (`currMemberById.get(mid)` 사용)
+- 알람 빌드 패턴은 `create()` 의 기존 코드 그대로 (isRead=false)
+
+필요 import: `java.util.HashMap`, `java.util.HashSet`, `java.util.Map`, `java.util.Set`, `java.util.stream.Collectors`.
+
+#### Step 3: 테스트 보강
+파일: `src/test/java/mju/capstone/ddingconnect/domain/job_post/service/JobPostServiceImplTest.java`
+
+추가 시나리오 4개 (이미 mock 으로 주입된 `jobAlarmRepository`, `targetJobRepository` 활용):
+
+1. `update_jobType_변경없음_알람미발행`
+   - `UpdateJobPostRequest.jobType()` 을 `null` 로 두거나 기존 `BACKEND` 와 같은 값으로 호출
+   - `jobAlarmRepository.save(JobAlarm)` 호출 0회, `findByPostContentsId` 호출 0회 검증
+
+2. `update_jobType_변경_removedOnly`
+   - 기존 jobType = BACKEND, 새 jobType = FRONTEND
+   - prev = [멤버 A (BACKEND)], curr = [] (FRONTEND 매칭 없음)
+   - 결과: A 에게 "벗어남" 알람 1건만 발행. `content` 가 "벗어난" 포함되는지 캡쳐 검증
+
+3. `update_jobType_변경_addedOnly`
+   - 기존 jobType = BACKEND, 새 jobType = FRONTEND
+   - prev = [], curr = [멤버 B (FRONTEND)]
+   - 결과: B 에게 "새 공고" 알람 1건만. `content` 가 "새로운 공고" 포함 검증
+
+4. `update_jobType_변경_mixed`
+   - prev = {A, B, C}, curr = {B, C, D}
+   - 결과: A 에게 Removed 1건, D 에게 Added 1건, B/C 는 미발행
+   - `ArgumentCaptor<JobAlarm>` 로 발행된 알람 멤버 ID 세트 검증
+
+스텁: `when(jobAlarmRepository.findByPostContentsId(...)).thenReturn(...)`, `when(targetJobRepository.findByInterestedJob(...)).thenReturn(...)`.
+
+#### Step 4: CLAUDE.md 갱신
+파일: `CLAUDE.md`, `### 구직 공고 (job_post)` 섹션에 다음 bullet 추가:
+
+> - **update 시 jobType 변경 알람 디스패치 (`JobPostServiceImpl.update`)**: `oldJobType != newJobType` 일 때, 이 공고의 기존 `JobAlarm` 수신자 (= prev) 와 새 `jobType` 매칭 학생 (= curr) 의 차집합을 계산해 두 종류 알람을 발행. **Removed = prev − curr** → `"관심 직군에서 벗어난 공고로 변경되었습니다."`, **Added = curr − prev** → `"관심 직무에 새로운 공고가 등록되었습니다."`. 기존 알람 row 는 보존(삭제·갱신 X). 등록 졸업생 본인 항상 제외. prev 집합 정의는 이 공고(`postContentsId`)에 연결된 `JobAlarm` row 만 본다 (다른 알람 타입/다른 공고는 무관).
+
+이 작업 완료 후 본 To-do 항목(TODO #1)은 이 To-do 섹션에서 삭제.
+
+#### Step 5: 커밋, 푸시, PR 생성
+
+- **브랜치**: 새 브랜치 `claude/feat-jobtype-change-alarm` 권장 (또는 기존 `claude/fix-registration-api-0WsYp` 재사용 가능 — 작업자 판단)
+- **커밋 메시지** (예시):
+  ```
+  feat(job_post): update 시 jobType 변경에 따른 JobAlarm Removed/Added 디스패치
+
+  TODO #1 (CLAUDE.md). PR #11 에서 추가한 POST 시점 알람과 대응해 update
+  시점에도 매칭 변화 알람을 발행. 기존 알람은 보존, 새 알람만 추가.
+
+  - JobAlarmRepository.findByPostContentsId 추가
+  - JobPostServiceImpl.update 에서 jobType 변경 감지 → 디스패치 헬퍼 호출
+  - 4가지 시나리오 테스트 (변경없음/RemovedOnly/AddedOnly/Mixed)
+  - docs(CLAUDE.md): TODO #1 항목 제거 + 구직 공고 섹션에 정식 규칙 통합
+  ```
+- **PR 제목** (예시): `feat(job_post): update 시 jobType 변경 → Removed/Added JobAlarm 디스패치`
+- **PR 본문**: 결정 사항 표, 테스트 케이스 목록, Swagger 검증 항목 포함
+- **Swagger 검증 항목** (PR 본문에 미체크박스로 포함):
+  - jobType 안 바꾸고 update → 새 알람 0건
+  - jobType BACKEND → FRONTEND 변경:
+    - 이전 BACKEND 관심 학생(FRONTEND 미관심) → "벗어남" 알람 받음
+    - 이전 FRONTEND 관심 학생(BACKEND 미관심) → "새 공고" 알람 받음
+    - BACKEND + FRONTEND 둘 다 관심 학생 → 새 알람 없음
+    - 등록 졸업생 본인이 두 카테고리 다 관심으로 등록해도 본인은 알람 없음
+
+#### 작업자 노트
+- 로컬 테스트 실행은 Gradle wrapper 다운로드 실패(503)로 안 될 가능성 높음. 작성한 단위 테스트가 컴파일 가능하면 그대로 PR. CI 또는 머지 후 수동 검증.
+- PR 생성 후 작업자가 활동 모니터링 (`subscribe_pr_activity`) 켤지는 사용자 지시에 따름.
