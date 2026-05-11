@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import mju.capstone.ddingconnect.domain.job_post.domain.GraduateJobPost;
 import mju.capstone.ddingconnect.domain.job_post.domain.PostContents;
 import mju.capstone.ddingconnect.domain.job_post.domain.repository.GraduateJobPostRepository;
+import mju.capstone.ddingconnect.domain.job_post.domain.repository.JobAlarmRepository;
 import mju.capstone.ddingconnect.domain.job_post.domain.repository.PostContentsRepository;
 import mju.capstone.ddingconnect.domain.job_post.dto.request.CreateJobPostRequest;
 import mju.capstone.ddingconnect.domain.job_post.dto.request.UpdateJobPostRequest;
@@ -24,6 +25,7 @@ public class JobPostServiceImpl implements JobPostService {
 
     private final PostContentsRepository postContentsRepository;
     private final GraduateJobPostRepository graduateJobPostRepository;
+    private final JobAlarmRepository jobAlarmRepository;
     private final GraduateRepository graduateRepository;
 
     @Override
@@ -114,14 +116,18 @@ public class JobPostServiceImpl implements JobPostService {
         PostContents postContents = postContentsRepository.findById(jobPostId)
                 .orElseThrow(() -> new JobPostHandler(ErrorStatus.POST_CONTENTS_NOT_FOUND));
 
-        boolean isOwner = graduateJobPostRepository.findByPostContentsId(jobPostId)
-                .stream()
+        List<GraduateJobPost> mappings = graduateJobPostRepository.findByPostContentsId(jobPostId);
+
+        boolean isOwner = mappings.stream()
                 .anyMatch(gjp -> gjp.getGraduate().getMember().getId().equals(member.getId()));
 
         if (!isOwner) {
             throw new JobPostHandler(ErrorStatus.POST_CONTENTS_UNAUTHORIZED);
         }
 
+        // PostContents 를 NOT NULL FK 로 참조하는 자식 행 먼저 삭제 (TransientObjectException 방지)
+        jobAlarmRepository.deleteByPostContentsId(jobPostId);
+        graduateJobPostRepository.deleteAll(mappings);
         postContentsRepository.delete(postContents);
     }
 }
