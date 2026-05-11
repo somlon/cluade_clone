@@ -6,6 +6,7 @@ import mju.capstone.ddingconnect.domain.interested_job.domain.TargetJobCategory;
 import mju.capstone.ddingconnect.domain.interested_job.domain.repository.TargetJobRepository;
 import mju.capstone.ddingconnect.domain.job_post.domain.GraduateJobPost;
 import mju.capstone.ddingconnect.domain.job_post.domain.JobAlarm;
+import mju.capstone.ddingconnect.domain.job_post.domain.JobType;
 import mju.capstone.ddingconnect.domain.job_post.domain.PostContents;
 import mju.capstone.ddingconnect.domain.job_post.domain.repository.GraduateJobPostRepository;
 import mju.capstone.ddingconnect.domain.job_post.domain.repository.JobAlarmRepository;
@@ -21,8 +22,10 @@ import mju.capstone.ddingconnect.global.response.exception.handler.JobPostHandle
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -118,12 +121,15 @@ public class JobPostServiceImpl implements JobPostService {
             throw new JobPostHandler(ErrorStatus.POST_CONTENTS_UNAUTHORIZED);
         }
 
+        JobType oldJobType = postContents.getJobType();
+        JobType newJobType = request.jobType() != null ? request.jobType() : postContents.getJobType();
+
         PostContents updated = PostContents.builder()
                 .id(postContents.getId())
                 .companyImage(request.companyImage() != null ? request.companyImage() : postContents.getCompanyImage())
                 .region(request.region() != null ? request.region() : postContents.getRegion())
                 .careerType(request.careerType() != null ? request.careerType() : postContents.getCareerType())
-                .jobType(request.jobType() != null ? request.jobType() : postContents.getJobType())
+                .jobType(newJobType)
                 .country(request.country() != null ? request.country() : postContents.getCountry())
                 .location(request.location() != null ? request.location() : postContents.getLocation())
                 .fullLocation(request.fullLocation() != null ? request.fullLocation() : postContents.getFullLocation())
@@ -133,7 +139,70 @@ public class JobPostServiceImpl implements JobPostService {
                 .companyName(request.companyName() != null ? request.companyName() : postContents.getCompanyName())
                 .build();
 
-        return JobPostResponse.from(postContentsRepository.save(updated));
+        PostContents saved = postContentsRepository.save(updated);
+
+        if (newJobType != oldJobType) {
+            dispatchJobTypeChangeAlarms(saved, member.getId());
+        }
+
+        return JobPostResponse.from(saved);
+    }
+
+    /**
+     * [jobType 변경 알람 디스패치]
+     * prev = 이 공고에 대한 기존 JobAlarm 수신자(멤버 ID 중복 제거).
+     * curr = 새 jobType 에 매칭되는 TargetJob 학생(멤버 ID 중복 제거, 등록 졸업생 본인 제외).
+     *
+     * Removed = prev − curr → "관심 직군에서 벗어난 공고로 변경되었습니다." 알람 추가
+     * Added   = curr − prev → "관심 직무에 새로운 공고가 등록되었습니다." 알람 추가
+     *
+     * 기존 JobAlarm row 는 보존(삭제·갱신 X). 새 알람만 INSERT.
+     */
+    private void dispatchJobTypeChangeAlarms(PostContents post, Long creatorId) {
+        List<JobAlarm> existing = jobAlarmRepository.findByPostContentsId(post.getId());
+
+        Set<Long> prevIds = new HashSet<>();
+        Map<Long, Member> prevMemberById = new HashMap<>();
+        for (JobAlarm alarm : existing) {
+            Long mid = alarm.getMember().getId();
+            if (prevIds.add(mid)) {
+                prevMemberById.put(mid, alarm.getMember());
+            }
+        }
+
+        TargetJobCategory newCategory = TargetJobCategory.valueOf(post.getJobType().name());
+        List<TargetJob> matched = targetJobRepository.findByInterestedJob(newCategory);
+
+        Set<Long> currIds = new HashSet<>();
+        Map<Long, Member> currMemberById = new HashMap<>();
+        for (TargetJob tj : matched) {
+            Long mid = tj.getMember().getId();
+            if (mid.equals(creatorId)) continue;
+            if (currIds.add(mid)) {
+                currMemberById.put(mid, tj.getMember());
+            }
+        }
+
+        for (Long mid : prevIds) {
+            if (currIds.contains(mid)) continue;
+            if (mid.equals(creatorId)) continue;
+            jobAlarmRepository.save(JobAlarm.builder()
+                    .member(prevMemberById.get(mid))
+                    .postContents(post)
+                    .content("관심 직군에서 벗어난 공고로 변경되었습니다.")
+                    .isRead(false)
+                    .build());
+        }
+
+        for (Long mid : currIds) {
+            if (prevIds.contains(mid)) continue;
+            jobAlarmRepository.save(JobAlarm.builder()
+                    .member(currMemberById.get(mid))
+                    .postContents(post)
+                    .content("관심 직무에 새로운 공고가 등록되었습니다.")
+                    .isRead(false)
+                    .build());
+        }
     }
 
     @Override
