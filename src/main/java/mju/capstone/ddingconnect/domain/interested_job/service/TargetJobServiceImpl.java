@@ -6,8 +6,6 @@ import mju.capstone.ddingconnect.domain.interested_job.domain.repository.TargetJ
 import mju.capstone.ddingconnect.domain.interested_job.dto.request.CreateTargetJobRequest;
 import mju.capstone.ddingconnect.domain.interested_job.dto.request.UpdateTargetJobRequest;
 import mju.capstone.ddingconnect.domain.interested_job.dto.response.TargetJobResponse;
-import mju.capstone.ddingconnect.domain.job_post.domain.PostContents;
-import mju.capstone.ddingconnect.domain.job_post.domain.repository.PostContentsRepository;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.global.response.code.status.ErrorStatus;
 import mju.capstone.ddingconnect.global.response.exception.handler.TargetJobHandler;
@@ -21,17 +19,12 @@ import java.util.List;
 public class TargetJobServiceImpl implements TargetJobService {
 
     private final TargetJobRepository targetJobRepository;
-    private final PostContentsRepository postContentsRepository;
 
     @Override
     @Transactional
     public TargetJobResponse create(Member member, CreateTargetJobRequest request) {
-        PostContents postContents = postContentsRepository.findById(request.postContentsId())
-                .orElseThrow(() -> new TargetJobHandler(ErrorStatus.POST_CONTENTS_NOT_FOUND));
-
         TargetJob targetJob = TargetJob.builder()
                 .member(member)
-                .postContents(postContents)
                 .interestedJob(request.interestedJob())
                 .build();
 
@@ -61,7 +54,6 @@ public class TargetJobServiceImpl implements TargetJobService {
         TargetJob updated = TargetJob.builder()
                 .id(targetJob.getId())
                 .member(targetJob.getMember())
-                .postContents(targetJob.getPostContents())
                 .interestedJob(request.interestedJob())
                 .key2(targetJob.getKey2())
                 .build();

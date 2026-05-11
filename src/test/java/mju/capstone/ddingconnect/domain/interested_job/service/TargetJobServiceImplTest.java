@@ -6,8 +6,6 @@ import mju.capstone.ddingconnect.domain.interested_job.domain.repository.TargetJ
 import mju.capstone.ddingconnect.domain.interested_job.dto.request.CreateTargetJobRequest;
 import mju.capstone.ddingconnect.domain.interested_job.dto.request.UpdateTargetJobRequest;
 import mju.capstone.ddingconnect.domain.interested_job.dto.response.TargetJobResponse;
-import mju.capstone.ddingconnect.domain.job_post.domain.PostContents;
-import mju.capstone.ddingconnect.domain.job_post.domain.repository.PostContentsRepository;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.global.response.exception.handler.TargetJobHandler;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,44 +29,30 @@ import static org.mockito.Mockito.*;
 class TargetJobServiceImplTest {
 
     @Mock TargetJobRepository targetJobRepository;
-    @Mock PostContentsRepository postContentsRepository;
     @InjectMocks TargetJobServiceImpl targetJobService;
 
     private Member owner;
     private Member other;
-    private PostContents postContents;
     private TargetJob targetJob;
 
     @BeforeEach
     void setUp() {
         owner = Member.builder().id(1L).email("o@mju.ac.kr").nickname("주인").build();
         other = Member.builder().id(2L).email("e@mju.ac.kr").nickname("타인").build();
-        postContents = PostContents.builder().id(100L).companyName("네이버").build();
-        targetJob = TargetJob.builder().id(10L).member(owner).postContents(postContents)
+        targetJob = TargetJob.builder().id(10L).member(owner)
                 .interestedJob(TargetJobCategory.BACKEND).key2("k").build();
     }
 
     @Test
     @DisplayName("create - 관심 직군을 정상 추가한다")
     void create_정상추가() {
-        CreateTargetJobRequest req = new CreateTargetJobRequest(TargetJobCategory.BACKEND, 100L);
-        when(postContentsRepository.findById(100L)).thenReturn(Optional.of(postContents));
+        CreateTargetJobRequest req = new CreateTargetJobRequest(TargetJobCategory.BACKEND);
         when(targetJobRepository.save(any(TargetJob.class))).thenReturn(targetJob);
 
         TargetJobResponse response = targetJobService.create(owner, req);
 
         assertThat(response.id()).isEqualTo(10L);
         assertThat(response.interestedJob()).isEqualTo(TargetJobCategory.BACKEND);
-    }
-
-    @Test
-    @DisplayName("create - 구직 공고가 없으면 POST_CONTENTS_NOT_FOUND 예외")
-    void create_공고없음_예외() {
-        CreateTargetJobRequest req = new CreateTargetJobRequest(TargetJobCategory.BACKEND, 999L);
-        when(postContentsRepository.findById(999L)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> targetJobService.create(owner, req))
-                .isInstanceOf(TargetJobHandler.class);
     }
 
     @Test
