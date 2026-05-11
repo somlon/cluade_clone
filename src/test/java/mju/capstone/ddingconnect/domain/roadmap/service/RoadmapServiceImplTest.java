@@ -53,6 +53,51 @@ class RoadmapServiceImplTest {
     }
 
     @Test
+    @DisplayName("create - JSON array도 정상 등록된다")
+    void create_jsonArray_정상등록() {
+        CreateRoadmapRequest req = new CreateRoadmapRequest("[{\"step\":1},{\"step\":2}]");
+        when(roadmapRepository.save(any(Roadmap.class))).thenReturn(roadmap);
+
+        roadmapService.create(author, req);
+
+        verify(roadmapRepository).save(any(Roadmap.class));
+    }
+
+    @Test
+    @DisplayName("create - content가 invalid JSON이면 INVALID_CONTENT 예외")
+    void create_invalidJson_예외() {
+        CreateRoadmapRequest req = new CreateRoadmapRequest("JAVA");
+
+        assertThatThrownBy(() -> roadmapService.create(author, req))
+                .isInstanceOf(RoadmapHandler.class);
+        verify(roadmapRepository, never()).save(any(Roadmap.class));
+    }
+
+    @Test
+    @DisplayName("create - content가 null 또는 공백이면 INVALID_CONTENT 예외")
+    void create_blankContent_예외() {
+        assertThatThrownBy(() -> roadmapService.create(author, new CreateRoadmapRequest(null)))
+                .isInstanceOf(RoadmapHandler.class);
+        assertThatThrownBy(() -> roadmapService.create(author, new CreateRoadmapRequest("   ")))
+                .isInstanceOf(RoadmapHandler.class);
+        verify(roadmapRepository, never()).save(any(Roadmap.class));
+    }
+
+    @Test
+    @DisplayName("create - JSON primitive(문자열/숫자/불리언/null)은 거부된다")
+    void create_jsonPrimitive_예외() {
+        assertThatThrownBy(() -> roadmapService.create(author, new CreateRoadmapRequest("\"JAVA\"")))
+                .isInstanceOf(RoadmapHandler.class);
+        assertThatThrownBy(() -> roadmapService.create(author, new CreateRoadmapRequest("123")))
+                .isInstanceOf(RoadmapHandler.class);
+        assertThatThrownBy(() -> roadmapService.create(author, new CreateRoadmapRequest("true")))
+                .isInstanceOf(RoadmapHandler.class);
+        assertThatThrownBy(() -> roadmapService.create(author, new CreateRoadmapRequest("null")))
+                .isInstanceOf(RoadmapHandler.class);
+        verify(roadmapRepository, never()).save(any(Roadmap.class));
+    }
+
+    @Test
     @DisplayName("getList - 로드맵 목록을 반환한다")
     void getList_정상반환() {
         when(roadmapRepository.findAll()).thenReturn(List.of(roadmap));
