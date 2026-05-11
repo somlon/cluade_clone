@@ -1,0 +1,103 @@
+package mju.capstone.ddingconnect.domain.qna.answer.controller;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import mju.capstone.ddingconnect.domain.qna.answer.dto.request.CreateAnswerRequest;
+import mju.capstone.ddingconnect.domain.qna.answer.dto.request.UpdateAnswerRequest;
+import mju.capstone.ddingconnect.domain.qna.answer.dto.response.AnswerResponse;
+import mju.capstone.ddingconnect.domain.qna.answer.service.AnswerService;
+import mju.capstone.ddingconnect.global.auth.annotation.LoginMemberArgumentResolver;
+import mju.capstone.ddingconnect.global.config.WebMvcConfig;
+import mju.capstone.ddingconnect.support.WithMockLoginMember;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+
+import java.util.List;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+@WebMvcTest(AnswerController.class)
+@AutoConfigureMockMvc(addFilters = false)
+@Import({WebMvcConfig.class, LoginMemberArgumentResolver.class})
+@DisplayName("AnswerController 슬라이스 테스트")
+class AnswerControllerTest {
+
+    @Autowired MockMvc mockMvc;
+    @Autowired ObjectMapper objectMapper;
+    @MockitoBean AnswerService answerService;
+
+    @BeforeEach
+    void setUp() { WithMockLoginMember.loginAsStudent(); }
+
+    @AfterEach
+    void tearDown() { WithMockLoginMember.clear(); }
+
+    @Test
+    @DisplayName("POST /api/v1/questions/{qid}/answers - 답변 등록")
+    void 답변_등록() throws Exception {
+        CreateAnswerRequest req = new CreateAnswerRequest("답변");
+        given(answerService.create(any(), eq(10L), any()))
+                .willReturn(new AnswerResponse(1L, 10L, 1L, "답변"));
+
+        mockMvc.perform(post("/api/v1/questions/10/answers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.id").value(1L));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/questions/{qid}/answers - 답변 목록")
+    void 답변_목록() throws Exception {
+        given(answerService.getList(10L)).willReturn(List.of());
+
+        mockMvc.perform(get("/api/v1/questions/10/answers"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result").isArray());
+    }
+
+    @Test
+    @DisplayName("PATCH /api/v1/questions/{qid}/answers/{aid} - 답변 수정")
+    void 답변_수정() throws Exception {
+        UpdateAnswerRequest req = new UpdateAnswerRequest("수정된 답변");
+        given(answerService.update(any(), eq(20L), any()))
+                .willReturn(new AnswerResponse(20L, 10L, 1L, "수정된 답변"));
+
+        mockMvc.perform(patch("/api/v1/questions/10/answers/20")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.content").value("수정된 답변"));
+    }
+
+    @Test
+    @DisplayName("DELETE /api/v1/questions/{qid}/answers/{aid} - 답변 삭제")
+    void 답변_삭제() throws Exception {
+        mockMvc.perform(delete("/api/v1/questions/10/answers/20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result").value("답변이 삭제되었습니다."));
+        verify(answerService).delete(any(), eq(20L));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/questions/{qid}/answers/{aid}/like - 답변 좋아요")
+    void 답변_좋아요() throws Exception {
+        mockMvc.perform(post("/api/v1/questions/10/answers/20/like"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result").value("좋아요가 처리되었습니다."));
+        verify(answerService).toggleLike(any(), eq(20L));
+    }
+}
