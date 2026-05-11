@@ -189,4 +189,269 @@ mju.capstone.ddingconnect
 >
 > 각 항목은 완료(머지) 후 이 섹션에서 삭제하거나 "완료" 로 표시하고, 본문 도메인 섹션에 정식 규칙으로 통합 기록한다.
 
-_(현재 진행 예정 작업 없음. TODO #1 — update 시 jobType 변경 JobAlarm 디스패치 — 완료 후 `### 구직 공고 (job_post)` 섹션에 정식 규칙으로 통합.)_
+_(아래 TODO #1 ~ #4 는 회원(member) 도메인 4개 이슈. 각 항목 완료 후 본문 `### 회원 (Member)` 섹션 등에 정식 규칙으로 통합하고 이 섹션에서 제거.)_
+
+### TODO #1: 회원 탈퇴 시 관련 DB 데이터 전부 hard delete
+
+**배경**
+현재 `MemberServiceImpl.withdraw()` 는 `isDeleted = true` 플래그만 세팅하는 soft delete. 사용자 요구 = 탈퇴 시 해당 회원이 만든·받은 모든 자식 행 + 회원 row 자체까지 즉시 삭제.
+
+**확정된 결정 사항 (재논의 금지)**
+
+| # | 결정 |
+|---|---|
+| 1 | `Member.isDeleted` 컬럼/필드는 **유지**, 기본 `false` 고정. DB 스키마는 그대로 두고 코드 동작만 hard delete 로 전환 (향후 차단/정지 등 다른 용도 보존 여지) |
+| 2 | 회원이 작성한 부모 row 는 **기존 도메인 서비스의 `delete()` 호출로 위임** — `Question/Answer/Roadmap/CoffeeChat/JobPost` 서비스에 이미 자식 캐스케이드가 구현돼 있어 재사용 |
+| 3 | 회원이 **받기만 한** leaf 알람/좋아요 row 는 `MemberServiceImpl` 가 각 레포에 새로 추가하는 `deleteByMemberId(Long)` 로 일괄 삭제 |
+| 4 | `TechStack`, `TargetJob` 본인 row 도 `deleteByMemberId` 로 직접 삭제 |
+| 5 | `Student`/`Graduate` 매핑 row 는 위 단계가 끝난 뒤 마지막으로 정리 |
+| 6 | `Member` 본인 row 마지막에 `delete()` 호출 — DB 에서 완전히 제거 |
+| 7 | 전체는 단일 `@Transactional` 안에서, 중간 실패 시 전부 롤백 |
+| 8 | `AuthServiceImpl` 의 회원가입 시 `.isDeleted(false)` 명시 호출은 유지 (의도적) |
+| 9 | `JwtAuthenticationFilter` 는 이미 `memberRepository.findById` 결과가 없으면 인증 실패 — hard delete 후 자동으로 토큰 무효화됨. 추가 작업 불필요 |
+| 10 | 탈퇴 응답 메시지/엔드포인트(`DELETE /api/v1/members/me`) 는 변경 없음 |
+
+**구현 단계**
+
+#### Step 1: leaf 알람 레포에 `deleteByMemberId(Long)` 추가
+- `AnswerAlarmRepository`
+- `JobAlarmRepository` (이미 `deleteByPostContentsId` 있음)
+- `RoadmapAlarmRepository`
+- `CoffeeChatAlarmRepository`
+
+Spring Data 쿼리 메서드 1줄씩.
+
+#### Step 2: 좋아요 레포에 `deleteByMemberId(Long)` 추가
+- `QuestionLikeRepository.deleteByMemberId(Long)`
+- `AnswerLikeRepository.deleteByMemberId(Long)` (복합 PK 지만 member_id 컬럼 자체는 단일이라 메서드 직접 추가 가능)
+
+#### Step 3: `TargetJobRepository.deleteByMemberId(Long)` 추가
+(`TechStackRepository.deleteByMemberId` 는 이미 존재)
+
+#### Step 4: `MemberServiceImpl` 생성자 주입 확장
+- `QuestionService`, `AnswerService`, `RoadmapService`, `CoffeeChatService`, `JobPostService`
+- 위 step 1~3 의 모든 새 레포: `AnswerAlarmRepository`, `JobAlarmRepository`, `RoadmapAlarmRepository`, `CoffeeChatAlarmRepository`, `QuestionLikeRepository`, `AnswerLikeRepository`, `TargetJobRepository`, `TechStackRepository`
+- 추가로 회원이 만든 부모 row 를 조회할 레포: `QuestionRepository`, `AnswerRepository`, `RoadmapRepository`, `CoffeeChatRepository`, `GraduateJobPostRepository`
+- 순환 의존 점검: QnA/CoffeeChat/Roadmap/JobPost 의 서비스들이 `MemberService` 를 주입받지 않으면 안전 — 사전 확인 필수
+
+#### Step 5: `withdraw()` 본체 재작성
+순서 (각 단계 같은 `@Transactional` 안):
+1. 회원이 작성한 `CoffeeChat` 목록을 requester/receiver 양쪽으로 조회 후 `coffeeChatService.delete(member, id)` 위임 (소유자 검증 우회를 위해 service.delete 가 아니라 직접 repo 정리로 변경할지 검토 — 현재 `CoffeeChatServiceImpl.delete` 는 요청자만 가능. 수신자만인 채팅은 부모를 자기가 못 지움 → 이 경우 `coffeeChatAlarmRepository.deleteByCoffeeChatId` 후 채팅 자체는 상대방이 지우거나, **여기서는 정책상 양쪽 다 지운다** — service.delete 대신 service 의 새 헬퍼 또는 직접 정리 사용)
+2. 회원이 작성한 `Question` 전부 → `questionService.delete(member, id)` 위임 (질문 삭제가 손자까지 캐스케이드)
+3. 회원이 작성한 `Answer` 전부 → `answerService.delete(member, id)` 위임
+4. 회원이 만든 `Roadmap` 전부 → `roadmapService.delete(member, id)` 위임
+5. GRADUATE 면 `graduateJobPostRepository.findByGraduate*` 로 본인이 등록한 공고 ID 모은 뒤 각각 `jobPostService.delete(member, id)` 호출 — `PostContents`/`GraduateJobPost`/`JobAlarm` 캐스케이드 재사용
+6. 회원이 받은 leaf 정리:
+   - `answerAlarmRepository.deleteByMemberId(memberId)`
+   - `jobAlarmRepository.deleteByMemberId(memberId)`
+   - `roadmapAlarmRepository.deleteByMemberId(memberId)`
+   - `coffeeChatAlarmRepository.deleteByMemberId(memberId)`
+   - `questionLikeRepository.deleteByMemberId(memberId)`
+   - `answerLikeRepository.deleteByMemberId(memberId)`
+7. 본인 소유 단순 row: `techStackRepository.deleteByMemberId`, `targetJobRepository.deleteByMemberId`
+8. `Student` 또는 `Graduate` 매핑 row 삭제
+9. `memberRepository.delete(member)` 로 회원 row 자체 제거
+
+**주의**: step 1 의 CoffeeChat 정리는 `service.delete` 의 권한 검증이 수신자 케이스를 거부함. → `MemberServiceImpl` 에서 별도 흐름으로 처리:
+```
+List<CoffeeChat> all = coffeeChatRepository.findByRequesterId(memberId) ∪ findByReceiverId(memberId)
+for each: coffeeChatAlarmRepository.deleteByCoffeeChatId(cc.id); coffeeChatRepository.delete(cc)
+```
+(coffeeChatService 우회. 알람 캐스케이드는 동일하게 보존.)
+
+#### Step 6: 테스트
+`MemberServiceImplTest`:
+- `withdraw_정상_모든관련데이터삭제` — STUDENT 가 Q/A/Roadmap/CoffeeChat/TechStack/TargetJob 1건씩 보유한 상태에서 withdraw → 각 레포 delete 호출 검증 + member delete 호출 검증
+- `withdraw_졸업생인_경우_본인등록공고와_그_자식들도_삭제` — GRADUATE 가 PostContents 2개 등록한 상태에서 jobPostService.delete 2회 호출 검증
+- `withdraw_받기만한_알람도_정리` — 다른 회원의 부모에 대한 JobAlarm/AnswerAlarm 받은 상태에서 각 deleteByMemberId 호출 검증
+- `withdraw_커피챗_수신자인_경우도_삭제` — 본인이 만들지 않았어도 수신자인 CoffeeChat 도 삭제되는지 검증
+
+#### Step 7: CLAUDE.md 갱신
+`### 회원 (Member)` 섹션:
+- 기존 "탈퇴는 `isDeleted` 플래그 (soft delete)" bullet 제거
+- 새 bullet 추가:
+  > - **탈퇴 = hard delete (`MemberServiceImpl.withdraw`)**: 회원이 작성/소유/수신한 모든 자식 행을 단일 `@Transactional` 안에서 정리한 뒤 `Member` row 자체를 삭제. 위임 순서 = (1) 본인 작성 부모 row 들을 각 도메인 `delete()` 로 캐스케이드 위임 (Question/Answer/Roadmap, GRADUATE 면 JobPost) → (2) CoffeeChat 은 service 우회해 양방향(requester/receiver) 모두 정리 → (3) 본인 수신 leaf 알람·좋아요 `deleteByMemberId` → (4) TechStack/TargetJob 본인 row → (5) Student/Graduate 매핑 → (6) Member. `isDeleted` 컬럼은 스키마에 남기되 기본 `false` 고정 (다른 용도 보존).
+
+또 `## 공통 패턴` 의 "삭제 캐스케이드" 관련 언급이 있다면 회원 hard delete 도 같은 패턴이라는 점 추가.
+
+#### 작업자 노트
+- 순환 의존 위험 — 현재 다른 서비스가 `MemberService` 를 의존하면 컴파일 실패. 작업 전 grep 으로 확인.
+- 위임된 `Question/Answer/Roadmap/JobPost/CoffeeChat` 서비스의 `delete(member, id)` 가 회원 본인 권한을 요구함. 본인 row 만 삭제하므로 자연스럽게 통과 — 단, CoffeeChat 의 receiver 케이스만 우회 필요.
+
+---
+
+### TODO #2: GitHub / LinkedIn 링크 도메인 검증
+
+**배경**
+`UpdateMemberRequest.githubLink`, `linkedinLink` 가 그냥 `String` — 어떤 문자열이든 통과해 저장됨. `MemberServiceImpl.updateMyProfile` L52–53 도 null 체크만.
+
+**확정된 결정 사항 (재논의 금지)**
+
+| # | 결정 |
+|---|---|
+| 1 | github 링크: `^https?://(www\.)?github\.com/.+` 매칭 (`http`/`https` 둘 다 허용, `www.` optional, 경로 1자 이상) |
+| 2 | linkedin 링크: `^https?://(www\.)?linkedin\.com/.+` 동일 규칙 |
+| 3 | `null` 통과 (필드 미입력 = 변경 없음, 기존 patch 패턴 유지) |
+| 4 | **빈 문자열 `""` 거부**. 링크 제거 메커니즘은 추후 별도 결정 (이 TODO 범위 밖) |
+| 5 | 검증 실패 → 400. 새 에러코드 `MEMBER_INVALID_SOCIAL_LINK(BAD_REQUEST, "MEMBER400", "github 또는 linkedin 링크 형식이 올바르지 않습니다.")` |
+| 6 | Bean Validation `@Pattern` 사용, 컨트롤러에 `@Valid` 추가 |
+| 7 | regex 자체가 빈 문자열을 거부함 (최소 1자 매칭). 추가 `@NotBlank` 불필요. `@Pattern` 은 null 통과 기본 — 그대로 활용 |
+
+**구현 단계**
+
+#### Step 1: `UpdateMemberRequest` 에 `@Pattern` 추가
+```java
+@Pattern(regexp = "^https?://(www\\.)?github\\.com/.+",
+        message = "github.com URL 만 허용됩니다.")
+String githubLink,
+
+@Pattern(regexp = "^https?://(www\\.)?linkedin\\.com/.+",
+        message = "linkedin.com URL 만 허용됩니다.")
+String linkedinLink,
+```
+필요 import: `jakarta.validation.constraints.Pattern`.
+
+#### Step 2: `ErrorStatus` 에 `MEMBER_INVALID_SOCIAL_LINK` 추가
+(현재 `MEMBER_UNAUTHORIZED` 만 있음)
+
+#### Step 3: `MemberController.updateMyProfile` 에 `@Valid` 추가
+```java
+public ApiResponse<MemberResponse> updateMyProfile(
+        @Parameter(hidden = true) @LoginMember Member member,
+        @Valid @RequestBody UpdateMemberRequest request) { ... }
+```
+import 추가: `jakarta.validation.Valid`.
+
+#### Step 4: `ExceptionAdvice` 점검
+`MethodArgumentNotValidException` 핸들러가 이미 있으면 OK. 없다면 추가해서 `MEMBER_INVALID_SOCIAL_LINK` 와 매핑 (혹은 `_BAD_REQUEST` 로 매핑하고 message 에 violation 내용 포함).
+
+#### Step 5: 테스트
+`MemberControllerTest` 또는 `MemberServiceImplTest`:
+- `update_githubLink_정상값_통과` (`https://github.com/honggildong`)
+- `update_githubLink_www_허용` (`https://www.github.com/honggildong`)
+- `update_githubLink_http_허용` (`http://github.com/honggildong`)
+- `update_githubLink_도메인불일치_400` (`https://gitlab.com/foo`)
+- `update_githubLink_빈문자열_400`
+- `update_githubLink_경로없음_400` (`https://github.com/`)
+- linkedin 동일 시나리오 1세트
+- `update_링크_null_검증통과_기존값유지`
+
+#### Step 6: CLAUDE.md 갱신
+`### 회원 (Member)` 섹션에 다음 bullet:
+> - **소셜 링크 검증 (`UpdateMemberRequest`)**: `githubLink` 는 `^https?://(www\.)?github\.com/.+`, `linkedinLink` 는 `^https?://(www\.)?linkedin\.com/.+` 패턴 매칭. `null` 통과(미입력), 빈 문자열·도메인 불일치는 400(`MEMBER_INVALID_SOCIAL_LINK`). 컨트롤러는 `@Valid` 필수.
+
+---
+
+### TODO #3: `grade` 값 검증 (음수/0 거부, >4 → 4 로 클램프)
+
+**배경**
+`Student.grade` 무검증. `UpdateMemberRequest.grade` 도 raw `Integer`. `MemberServiceImpl.updateMyProfile` L66 에서 그대로 저장 → `-5`, `0`, `99` 다 통과.
+
+**확정된 결정 사항 (재논의 금지)**
+
+| # | 결정 |
+|---|---|
+| 1 | `grade < 1` → 400 거부 (음수, 0 모두 포함) |
+| 2 | `grade > 4` → 4 로 **클램프** (저장값 = `Math.min(raw, 4)`, 200 OK) |
+| 3 | `grade == null` → 기존값 유지 (현재 동작 그대로) |
+| 4 | 새 에러코드 `MEMBER_INVALID_GRADE(BAD_REQUEST, "MEMBER400", "학년은 1 이상이어야 합니다.")` |
+| 5 | 검증/클램프 로직은 **서비스 레이어** (Bean Validation 만으로는 비대칭 규칙 표현 어려움) |
+| 6 | 회원가입 시점(`AuthServiceImpl.createRoleRecord` 의 STUDENT 분기) 에도 동일 규칙 적용 — 단, 현 시점 회원가입 DTO 가 `grade` 를 받지 않으면 step 4 생략 (구현 시 확인) |
+
+**구현 단계**
+
+#### Step 1: `ErrorStatus` 에 `MEMBER_INVALID_GRADE` 추가
+
+#### Step 2: `MemberServiceImpl` 에 private 헬퍼 추출
+```java
+private Integer sanitizeGrade(Integer raw, Integer fallback) {
+    if (raw == null) return fallback;
+    if (raw < 1) throw new MemberHandler(ErrorStatus.MEMBER_INVALID_GRADE);
+    return Math.min(raw, 4);
+}
+```
+(`MemberHandler` 가 없으면 만들기 — 현재 `MEMBER_UNAUTHORIZED` 만 있고 `MemberHandler` 부재 가능성. 점검.)
+
+#### Step 3: `updateMyProfile` 의 STUDENT 분기에서 헬퍼 호출
+```java
+.grade(sanitizeGrade(request.grade(), student.getGrade()))
+```
+
+#### Step 4: 회원가입에도 적용 (해당되면)
+`AuthServiceImpl.createRoleRecord` 의 STUDENT 분기에서 입력 grade 가 있으면 동일 헬퍼 호출. 회원가입 DTO 가 grade 안 받으면 step 생략.
+
+#### Step 5: 테스트
+- `update_grade_음수_400` (`-1`)
+- `update_grade_0_400`
+- `update_grade_1_통과` (경계값)
+- `update_grade_4_통과` (경계값, 클램프 X)
+- `update_grade_5_4로클램프` — `studentRepository.save` 캡쳐로 저장된 grade=4 검증
+- `update_grade_99_4로클램프`
+- `update_grade_null_기존값유지`
+
+#### Step 6: CLAUDE.md 갱신
+`### 회원 (Member)` 섹션에 다음 bullet:
+> - **`Student.grade` 검증 (`MemberServiceImpl.sanitizeGrade`)**: `grade < 1` → 400(`MEMBER_INVALID_GRADE`). `grade > 4` → 4 로 클램프(`Math.min`)해서 저장. `null` 은 기존값 유지. 회원가입(`AuthServiceImpl.createRoleRecord`) 도 동일 규칙 적용.
+
+---
+
+### TODO #4: STUDENT/GRADUATE 역할 외 필드 거부 (silent ignore → loud error)
+
+**배경**
+`UpdateMemberRequest` 가 STUDENT 전용(`grade`) + GRADUATE 전용(`businessCardImage`, `company`, `careerYear`) 필드를 모두 포함. 현재 `MemberServiceImpl.updateMyProfile` 는 `member.getRole()` 분기로 본인 역할 외 필드를 **조용히 무시** → 200 OK 인데 미반영. API 계약 모호.
+
+**확정된 결정 사항 (재논의 금지)**
+
+| # | 결정 |
+|---|---|
+| 1 | **Option B 채택**: 단일 DTO/엔드포인트 유지. 서비스 진입부에서 role-필드 불일치를 명시적 400 으로 거부 |
+| 2 | STUDENT 가 `businessCardImage`/`company`/`careerYear` 중 하나라도 non-null 로 보내면 400 |
+| 3 | GRADUATE 가 `grade` non-null 로 보내면 400 |
+| 4 | UNKNOWN role 의 update 호출은 **모든 역할 전용 필드 non-null 시 400** (양 역할 모두에 속하지 않음). 공통 필드만 보내는 건 통과 |
+| 5 | 새 에러코드 `MEMBER_FIELD_ROLE_MISMATCH(BAD_REQUEST, "MEMBER400", "본인 역할과 일치하지 않는 필드는 수정할 수 없습니다.")` |
+| 6 | 검증은 서비스 레이어, `Member.builder()` 만들기 **전** 에 수행 (실패 시 DB 접근 없이 즉시 throw) |
+
+**구현 단계**
+
+#### Step 1: `ErrorStatus` 에 `MEMBER_FIELD_ROLE_MISMATCH` 추가
+
+#### Step 2: `MemberServiceImpl.updateMyProfile` 진입부에 검증 헬퍼 호출
+```java
+private void validateRoleFields(MemberRole role, UpdateMemberRequest req) {
+    boolean studentField = req.grade() != null;
+    boolean graduateField = req.businessCardImage() != null
+            || req.company() != null
+            || req.careerYear() != null;
+    if (role == MemberRole.STUDENT && graduateField)
+        throw new MemberHandler(ErrorStatus.MEMBER_FIELD_ROLE_MISMATCH);
+    if (role == MemberRole.GRADUATE && studentField)
+        throw new MemberHandler(ErrorStatus.MEMBER_FIELD_ROLE_MISMATCH);
+    if (role == MemberRole.UNKNOWN && (studentField || graduateField))
+        throw new MemberHandler(ErrorStatus.MEMBER_FIELD_ROLE_MISMATCH);
+}
+```
+
+`updateMyProfile` 의 첫 줄에서 호출.
+
+#### Step 3: 테스트
+- `update_STUDENT_가_businessCardImage_보냄_400`
+- `update_STUDENT_가_company_보냄_400`
+- `update_STUDENT_가_careerYear_보냄_400`
+- `update_GRADUATE_가_grade_보냄_400`
+- `update_STUDENT_가_grade만_보냄_정상`
+- `update_GRADUATE_가_company만_보냄_정상`
+- `update_공통필드_보냄_역할무관_정상` (nickname/githubLink 만)
+- `update_UNKNOWN_이_grade_보냄_400`
+
+#### Step 4: CLAUDE.md 갱신
+`### 회원 (Member)` 섹션에 다음 bullet:
+> - **역할 외 필드 거부 (`MemberServiceImpl.validateRoleFields`)**: 단일 `UpdateMemberRequest` 에 STUDENT/GRADUATE 양쪽 필드가 다 있어, 본인 역할 외 필드를 non-null 로 보내면 즉시 400 (`MEMBER_FIELD_ROLE_MISMATCH`). STUDENT → graduate 필드 거부, GRADUATE → grade 거부, UNKNOWN → 양쪽 다 거부. 공통 필드만 보내는 건 항상 통과.
+
+---
+
+### 4개 TODO 공통 작업자 노트
+
+- **브랜치 정책**: 각 TODO 를 **개별 브랜치 + 개별 PR** 로 처리하는 것을 기본으로 한다. TODO #1 은 영향 범위가 커서 단독 PR 필수. TODO #2/#3/#4 는 회원 도메인의 작은 검증 변경이라 묶어서 1개 PR 도 허용 (작업자 판단). 사용자가 "TODO #N 작업" 으로 단일 항목 지목 시 그 항목만 단독 PR.
+- **공통 커밋 메시지 컨벤션**: `feat(member): ...` / `fix(member): ...` / `docs(CLAUDE.md): ...` prefix. 마지막 줄에 항상 `https://claude.ai/code/session_...` 포함.
+- **Swagger 검증**: 가능하면 PR 본문 Test plan 에 Swagger 시나리오 체크박스 포함.
+- **테스트 실패 시**: `--no-verify` 등으로 우회 금지. 원인 분석 후 수정.
