@@ -1,5 +1,8 @@
 package mju.capstone.ddingconnect.domain.roadmap.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.domain.roadmap.domain.Roadmap;
@@ -17,16 +20,34 @@ import java.util.List;
 @RequiredArgsConstructor
 public class RoadmapServiceImpl implements RoadmapService {
 
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
     private final RoadmapRepository roadmapRepository;
 
     @Override
     @Transactional
     public RoadmapResponse create(Member member, CreateRoadmapRequest request) {
+        validateJsonContent(request.content());
+
         Roadmap roadmap = Roadmap.builder()
                 .member(member)
                 .content(request.content())
                 .build();
         return RoadmapResponse.from(roadmapRepository.save(roadmap));
+    }
+
+    private void validateJsonContent(String content) {
+        if (content == null || content.isBlank()) {
+            throw new RoadmapHandler(ErrorStatus.ROADMAP_INVALID_CONTENT);
+        }
+        try {
+            JsonNode node = OBJECT_MAPPER.readTree(content);
+            if (!node.isObject() && !node.isArray()) {
+                throw new RoadmapHandler(ErrorStatus.ROADMAP_INVALID_CONTENT);
+            }
+        } catch (JsonProcessingException e) {
+            throw new RoadmapHandler(ErrorStatus.ROADMAP_INVALID_CONTENT);
+        }
     }
 
     @Override
