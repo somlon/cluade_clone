@@ -2,6 +2,8 @@ package mju.capstone.ddingconnect.domain.roadmap.service;
 
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.domain.roadmap.domain.Roadmap;
+import mju.capstone.ddingconnect.domain.roadmap.domain.RoadmapAlarm;
+import mju.capstone.ddingconnect.domain.roadmap.domain.repository.RoadmapAlarmRepository;
 import mju.capstone.ddingconnect.domain.roadmap.domain.repository.RoadmapRepository;
 import mju.capstone.ddingconnect.domain.roadmap.dto.request.CreateRoadmapRequest;
 import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapResponse;
@@ -27,6 +29,7 @@ import static org.mockito.Mockito.*;
 class RoadmapServiceImplTest {
 
     @Mock RoadmapRepository roadmapRepository;
+    @Mock RoadmapAlarmRepository roadmapAlarmRepository;
     @InjectMocks RoadmapServiceImpl roadmapService;
 
     private Member author;
@@ -41,8 +44,8 @@ class RoadmapServiceImplTest {
     }
 
     @Test
-    @DisplayName("create - 로드맵을 정상 등록한다")
-    void create_정상등록() {
+    @DisplayName("create - 로드맵을 정상 등록하고 본인에게 RoadmapAlarm 1건 발행한다")
+    void create_정상등록_알람발행() {
         CreateRoadmapRequest req = new CreateRoadmapRequest("{\"step\":\"1\"}");
         when(roadmapRepository.save(any(Roadmap.class))).thenReturn(roadmap);
 
@@ -50,6 +53,7 @@ class RoadmapServiceImplTest {
 
         assertThat(response.id()).isEqualTo(10L);
         assertThat(response.content()).contains("step");
+        verify(roadmapAlarmRepository).save(any(RoadmapAlarm.class));
     }
 
     @Test

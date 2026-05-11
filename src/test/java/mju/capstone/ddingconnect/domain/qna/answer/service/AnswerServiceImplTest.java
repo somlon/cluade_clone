@@ -2,8 +2,10 @@ package mju.capstone.ddingconnect.domain.qna.answer.service;
 
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.domain.qna.answer.domain.Answer;
+import mju.capstone.ddingconnect.domain.qna.answer.domain.AnswerAlarm;
 import mju.capstone.ddingconnect.domain.qna.answer.domain.AnswerLike;
 import mju.capstone.ddingconnect.domain.qna.answer.domain.AnswerLikeId;
+import mju.capstone.ddingconnect.domain.qna.answer.domain.repository.AnswerAlarmRepository;
 import mju.capstone.ddingconnect.domain.qna.answer.domain.repository.AnswerLikeRepository;
 import mju.capstone.ddingconnect.domain.qna.answer.domain.repository.AnswerRepository;
 import mju.capstone.ddingconnect.domain.qna.answer.dto.request.CreateAnswerRequest;
@@ -36,6 +38,7 @@ class AnswerServiceImplTest {
 
     @Mock AnswerRepository answerRepository;
     @Mock AnswerLikeRepository answerLikeRepository;
+    @Mock AnswerAlarmRepository answerAlarmRepository;
     @Mock QuestionRepository questionRepository;
     @InjectMocks AnswerServiceImpl answerService;
 
@@ -56,8 +59,8 @@ class AnswerServiceImplTest {
     }
 
     @Test
-    @DisplayName("create - 질문에 답변을 정상 등록한다")
-    void create_정상등록() {
+    @DisplayName("create - 다른 사람 질문에 답변 시 AnswerAlarm 1건 발행한다")
+    void create_정상등록_타인질문_알람발행() {
         CreateAnswerRequest req = new CreateAnswerRequest("답변내용");
         when(questionRepository.findById(10L)).thenReturn(Optional.of(question));
         when(answerRepository.save(any(Answer.class))).thenReturn(answer);
@@ -66,6 +69,21 @@ class AnswerServiceImplTest {
 
         assertThat(response.id()).isEqualTo(20L);
         assertThat(response.questionId()).isEqualTo(10L);
+        verify(answerAlarmRepository).save(any(AnswerAlarm.class));
+    }
+
+    @Test
+    @DisplayName("create - 본인이 본인 질문에 답변하면 AnswerAlarm 미발행")
+    void create_본인질문_본인답변_알람미발행() {
+        // questioner 가 자기 질문에 직접 답변
+        Answer selfAnswer = Answer.builder().id(21L).question(question).member(questioner).content("자답").build();
+        CreateAnswerRequest req = new CreateAnswerRequest("자답");
+        when(questionRepository.findById(10L)).thenReturn(Optional.of(question));
+        when(answerRepository.save(any(Answer.class))).thenReturn(selfAnswer);
+
+        answerService.create(questioner, 10L, req);
+
+        verify(answerAlarmRepository, never()).save(any(AnswerAlarm.class));
     }
 
     @Test
@@ -76,6 +94,7 @@ class AnswerServiceImplTest {
 
         assertThatThrownBy(() -> answerService.create(answerer, 999L, req))
                 .isInstanceOf(QuestionHandler.class);
+        verify(answerAlarmRepository, never()).save(any(AnswerAlarm.class));
     }
 
     @Test
