@@ -17,5 +17,7 @@ public interface JobAlarmRepository extends JpaRepository<JobAlarm, Long> {
 
     long countByMemberIdAndIsRead(Long memberId, Boolean isRead);
 
+    List<JobAlarm> findByPostContentsId(Long postContentsId);
+
     void deleteByPostContentsId(Long postContentsId);
 }

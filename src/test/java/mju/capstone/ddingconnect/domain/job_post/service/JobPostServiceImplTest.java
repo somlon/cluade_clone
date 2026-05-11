@@ -20,6 +20,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -28,6 +29,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -170,6 +173,143 @@ class JobPostServiceImplTest {
         JobPostResponse response = jobPostService.update(graduateMember, 100L, request);
 
         assertThat(response.companyName()).isEqualTo("카카오");
+    }
+
+    @Test
+    @DisplayName("update - jobType 변경 없으면 알람 미발행 (findByPostContentsId 도 호출되지 않음)")
+    void update_jobType_변경없음_알람미발행() {
+        GraduateJobPost gjp = GraduateJobPost.builder().graduate(graduate).postContents(postContents).build();
+        when(postContentsRepository.findById(100L)).thenReturn(Optional.of(postContents));
+        when(graduateJobPostRepository.findByPostContentsId(100L)).thenReturn(List.of(gjp));
+        when(postContentsRepository.save(any(PostContents.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // jobType 을 기존(BACKEND)과 같게 명시한 요청
+        UpdateJobPostRequest sameType = new UpdateJobPostRequest(null, null, null, JobType.BACKEND,
+                null, null, null, null, null, null, "카카오");
+        jobPostService.update(graduateMember, 100L, sameType);
+
+        // jobType null (= 변경 없음) 요청
+        UpdateJobPostRequest nullType = new UpdateJobPostRequest(null, null, null, null,
+                null, null, null, null, null, null, "라인");
+        jobPostService.update(graduateMember, 100L, nullType);
+
+        verify(jobAlarmRepository, never()).save(any(JobAlarm.class));
+        verify(jobAlarmRepository, never()).findByPostContentsId(any());
+        verify(targetJobRepository, never()).findByInterestedJob(any());
+    }
+
+    @Test
+    @DisplayName("update - jobType 변경 시 prev 만 있고 curr 비면 'Removed' 알람만 발행")
+    void update_jobType_변경_removedOnly() {
+        Member studentA = Member.builder().id(11L).nickname("A").build();
+        GraduateJobPost gjp = GraduateJobPost.builder().graduate(graduate).postContents(postContents).build();
+        // 기존 알람 = A 가 BACKEND 매칭으로 받았던 알람 1건
+        JobAlarm aPrev = JobAlarm.builder().id(500L).member(studentA).postContents(postContents)
+                .content("관심 직무에 새로운 공고가 등록되었습니다.").isRead(false).build();
+
+        when(postContentsRepository.findById(100L)).thenReturn(Optional.of(postContents));
+        when(graduateJobPostRepository.findByPostContentsId(100L)).thenReturn(List.of(gjp));
+        when(postContentsRepository.save(any(PostContents.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(jobAlarmRepository.findByPostContentsId(100L)).thenReturn(List.of(aPrev));
+        // FRONTEND 관심 학생 없음
+        when(targetJobRepository.findByInterestedJob(TargetJobCategory.FRONTEND)).thenReturn(List.of());
+
+        UpdateJobPostRequest request = new UpdateJobPostRequest(null, null, null, JobType.FRONTEND,
+                null, null, null, null, null, null, null);
+        jobPostService.update(graduateMember, 100L, request);
+
+        ArgumentCaptor<JobAlarm> captor = ArgumentCaptor.forClass(JobAlarm.class);
+        verify(jobAlarmRepository, times(1)).save(captor.capture());
+        JobAlarm dispatched = captor.getValue();
+        assertThat(dispatched.getMember().getId()).isEqualTo(11L);
+        assertThat(dispatched.getContent()).contains("벗어난");
+        assertThat(dispatched.getIsRead()).isFalse();
+    }
+
+    @Test
+    @DisplayName("update - jobType 변경 시 curr 만 있고 prev 비면 'Added' 알람만 발행")
+    void update_jobType_변경_addedOnly() {
+        Member studentB = Member.builder().id(12L).nickname("B").build();
+        GraduateJobPost gjp = GraduateJobPost.builder().graduate(graduate).postContents(postContents).build();
+        TargetJob bMatch = TargetJob.builder().id(2L).member(studentB)
+                .interestedJob(TargetJobCategory.FRONTEND).build();
+
+        when(postContentsRepository.findById(100L)).thenReturn(Optional.of(postContents));
+        when(graduateJobPostRepository.findByPostContentsId(100L)).thenReturn(List.of(gjp));
+        when(postContentsRepository.save(any(PostContents.class))).thenAnswer(inv -> inv.getArgument(0));
+        // 기존 JobAlarm 없음
+        when(jobAlarmRepository.findByPostContentsId(100L)).thenReturn(List.of());
+        when(targetJobRepository.findByInterestedJob(TargetJobCategory.FRONTEND)).thenReturn(List.of(bMatch));
+
+        UpdateJobPostRequest request = new UpdateJobPostRequest(null, null, null, JobType.FRONTEND,
+                null, null, null, null, null, null, null);
+        jobPostService.update(graduateMember, 100L, request);
+
+        ArgumentCaptor<JobAlarm> captor = ArgumentCaptor.forClass(JobAlarm.class);
+        verify(jobAlarmRepository, times(1)).save(captor.capture());
+        JobAlarm dispatched = captor.getValue();
+        assertThat(dispatched.getMember().getId()).isEqualTo(12L);
+        assertThat(dispatched.getContent()).contains("새로운 공고");
+        assertThat(dispatched.getIsRead()).isFalse();
+    }
+
+    @Test
+    @DisplayName("update - jobType 변경 시 prev/curr 교집합 보존, Removed/Added 만 새 알람 (등록 졸업생 본인 항상 제외)")
+    void update_jobType_변경_mixed() {
+        Member studentA = Member.builder().id(11L).nickname("A").build();
+        Member studentB = Member.builder().id(12L).nickname("B").build();
+        Member studentC = Member.builder().id(13L).nickname("C").build();
+        Member studentD = Member.builder().id(14L).nickname("D").build();
+
+        GraduateJobPost gjp = GraduateJobPost.builder().graduate(graduate).postContents(postContents).build();
+
+        // prev = {A, B, C} 가 BACKEND 시절 받았던 알람들 (B 는 중복 등록으로 알람 2건 들고 있다고 가정)
+        JobAlarm aPrev = JobAlarm.builder().id(501L).member(studentA).postContents(postContents)
+                .content("관심 직무에 새로운 공고가 등록되었습니다.").isRead(false).build();
+        JobAlarm bPrev1 = JobAlarm.builder().id(502L).member(studentB).postContents(postContents)
+                .content("관심 직무에 새로운 공고가 등록되었습니다.").isRead(false).build();
+        JobAlarm bPrev2 = JobAlarm.builder().id(503L).member(studentB).postContents(postContents)
+                .content("관심 직무에 새로운 공고가 등록되었습니다.").isRead(false).build();
+        JobAlarm cPrev = JobAlarm.builder().id(504L).member(studentC).postContents(postContents)
+                .content("관심 직무에 새로운 공고가 등록되었습니다.").isRead(false).build();
+
+        // curr = {B, C, D} (자신 등록 졸업생도 FRONTEND 관심으로 등록되어 있다고 가정 → 제외돼야 함)
+        TargetJob bCurr = TargetJob.builder().id(20L).member(studentB)
+                .interestedJob(TargetJobCategory.FRONTEND).build();
+        TargetJob cCurr = TargetJob.builder().id(21L).member(studentC)
+                .interestedJob(TargetJobCategory.FRONTEND).build();
+        TargetJob dCurr = TargetJob.builder().id(22L).member(studentD)
+                .interestedJob(TargetJobCategory.FRONTEND).build();
+        TargetJob selfCurr = TargetJob.builder().id(23L).member(graduateMember)
+                .interestedJob(TargetJobCategory.FRONTEND).build();
+
+        when(postContentsRepository.findById(100L)).thenReturn(Optional.of(postContents));
+        when(graduateJobPostRepository.findByPostContentsId(100L)).thenReturn(List.of(gjp));
+        when(postContentsRepository.save(any(PostContents.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(jobAlarmRepository.findByPostContentsId(100L)).thenReturn(List.of(aPrev, bPrev1, bPrev2, cPrev));
+        when(targetJobRepository.findByInterestedJob(TargetJobCategory.FRONTEND))
+                .thenReturn(List.of(bCurr, cCurr, dCurr, selfCurr));
+
+        UpdateJobPostRequest request = new UpdateJobPostRequest(null, null, null, JobType.FRONTEND,
+                null, null, null, null, null, null, null);
+        jobPostService.update(graduateMember, 100L, request);
+
+        ArgumentCaptor<JobAlarm> captor = ArgumentCaptor.forClass(JobAlarm.class);
+        // Removed: A 1건, Added: D 1건 — 총 2건
+        verify(jobAlarmRepository, times(2)).save(captor.capture());
+        List<JobAlarm> dispatched = captor.getAllValues();
+
+        Set<Long> dispatchedMemberIds = dispatched.stream()
+                .map(a -> a.getMember().getId())
+                .collect(Collectors.toSet());
+        assertThat(dispatchedMemberIds).containsExactlyInAnyOrder(11L, 14L);
+
+        JobAlarm aAlarm = dispatched.stream().filter(a -> a.getMember().getId() == 11L).findFirst().orElseThrow();
+        JobAlarm dAlarm = dispatched.stream().filter(a -> a.getMember().getId() == 14L).findFirst().orElseThrow();
+        assertThat(aAlarm.getContent()).contains("벗어난");
+        assertThat(dAlarm.getContent()).contains("새로운 공고");
+        // 등록 졸업생 본인(id=1L) 은 어디에도 포함되지 않음
+        assertThat(dispatchedMemberIds).doesNotContain(graduateMember.getId());
     }
 
     @Test
