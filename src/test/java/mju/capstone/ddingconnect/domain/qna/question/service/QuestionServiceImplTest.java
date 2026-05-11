@@ -4,6 +4,9 @@ import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.domain.qna.question.domain.Question;
 import mju.capstone.ddingconnect.domain.qna.question.domain.QuestionCategory;
 import mju.capstone.ddingconnect.domain.qna.question.domain.QuestionLike;
+import mju.capstone.ddingconnect.domain.qna.answer.domain.repository.AnswerAlarmRepository;
+import mju.capstone.ddingconnect.domain.qna.answer.domain.repository.AnswerLikeRepository;
+import mju.capstone.ddingconnect.domain.qna.answer.domain.repository.AnswerRepository;
 import mju.capstone.ddingconnect.domain.qna.question.domain.repository.QuestionLikeRepository;
 import mju.capstone.ddingconnect.domain.qna.question.domain.repository.QuestionRepository;
 import mju.capstone.ddingconnect.domain.qna.question.dto.request.CreateQuestionRequest;
@@ -15,6 +18,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -33,6 +37,9 @@ class QuestionServiceImplTest {
 
     @Mock QuestionRepository questionRepository;
     @Mock QuestionLikeRepository questionLikeRepository;
+    @Mock AnswerRepository answerRepository;
+    @Mock AnswerAlarmRepository answerAlarmRepository;
+    @Mock AnswerLikeRepository answerLikeRepository;
     @InjectMocks QuestionServiceImpl questionService;
 
     private Member author;
@@ -125,22 +132,33 @@ class QuestionServiceImplTest {
     }
 
     @Test
-    @DisplayName("delete - 작성자가 정상 삭제한다")
+    @DisplayName("delete - 작성자가 정상 삭제하면 손자 자식 순서로 모두 삭제한다")
     void delete_정상삭제() {
         when(questionRepository.findById(10L)).thenReturn(Optional.of(question));
 
         questionService.delete(author, 10L);
 
-        verify(questionRepository).delete(question);
+        // 손자(AnswerAlarm, AnswerLike) → Answer → QuestionLike → Question
+        InOrder inOrder = inOrder(answerAlarmRepository, answerLikeRepository,
+                answerRepository, questionLikeRepository, questionRepository);
+        inOrder.verify(answerAlarmRepository).deleteByQuestionId(10L);
+        inOrder.verify(answerLikeRepository).deleteByQuestionId(10L);
+        inOrder.verify(answerRepository).deleteByQuestionId(10L);
+        inOrder.verify(questionLikeRepository).deleteByQuestionId(10L);
+        inOrder.verify(questionRepository).delete(question);
     }
 
     @Test
-    @DisplayName("delete - 작성자가 아니면 UNAUTHORIZED 예외")
+    @DisplayName("delete - 작성자가 아니면 UNAUTHORIZED 예외, 자식/본체 모두 미삭제")
     void delete_권한없음_예외() {
         when(questionRepository.findById(10L)).thenReturn(Optional.of(question));
 
         assertThatThrownBy(() -> questionService.delete(other, 10L))
                 .isInstanceOf(QuestionHandler.class);
+        verify(answerAlarmRepository, never()).deleteByQuestionId(any());
+        verify(answerLikeRepository, never()).deleteByQuestionId(any());
+        verify(answerRepository, never()).deleteByQuestionId(any());
+        verify(questionLikeRepository, never()).deleteByQuestionId(any());
         verify(questionRepository, never()).delete(any());
     }
 

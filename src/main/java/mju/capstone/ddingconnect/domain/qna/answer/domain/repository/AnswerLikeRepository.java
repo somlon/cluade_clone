@@ -3,6 +3,9 @@ package mju.capstone.ddingconnect.domain.qna.answer.domain.repository;
 import mju.capstone.ddingconnect.domain.qna.answer.domain.AnswerLike;
 import mju.capstone.ddingconnect.domain.qna.answer.domain.AnswerLikeId;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 /**
  * [답변 좋아요 레포지토리]
@@ -14,4 +17,10 @@ public interface AnswerLikeRepository extends JpaRepository<AnswerLike, AnswerLi
     long countByAnswerId(Long answerId);
 
     boolean existsByMemberIdAndAnswerId(Long memberId, Long answerId);
+
+    void deleteByAnswerId(Long answerId);
+
+    @Modifying
+    @Query("DELETE FROM AnswerLike al WHERE al.answer.question.id = :questionId")
+    void deleteByQuestionId(@Param("questionId") Long questionId);
 }

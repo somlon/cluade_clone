@@ -94,6 +94,9 @@ public class AnswerServiceImpl implements AnswerService {
             throw new AnswerHandler(ErrorStatus.ANSWER_UNAUTHORIZED);
         }
 
+        // Answer 를 NOT NULL FK 로 참조하는 자식 먼저 삭제 (FK 제약 방지)
+        answerAlarmRepository.deleteByAnswerId(answerId);
+        answerLikeRepository.deleteByAnswerId(answerId);
         answerRepository.delete(answer);
     }
 

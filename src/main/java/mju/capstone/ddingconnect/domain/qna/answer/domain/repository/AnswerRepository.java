@@ -16,4 +16,6 @@ public interface AnswerRepository extends JpaRepository<Answer, Long> {
     List<Answer> findByMemberId(Long memberId);
 
     long countByQuestionId(Long questionId);
+
+    void deleteByQuestionId(Long questionId);
 }

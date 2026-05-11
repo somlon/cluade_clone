@@ -20,6 +20,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -141,22 +142,27 @@ class AnswerServiceImplTest {
     }
 
     @Test
-    @DisplayName("delete - 작성자가 답변을 정상 삭제한다")
+    @DisplayName("delete - 작성자가 정상 삭제하면 AnswerAlarm/AnswerLike 먼저 삭제 후 Answer 삭제")
     void delete_정상삭제() {
         when(answerRepository.findById(20L)).thenReturn(Optional.of(answer));
 
         answerService.delete(answerer, 20L);
 
-        verify(answerRepository).delete(answer);
+        InOrder inOrder = inOrder(answerAlarmRepository, answerLikeRepository, answerRepository);
+        inOrder.verify(answerAlarmRepository).deleteByAnswerId(20L);
+        inOrder.verify(answerLikeRepository).deleteByAnswerId(20L);
+        inOrder.verify(answerRepository).delete(answer);
     }
 
     @Test
-    @DisplayName("delete - 작성자가 아니면 UNAUTHORIZED 예외")
+    @DisplayName("delete - 작성자가 아니면 UNAUTHORIZED 예외, 자식/본체 모두 미삭제")
     void delete_권한없음_예외() {
         when(answerRepository.findById(20L)).thenReturn(Optional.of(answer));
 
         assertThatThrownBy(() -> answerService.delete(other, 20L))
                 .isInstanceOf(AnswerHandler.class);
+        verify(answerAlarmRepository, never()).deleteByAnswerId(any());
+        verify(answerLikeRepository, never()).deleteByAnswerId(any());
         verify(answerRepository, never()).delete(any());
     }
 

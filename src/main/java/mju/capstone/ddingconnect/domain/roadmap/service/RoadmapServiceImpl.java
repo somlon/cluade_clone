@@ -87,6 +87,8 @@ public class RoadmapServiceImpl implements RoadmapService {
             throw new RoadmapHandler(ErrorStatus.ROADMAP_UNAUTHORIZED);
         }
 
+        // Roadmap 을 NOT NULL FK 로 참조하는 RoadmapAlarm 먼저 삭제 (FK 제약 / TransientObjectException 방지)
+        roadmapAlarmRepository.deleteByRoadmapId(roadmapId);
         roadmapRepository.delete(roadmap);
     }
 }
