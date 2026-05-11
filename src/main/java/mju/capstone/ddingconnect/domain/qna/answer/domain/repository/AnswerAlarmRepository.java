@@ -2,6 +2,7 @@ package mju.capstone.ddingconnect.domain.qna.answer.domain.repository;
 
 import mju.capstone.ddingconnect.domain.qna.answer.domain.AnswerAlarm;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -18,6 +19,12 @@ public interface AnswerAlarmRepository extends JpaRepository<AnswerAlarm, Long> 
     List<AnswerAlarm> findByAnswerIdAndIsRead(Long answerId, Boolean isRead);
 
     long countByAnswerIdAndIsRead(Long answerId, Boolean isRead);
+
+    void deleteByAnswerId(Long answerId);
+
+    @Modifying
+    @Query("DELETE FROM AnswerAlarm aa WHERE aa.answer.question.id = :questionId")
+    void deleteByQuestionId(@Param("questionId") Long questionId);
 
     /**
      * 특정 회원이 작성한 질문에 달린 답변과 연관된 알람을 조회

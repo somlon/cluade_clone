@@ -144,6 +144,8 @@ public class CoffeeChatServiceImpl implements CoffeeChatService {
             throw new CoffeeChatHandler(ErrorStatus.COFFEE_CHAT_UNAUTHORIZED);
         }
 
+        // CoffeeChat 을 NOT NULL FK 로 참조하는 CoffeeChatAlarm 먼저 삭제
+        coffeeChatAlarmRepository.deleteByCoffeeChatId(coffeeChatId);
         coffeeChatRepository.delete(coffeeChat);
     }
 }

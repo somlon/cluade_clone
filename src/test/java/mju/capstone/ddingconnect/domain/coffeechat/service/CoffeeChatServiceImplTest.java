@@ -17,6 +17,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -171,22 +172,25 @@ class CoffeeChatServiceImplTest {
     }
 
     @Test
-    @DisplayName("delete - 요청자가 정상 취소한다")
+    @DisplayName("delete - 요청자가 정상 취소하면 CoffeeChatAlarm 먼저 삭제 후 CoffeeChat 삭제")
     void delete_정상취소() {
         when(coffeeChatRepository.findById(10L)).thenReturn(Optional.of(coffeeChat));
 
         coffeeChatService.delete(requester, 10L);
 
-        verify(coffeeChatRepository).delete(coffeeChat);
+        InOrder inOrder = inOrder(coffeeChatAlarmRepository, coffeeChatRepository);
+        inOrder.verify(coffeeChatAlarmRepository).deleteByCoffeeChatId(10L);
+        inOrder.verify(coffeeChatRepository).delete(coffeeChat);
     }
 
     @Test
-    @DisplayName("delete - 요청자가 아니면 UNAUTHORIZED 예외")
+    @DisplayName("delete - 요청자가 아니면 UNAUTHORIZED 예외, 자식/본체 모두 미삭제")
     void delete_권한없음_예외() {
         when(coffeeChatRepository.findById(10L)).thenReturn(Optional.of(coffeeChat));
 
         assertThatThrownBy(() -> coffeeChatService.delete(receiver, 10L))
                 .isInstanceOf(CoffeeChatHandler.class);
+        verify(coffeeChatAlarmRepository, never()).deleteByCoffeeChatId(any());
         verify(coffeeChatRepository, never()).delete(any());
     }
 

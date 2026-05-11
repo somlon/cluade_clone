@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -131,22 +132,25 @@ class RoadmapServiceImplTest {
     }
 
     @Test
-    @DisplayName("delete - 작성자가 정상 삭제한다")
+    @DisplayName("delete - 작성자가 정상 삭제하면 RoadmapAlarm 먼저 삭제 후 Roadmap 삭제")
     void delete_정상삭제() {
         when(roadmapRepository.findById(10L)).thenReturn(Optional.of(roadmap));
 
         roadmapService.delete(author, 10L);
 
-        verify(roadmapRepository).delete(roadmap);
+        InOrder inOrder = inOrder(roadmapAlarmRepository, roadmapRepository);
+        inOrder.verify(roadmapAlarmRepository).deleteByRoadmapId(10L);
+        inOrder.verify(roadmapRepository).delete(roadmap);
     }
 
     @Test
-    @DisplayName("delete - 작성자가 아니면 UNAUTHORIZED 예외")
+    @DisplayName("delete - 작성자가 아니면 UNAUTHORIZED 예외, 자식/본체 모두 미삭제")
     void delete_권한없음_예외() {
         when(roadmapRepository.findById(10L)).thenReturn(Optional.of(roadmap));
 
         assertThatThrownBy(() -> roadmapService.delete(other, 10L))
                 .isInstanceOf(RoadmapHandler.class);
+        verify(roadmapAlarmRepository, never()).deleteByRoadmapId(any());
         verify(roadmapRepository, never()).delete(any());
     }
 

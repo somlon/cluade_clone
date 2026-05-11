@@ -19,6 +19,8 @@ public interface RoadmapAlarmRepository extends JpaRepository<RoadmapAlarm, Long
 
     long countByRoadmapIdAndIsRead(Long roadmapId, Boolean isRead);
 
+    void deleteByRoadmapId(Long roadmapId);
+
     /**
      * 특정 회원의 로드맵에 연관된 알람을 조회
      */

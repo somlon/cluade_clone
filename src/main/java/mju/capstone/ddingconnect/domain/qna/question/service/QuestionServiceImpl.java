@@ -2,6 +2,9 @@ package mju.capstone.ddingconnect.domain.qna.question.service;
 
 import lombok.RequiredArgsConstructor;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
+import mju.capstone.ddingconnect.domain.qna.answer.domain.repository.AnswerAlarmRepository;
+import mju.capstone.ddingconnect.domain.qna.answer.domain.repository.AnswerLikeRepository;
+import mju.capstone.ddingconnect.domain.qna.answer.domain.repository.AnswerRepository;
 import mju.capstone.ddingconnect.domain.qna.question.domain.Question;
 import mju.capstone.ddingconnect.domain.qna.question.domain.QuestionLike;
 import mju.capstone.ddingconnect.domain.qna.question.domain.repository.QuestionLikeRepository;
@@ -22,6 +25,9 @@ public class QuestionServiceImpl implements QuestionService {
 
     private final QuestionRepository questionRepository;
     private final QuestionLikeRepository questionLikeRepository;
+    private final AnswerRepository answerRepository;
+    private final AnswerAlarmRepository answerAlarmRepository;
+    private final AnswerLikeRepository answerLikeRepository;
 
     @Override
     @Transactional
@@ -94,6 +100,13 @@ public class QuestionServiceImpl implements QuestionService {
             throw new QuestionHandler(ErrorStatus.QUESTION_UNAUTHORIZED);
         }
 
+        // 계층 자식 정리 (FK 제약 방지):
+        // Answer 의 손자(AnswerAlarm, AnswerLike) → Answer → QuestionLike → Question 순.
+        // bulk @Modifying 쿼리이므로 영속성 컨텍스트에 자식이 로드되지 않은 상태에서 직접 DB 삭제.
+        answerAlarmRepository.deleteByQuestionId(questionId);
+        answerLikeRepository.deleteByQuestionId(questionId);
+        answerRepository.deleteByQuestionId(questionId);
+        questionLikeRepository.deleteByQuestionId(questionId);
         questionRepository.delete(question);
     }
 
