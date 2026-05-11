@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- 테스트 출력에서 SQL/프레임워크 로그 완전 억제 -->
+    <root level="OFF">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+
+    <!-- 테스트 클래스 출력만 허용 -->
+    <logger name="mju.capstone.ddingconnect" level="INFO" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+</configuration>
