@@ -189,7 +189,7 @@ mju.capstone.ddingconnect
 >
 > 각 항목은 완료(머지) 후 이 섹션에서 삭제하거나 "완료" 로 표시하고, 본문 도메인 섹션에 정식 규칙으로 통합 기록한다.
 
-_(아래 TODO #1 ~ #4 는 회원(member) 도메인 4개 이슈. 각 항목 완료 후 본문 `### 회원 (Member)` 섹션 등에 정식 규칙으로 통합하고 이 섹션에서 제거.)_
+_(아래 TODO #1 ~ #7 는 회원(member) 4개 + 기술 스택 1개 + 관심 직군 1개 + 커피챗 1개 이슈. 각 항목 완료 후 본문 `### 회원 (Member)` / `### 기술 스택 (techstack)` / `### 커피챗 (coffeechat)` 섹션 등에 정식 규칙으로 통합하고 이 섹션에서 제거.)_
 
 ### TODO #1: 회원 탈퇴 시 관련 DB 데이터 전부 hard delete
 
@@ -449,9 +449,164 @@ private void validateRoleFields(MemberRole role, UpdateMemberRequest req) {
 
 ---
 
-### 4개 TODO 공통 작업자 노트
+---
 
-- **브랜치 정책**: 각 TODO 를 **개별 브랜치 + 개별 PR** 로 처리하는 것을 기본으로 한다. TODO #1 은 영향 범위가 커서 단독 PR 필수. TODO #2/#3/#4 는 회원 도메인의 작은 검증 변경이라 묶어서 1개 PR 도 허용 (작업자 판단). 사용자가 "TODO #N 작업" 으로 단일 항목 지목 시 그 항목만 단독 PR.
-- **공통 커밋 메시지 컨벤션**: `feat(member): ...` / `fix(member): ...` / `docs(CLAUDE.md): ...` prefix. 마지막 줄에 항상 `https://claude.ai/code/session_...` 포함.
+### TODO #5: TechStack 같은 이름 중복 추가 거부
+
+**배경**
+`TechStackServiceImpl.add` 가 중복 체크 없이 그대로 `save` 함. `TechStackRepository.existsByMemberIdAndName(Long, TechStackName)` 는 **이미 선언돼 있지만 service 가 호출하지 않음** — 누군가 의도해 만들었다가 빠뜨림. 결과: 같은 회원이 같은 이름 기술 스택을 N개 등록 가능.
+
+**확정된 결정 사항 (재논의 금지)**
+
+| # | 결정 |
+|---|---|
+| 1 | 같은 회원이 같은 `TechStackName` 으로 중복 등록 시 거부 |
+| 2 | 응답 코드: **409 Conflict** (precedent: `DUPLICATE_EMAIL` 도 CONFLICT 사용) |
+| 3 | 새 에러: `TECH_STACK_DUPLICATE(CONFLICT, "TECHSTACK409", "이미 등록된 기술 스택입니다.")` |
+| 4 | 검증 메서드: 기존 레포의 `existsByMemberIdAndName` 활용 (메서드 신설 불필요) |
+| 5 | 검증 위치: `add` 진입부, builder 생성 **전** |
+| 6 | 다른 회원이 같은 이름 등록하는 건 항상 통과 (회원별 독립) |
+
+**구현 단계**
+
+#### Step 1: `ErrorStatus` 에 `TECH_STACK_DUPLICATE` 추가
+기존 `TECH_STACK_NOT_FOUND`, `TECH_STACK_UNAUTHORIZED` 옆에.
+
+#### Step 2: `TechStackServiceImpl.add` 진입부에 검증
+```java
+if (techStackRepository.existsByMemberIdAndName(member.getId(), request.name())) {
+    throw new TechStackHandler(ErrorStatus.TECH_STACK_DUPLICATE);
+}
+```
+
+#### Step 3: 테스트
+- `add_같은이름_중복_409`
+- `add_다른이름_정상`
+- `add_다른회원이_같은이름_정상` (회원별 독립 검증)
+
+#### Step 4: CLAUDE.md 갱신
+`### 핵심 도메인 규칙` 아래에 새 `### 기술 스택 (techstack)` 섹션 신설하거나, 기존 본문에 적절한 위치에 bullet 추가:
+> - **기술 스택 중복 거부 (`TechStackServiceImpl.add`)**: 같은 회원이 같은 `TechStackName` 으로 중복 등록 시 409 (`TECH_STACK_DUPLICATE`). 회원별 독립이라 다른 회원은 같은 이름 등록 가능. 레포 `existsByMemberIdAndName` 활용.
+
+---
+
+### TODO #6: TargetJob 같은 카테고리 중복 추가 거부
+
+**배경**
+`TargetJobServiceImpl.create` 가 중복 체크 없이 그대로 `save`. 같은 회원이 같은 `TargetJobCategory` 를 N개 등록 가능. 부수 효과로 `JobPostServiceImpl.create` 의 알람 발행 로직이 `notifiedMemberIds.add()` 로 dedup 하고 있음 (즉 알람 N건 발행은 막혀 있지만, DB 에는 row N개 누적). 데이터 무결성 측면에서 거부 필요.
+
+**확정된 결정 사항 (재논의 금지)**
+
+| # | 결정 |
+|---|---|
+| 1 | 같은 회원이 같은 `TargetJobCategory` 로 중복 등록 시 거부 |
+| 2 | 응답 코드: **409 Conflict** |
+| 3 | 새 에러: `TARGET_JOB_DUPLICATE(CONFLICT, "TARGETJOB409", "이미 등록된 관심 직군입니다.")` |
+| 4 | 검증 메서드: `TargetJobRepository.existsByMemberIdAndInterestedJob(Long, TargetJobCategory)` **신설** (현재 `findByMemberIdAndInterestedJob` 만 있음) |
+| 5 | `create` 와 `update` 모두 동일 규칙 적용 — update 로 다른 카테고리에서 이미 보유한 카테고리로 변경하려는 경우도 거부. 단 자기 자신 row 의 카테고리 그대로 update 는 통과 |
+| 6 | `JobPostServiceImpl.create` 의 알람 dedup 로직(`notifiedMemberIds.add`) 은 **그대로 유지** — 안전망 (이번 변경으로 DB 중복은 막히지만, 방어층 보존) |
+
+**구현 단계**
+
+#### Step 1: `TargetJobRepository` 에 `existsByMemberIdAndInterestedJob(Long, TargetJobCategory)` 추가
+Spring Data 쿼리 메서드 1줄.
+
+#### Step 2: `ErrorStatus` 에 `TARGET_JOB_DUPLICATE` 추가
+
+#### Step 3: `TargetJobServiceImpl.create` 진입부에 검증
+```java
+if (targetJobRepository.existsByMemberIdAndInterestedJob(member.getId(), request.interestedJob())) {
+    throw new TargetJobHandler(ErrorStatus.TARGET_JOB_DUPLICATE);
+}
+```
+
+#### Step 4: `TargetJobServiceImpl.update` 에도 검증 추가
+자기 자신 row 의 카테고리는 변경 없으면 통과해야 하므로:
+```java
+boolean unchanged = targetJob.getInterestedJob() == request.interestedJob();
+if (!unchanged && targetJobRepository.existsByMemberIdAndInterestedJob(member.getId(), request.interestedJob())) {
+    throw new TargetJobHandler(ErrorStatus.TARGET_JOB_DUPLICATE);
+}
+```
+
+#### Step 5: 테스트
+- `create_같은카테고리_중복_409`
+- `create_다른카테고리_정상`
+- `create_다른회원이_같은카테고리_정상` (회원별 독립)
+- `update_같은카테고리_그대로_통과`
+- `update_이미보유한_다른카테고리로_409`
+- `update_새카테고리로_정상`
+
+#### Step 6: CLAUDE.md 갱신
+`### 관심 직군 (interested_job)` 섹션에 bullet 추가:
+> - **관심 직군 중복 거부 (`TargetJobServiceImpl.create` / `update`)**: 같은 회원이 같은 `TargetJobCategory` 로 중복 등록·변경 시 409 (`TARGET_JOB_DUPLICATE`). update 는 자기 row 의 카테고리 그대로 두는 건 통과. 회원별 독립. `JobPostServiceImpl.create` 의 알람 dedup 안전망(`notifiedMemberIds.add`) 은 보존.
+
+---
+
+### TODO #7: 커피챗 생성 시 자기 자신 / 동일 role 요청 거부
+
+**배경**
+`CoffeeChatServiceImpl.create` 가 requester ↔ receiver 의 ID 동일성, role 매칭 어느 것도 검증하지 않음. 결과:
+1. **자기 자신**: `receiverId` 에 본인 PK 를 넣어도 통과 → 본인이 본인에게 보낸 알람 생성
+2. **동일 role**: STUDENT ↔ STUDENT, GRADUATE ↔ GRADUATE 다 통과
+3. **UNKNOWN**: 역할 미설정 회원이 양쪽으로 끼어들 수 있음
+
+도메인 의도 = **학생 ↔ 졸업생 멘토링 매칭** 이므로 STUDENT ↔ GRADUATE 쌍만 허용.
+
+**확정된 결정 사항 (재논의 금지)**
+
+| # | 결정 |
+|---|---|
+| 1 | `requester.id == receiver.id` → 400 거부 |
+| 2 | (requester, receiver) role 쌍이 (STUDENT, GRADUATE) 또는 (GRADUATE, STUDENT) 가 아니면 400 거부 |
+| 3 | UNKNOWN role 은 양쪽 어느 쪽이든 끼어들면 거부 (요청자/수신자 둘 다 STUDENT/GRADUATE 여야 함) |
+| 4 | 새 에러 2종:<br>- `COFFEE_CHAT_SELF_REQUEST(BAD_REQUEST, "COFFEECHAT400", "자기 자신에게는 커피챗을 요청할 수 없습니다.")`<br>- `COFFEE_CHAT_ROLE_MISMATCH(BAD_REQUEST, "COFFEECHAT400", "커피챗은 학생과 졸업생 사이에만 가능합니다.")` |
+| 5 | 검증 순서: receiver 조회 직후 → 자기 자신 체크 → role 매칭 체크. self 가 먼저 (정보 노출 최소). |
+| 6 | 검증 위치: `CoffeeChatServiceImpl.create` 진입부, `CoffeeChat.builder()` 호출 **전** |
+
+**구현 단계**
+
+#### Step 1: `ErrorStatus` 에 두 에러 추가
+- `COFFEE_CHAT_SELF_REQUEST(HttpStatus.BAD_REQUEST, "COFFEECHAT400", "자기 자신에게는 커피챗을 요청할 수 없습니다.")`
+- `COFFEE_CHAT_ROLE_MISMATCH(HttpStatus.BAD_REQUEST, "COFFEECHAT400", "커피챗은 학생과 졸업생 사이에만 가능합니다.")`
+
+#### Step 2: `CoffeeChatServiceImpl.create` 에 검증 추가
+```java
+Member receiver = memberRepository.findById(request.receiverId())
+        .orElseThrow(() -> new MemberHandler(ErrorStatus.MEMBER_NOT_FOUND));
+
+if (member.getId().equals(receiver.getId())) {
+    throw new CoffeeChatHandler(ErrorStatus.COFFEE_CHAT_SELF_REQUEST);
+}
+
+boolean studentToGraduate = member.getRole() == MemberRole.STUDENT
+        && receiver.getRole() == MemberRole.GRADUATE;
+boolean graduateToStudent = member.getRole() == MemberRole.GRADUATE
+        && receiver.getRole() == MemberRole.STUDENT;
+if (!studentToGraduate && !graduateToStudent) {
+    throw new CoffeeChatHandler(ErrorStatus.COFFEE_CHAT_ROLE_MISMATCH);
+}
+```
+
+#### Step 3: 테스트
+- `create_자기자신에게_요청_400`
+- `create_STUDENT가_STUDENT에게_400`
+- `create_GRADUATE가_GRADUATE에게_400`
+- `create_STUDENT가_GRADUATE에게_정상`
+- `create_GRADUATE가_STUDENT에게_정상`
+- `create_UNKNOWN이_요청자_400`
+- `create_UNKNOWN이_수신자_400`
+- `create_STUDENT가_UNKNOWN에게_400`
+
+#### Step 4: CLAUDE.md 갱신
+`### 커피챗 (coffeechat)` 섹션의 흐름 설명 위에 bullet 추가:
+> - **생성 검증 (`CoffeeChatServiceImpl.create`)**: requester.id == receiver.id 면 400 (`COFFEE_CHAT_SELF_REQUEST`). role 쌍이 (STUDENT, GRADUATE) 또는 (GRADUATE, STUDENT) 가 아니면 400 (`COFFEE_CHAT_ROLE_MISMATCH`) — UNKNOWN 양쪽 모두 거부. 도메인 의도 = 학생 ↔ 졸업생 멘토링 매칭.
+
+---
+
+### 7개 TODO 공통 작업자 노트
+
+- **브랜치 정책**: 각 TODO 를 **개별 브랜치 + 개별 PR** 로 처리하는 것을 기본으로 한다. TODO #1 은 영향 범위가 커서 단독 PR 필수. TODO #2/#3/#4 는 회원 도메인의 작은 검증 변경이라 묶어서 1개 PR 도 허용 (작업자 판단). TODO #5/#6/#7 도 각각 다른 도메인이라 단독 PR 권장. 사용자가 "TODO #N 작업" 으로 단일 항목 지목 시 그 항목만 단독 PR.
+- **공통 커밋 메시지 컨벤션**: `feat(member): ...` / `fix(member): ...` / `feat(techstack): ...` / `feat(coffeechat): ...` / `docs(CLAUDE.md): ...` prefix. 마지막 줄에 항상 `https://claude.ai/code/session_...` 포함.
 - **Swagger 검증**: 가능하면 PR 본문 Test plan 에 Swagger 시나리오 체크박스 포함.
 - **테스트 실패 시**: `--no-verify` 등으로 우회 금지. 원인 분석 후 수정.
