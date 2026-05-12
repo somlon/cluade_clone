@@ -189,7 +189,7 @@ mju.capstone.ddingconnect
 >
 > 각 항목은 완료(머지) 후 이 섹션에서 삭제하거나 "완료" 로 표시하고, 본문 도메인 섹션에 정식 규칙으로 통합 기록한다.
 
-_(아래 TODO #1 ~ #8 는 회원(member) 4개 + 기술 스택 1개 + 관심 직군 1개 + 커피챗 2개 이슈. 각 항목 완료 후 본문 `### 회원 (Member)` / `### 기술 스택 (techstack)` / `### 커피챗 (coffeechat)` 섹션 등에 정식 규칙으로 통합하고 이 섹션에서 제거.)_
+_(아래 TODO #1 ~ #9 는 회원(member) 4개 + 기술 스택 1개 + 관심 직군 1개 + 커피챗 2개 + Q&A 1개 이슈. 각 항목 완료 후 본문 `### 회원 (Member)` / `### 기술 스택 (techstack)` / `### 커피챗 (coffeechat)` / `### Q&A` 섹션 등에 정식 규칙으로 통합하고 이 섹션에서 제거.)_
 
 ### TODO #1: 회원 탈퇴 시 관련 DB 데이터 전부 hard delete
 
@@ -687,9 +687,131 @@ coffeeChatAlarmRepository.save(CoffeeChatAlarm.builder()
 
 ---
 
-### 8개 TODO 공통 작업자 노트
+---
 
-- **브랜치 정책**: 각 TODO 를 **개별 브랜치 + 개별 PR** 로 처리하는 것을 기본으로 한다. TODO #1 은 영향 범위가 커서 단독 PR 필수. TODO #2/#3/#4 는 회원 도메인의 작은 검증 변경이라 묶어서 1개 PR 도 허용 (작업자 판단). TODO #5/#6/#7/#8 도 각각 다른 변경 지점이라 단독 PR 권장. 사용자가 "TODO #N 작업" 으로 단일 항목 지목 시 그 항목만 단독 PR.
-- **공통 커밋 메시지 컨벤션**: `feat(member): ...` / `fix(member): ...` / `feat(techstack): ...` / `feat(coffeechat): ...` / `docs(CLAUDE.md): ...` prefix. 마지막 줄에 항상 `https://claude.ai/code/session_...` 포함.
+### TODO #9: Q&A 좋아요·답변 카운트·내 좋아요 상태 응답 노출 + Swagger 명세 갱신
+
+**배경**
+화면(Figma)이 요구하는 "답변 N", "👍 N", 좋아요 버튼 활성 상태가 백엔드 응답에 없음. 좋아요는 `QuestionLike` / `AnswerLike` row 로만 저장되고 카운트 캐시 컬럼 없음. 또한 5개 메서드가 레포에 **선언만 돼 있고 호출 0건**:
+
+| # | 메서드 | 보여줄 정보 |
+|---|---|---|
+| 1 | `AnswerRepository.countByQuestionId(Long)` | 질문당 답변 개수 ("답변 12") |
+| 2 | `QuestionLikeRepository.countByQuestionId(Long)` | 질문 좋아요 개수 |
+| 3 | `AnswerLikeRepository.countByAnswerId(Long)` | 답변 좋아요 개수 |
+| 4 | `QuestionLikeRepository.existsByMemberIdAndQuestionId(Long, Long)` | 본인이 이 질문에 좋아요 눌렀는지 |
+| 5 | `AnswerLikeRepository.existsByMemberIdAndAnswerId(Long, Long)` | 본인이 이 답변에 좋아요 눌렀는지 |
+
+**확정된 결정 사항 (재논의 금지)**
+
+| # | 결정 |
+|---|---|
+| 1 | **DTO 확장 방식 채택** — 별도 카운트 endpoint 안 만듦. `QuestionResponse` / `AnswerResponse` 에 nullable 필드 추가 |
+| 2 | `QuestionResponse` 추가 필드: `likeCount: Long`, `answerCount: Long`, `likedByMe: Boolean` |
+| 3 | `AnswerResponse` 추가 필드: `likeCount: Long`, `likedByMe: Boolean` |
+| 4 | 카운트는 매 GET 시 `countBy*` 쿼리 호출. **캐시 컬럼 미도입** (정규화 유지) |
+| 5 | `likedByMe` 는 로그인된 `member.id` 기준 `existsByMemberIdAnd*` 호출 |
+| 6 | **좋아요 토글 응답 개선**: `ApiResponse<String>` → `ApiResponse<LikeToggleResponse>`. 토글 후 새 `liked` / `likeCount` 즉시 반환 (프론트 추가 GET 불필요) |
+| 7 | Q&A 모든 GET API (`getList`, `getOne`, `Answer.getList`) 가 `Member` 를 받아 `likedByMe` 채움. 시그니처 변경 |
+| 8 | **N+1 위험 인지**: `getList` 에서 N건 질문마다 카운트 쿼리 1회 + exists 1회씩 호출. 작은 트래픽 허용, 큰 트래픽 시 batch/JOIN 최적화는 별도 TODO |
+| 9 | **Swagger 명세 갱신**: `QuestionSwagger`, `AnswerSwagger` 의 `@Operation`/응답 타입 표기 갱신, 새 필드 의미 description 보강 |
+| 10 | 비로그인 사용자도 GET 가능하게 정책 변경되면 별도 검토 (현재는 모든 GET 이 인증 필수라 `member` 항상 존재) |
+
+**구현 단계**
+
+#### Step 1: 토글 응답 DTO 신설
+파일: `src/main/java/.../qna/dto/response/LikeToggleResponse.java` (또는 question/answer 도메인 양쪽 공용으로 두기)
+```java
+public record LikeToggleResponse(Boolean liked, Long likeCount) {}
+```
+
+#### Step 2: `QuestionResponse` 확장
+```java
+public record QuestionResponse(
+        Long id, Long memberId, QuestionCategory category, String title,
+        String content, Integer viewCount,
+        Long likeCount, Long answerCount, Boolean likedByMe
+) {
+    public static QuestionResponse from(Question q, long likeCount,
+                                        long answerCount, boolean likedByMe) {
+        return new QuestionResponse(
+                q.getId(), q.getMember().getId(), q.getCategory(),
+                q.getTitle(), q.getContent(), q.getViewCount(),
+                likeCount, answerCount, likedByMe);
+    }
+}
+```
+기존 `from(Question)` 시그니처는 호출처 모두 새 시그니처로 마이그레이션 (deprecated 처리 X — 컴파일 깨지는 곳 다 갱신).
+
+#### Step 3: `AnswerResponse` 확장
+동일 패턴, 필드 = `likeCount`, `likedByMe`.
+
+#### Step 4: `QuestionServiceImpl` 변경
+- `getList(Member member)` — Member 받음. 각 질문마다 `questionLikeRepository.countByQuestionId(q.id)`, `answerRepository.countByQuestionId(q.id)`, `questionLikeRepository.existsByMemberIdAndQuestionId(member.id, q.id)` 호출해 응답 채움.
+- `getOne(Member member, Long questionId)` — viewCount+1 처리 후 동일하게 카운트·상태 채움.
+- `toggleLike(Member, Long)` 반환 타입을 `LikeToggleResponse` 로 변경. toggle 후 `existsByMemberIdAndQuestionId` 로 새 `liked`, `countByQuestionId` 로 새 `likeCount` 반환.
+
+#### Step 5: `AnswerServiceImpl` 변경
+- `getList(Member member, Long questionId)` — 동일 패턴, 각 답변에 `likeCount`/`likedByMe` 채움.
+- `toggleLike(Member, Long)` 반환 타입 변경 (Step 4 와 동일 패턴).
+- `create()`, `update()` 의 응답도 새 시그니처로 채움 (자기 답변이라 `likedByMe=false`, `likeCount=0` 기본).
+
+#### Step 6: 컨트롤러 시그니처 갱신
+`QuestionController`:
+- `getQuestions()` → `@LoginMember Member member` 추가, `questionService.getList(member)` 호출
+- `getQuestion(questionId)` → 동일하게 member 받아 전달
+- `likeQuestion(...)` 반환 타입 `ApiResponse<LikeToggleResponse>` 로 변경
+
+`AnswerController`:
+- `getAnswers(...)` → member 받아 전달
+- `likeAnswer(...)` 반환 타입 변경
+
+#### Step 7: Swagger 명세 갱신
+`QuestionSwagger`, `AnswerSwagger` 인터페이스:
+- 응답 반환 타입 표기 갱신 (`ApiResponse<LikeToggleResponse>` 등)
+- `@Operation` description 보강 — 예: 질문 상세 → "응답에 좋아요 개수(`likeCount`), 답변 개수(`answerCount`), 본인 좋아요 여부(`likedByMe`)가 포함됩니다."
+- 좋아요 토글 description — "토글 후 새로운 상태와 카운트가 응답에 포함됩니다."
+- 필요시 `QuestionResponse`/`AnswerResponse` DTO 의 필드에 `@Schema(description = "...")` 추가 (선택)
+
+#### Step 8: 테스트
+기존 `QuestionServiceImplTest`, `AnswerServiceImplTest`:
+- `QuestionResponse.from(question)` 호출하는 단정문이 깨지므로 새 시그니처로 마이그레이션
+- 새 테스트:
+  - `getOne_좋아요갯수_답변갯수_likedByMe_정상반환` — 좋아요 2건 + 답변 3건 + 본인 좋아요 누른 상태 → likeCount=2, answerCount=3, likedByMe=true
+  - `getList_각질문별_카운트누락없음` — 질문 N건 각각의 카운트 정상
+  - `toggleLike_누른후_liked_true_likeCount_증가` — 응답 검증
+  - `toggleLike_재호출_liked_false_likeCount_감소`
+- AnswerServiceImplTest 동일 패턴
+- `QuestionLikeRepository`/`AnswerLikeRepository` 가 mock 이라면 `countByQuestionId`/`existsByMemberIdAndQuestionId` 등 stub 추가
+
+#### Step 9: CLAUDE.md 갱신
+`### Q&A` 섹션 좋아요 bullet 보강:
+> - 좋아요: `QuestionLike`, `AnswerLike` (복합키 `AnswerLikeId`), toggle 방식. **카운트·내 좋아요 여부**는 응답 DTO 에 포함 (`QuestionResponse.likeCount`/`likedByMe`/`answerCount`, `AnswerResponse.likeCount`/`likedByMe`). 매 GET 시 `countBy*` / `existsByMemberIdAnd*` 쿼리 호출 (캐시 컬럼 미도입).
+> - 좋아요 토글 응답: `LikeToggleResponse(liked, likeCount)` — 토글 후 새 상태·카운트 즉시 반환. 프론트 추가 GET 불필요.
+> - 답변 개수: `QuestionResponse.answerCount` 로 노출 (`AnswerRepository.countByQuestionId`).
+
+#### Step 10: Swagger 수동 검증
+- `GET /api/v1/questions` → 각 항목에 `likeCount`, `answerCount`, `likedByMe` 보임
+- `GET /api/v1/questions/{id}` → 동일
+- `GET /api/v1/questions/{qid}/answers` → 각 답변에 `likeCount`, `likedByMe` 보임
+- `POST /api/v1/questions/{id}/like` → 응답 `{"liked": true, "likeCount": 1}`. 한 번 더 호출 → `{"liked": false, "likeCount": 0}`
+- `POST /api/v1/questions/{qid}/answers/{aid}/like` → 동일 패턴
+
+#### Step 11: 커밋, 푸시, PR
+- 커밋 메시지: `feat(qna): 좋아요·답변 카운트·내 좋아요 상태 응답 노출 + Swagger 명세 갱신`
+- PR 본문: 결정표 + 테스트 시나리오 + Swagger 검증 가이드
+
+#### 작업자 노트
+- **시그니처 변경 영향**: `QuestionResponse.from(question)` 단일 인자 호출처가 모두 깨짐. 컴파일러가 잡아주므로 일괄 마이그레이션.
+- **N+1 최적화**: 본 TODO 범위 외. `getList` 가 느려지면 별도 TODO 로 분리 (단일 GROUP BY 쿼리 또는 projection DTO).
+- **응답 DTO 가 커짐**: 다른 화면 (예: 알람 → 질문 미리보기) 에서 카운트 불필요 시 가벼운 별도 DTO 검토. 일단은 단일 응답 유지.
+- **TODO #1 의 회원 hard delete 와의 관계**: 회원 탈퇴 시 본인이 누른 좋아요 row 도 정리 (`QuestionLikeRepository.deleteByMemberId`). TODO #1 의 step 2 에 이미 포함된 작업.
+
+---
+
+### 9개 TODO 공통 작업자 노트
+
+- **브랜치 정책**: 각 TODO 를 **개별 브랜치 + 개별 PR** 로 처리하는 것을 기본으로 한다. TODO #1 은 영향 범위가 커서 단독 PR 필수. TODO #2/#3/#4 는 회원 도메인의 작은 검증 변경이라 묶어서 1개 PR 도 허용 (작업자 판단). TODO #5/#6/#7/#8/#9 도 각각 다른 변경 지점이라 단독 PR 권장. 사용자가 "TODO #N 작업" 으로 단일 항목 지목 시 그 항목만 단독 PR.
+- **공통 커밋 메시지 컨벤션**: `feat(member): ...` / `fix(member): ...` / `feat(techstack): ...` / `feat(coffeechat): ...` / `feat(qna): ...` / `docs(CLAUDE.md): ...` prefix. 마지막 줄에 항상 `https://claude.ai/code/session_...` 포함.
 - **Swagger 검증**: 가능하면 PR 본문 Test plan 에 Swagger 시나리오 체크박스 포함.
 - **테스트 실패 시**: `--no-verify` 등으로 우회 금지. 원인 분석 후 수정.
