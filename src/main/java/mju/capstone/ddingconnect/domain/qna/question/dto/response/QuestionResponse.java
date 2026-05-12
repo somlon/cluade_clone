@@ -9,16 +9,25 @@ public record QuestionResponse(
         QuestionCategory category,
         String title,
         String content,
-        Integer viewCount
+        Integer viewCount,
+        Long likeCount,
+        Long answerCount,
+        Boolean likedByMe
 ) {
-    public static QuestionResponse from(Question question) {
+    public static QuestionResponse from(Question question,
+                                        long likeCount,
+                                        long answerCount,
+                                        boolean likedByMe) {
         return new QuestionResponse(
                 question.getId(),
                 question.getMember().getId(),
                 question.getCategory(),
                 question.getTitle(),
                 question.getContent(),
-                question.getViewCount()
+                question.getViewCount(),
+                likeCount,
+                answerCount,
+                likedByMe
         );
     }
 }

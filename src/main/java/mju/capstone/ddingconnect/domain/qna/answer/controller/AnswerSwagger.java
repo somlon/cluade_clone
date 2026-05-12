@@ -7,6 +7,7 @@ import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.domain.qna.answer.dto.request.CreateAnswerRequest;
 import mju.capstone.ddingconnect.domain.qna.answer.dto.request.UpdateAnswerRequest;
 import mju.capstone.ddingconnect.domain.qna.answer.dto.response.AnswerResponse;
+import mju.capstone.ddingconnect.domain.qna.question.dto.response.LikeToggleResponse;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMember;
 import mju.capstone.ddingconnect.global.response.exception.handler.ApiResponse;
 import org.springframework.web.bind.annotation.*;
@@ -18,7 +19,7 @@ public interface AnswerSwagger {
 
     @Operation(
             summary = "답변 등록",
-            description = "특정 질문에 새로운 답변을 등록합니다. 로그인된 회원만 호출할 수 있습니다."
+            description = "특정 질문에 새로운 답변을 등록합니다. **졸업생만** 등록 가능합니다 (STUDENT/UNKNOWN → 403)."
     )
     @PostMapping
     ApiResponse<AnswerResponse> createAnswer(
@@ -33,10 +34,11 @@ public interface AnswerSwagger {
 
     @Operation(
             summary = "답변 목록 조회",
-            description = "특정 질문에 달린 모든 답변 목록을 조회합니다."
+            description = "특정 질문에 달린 모든 답변 목록을 조회합니다. 각 항목에 좋아요 개수(`likeCount`), 본인 좋아요 여부(`likedByMe`)가 포함됩니다."
     )
     @GetMapping
     ApiResponse<List<AnswerResponse>> getAnswers(
+            @Parameter(hidden = true) @LoginMember Member member,
             @Parameter(description = "답변 목록을 조회할 질문 ID")
             @PathVariable Long questionId);
 
@@ -77,10 +79,10 @@ public interface AnswerSwagger {
 
     @Operation(
             summary = "답변 좋아요 토글",
-            description = "특정 답변에 좋아요를 누르거나 취소합니다. 이미 좋아요를 누른 상태라면 좋아요가 취소됩니다."
+            description = "특정 답변에 좋아요를 누르거나 취소합니다. 이미 좋아요를 누른 상태라면 좋아요가 취소됩니다. 본인이 작성한 답변에는 좋아요 불가(400). 토글 후 새 상태(`liked`)와 카운트(`likeCount`)가 응답에 포함됩니다."
     )
     @PostMapping("/{answerId}/like")
-    ApiResponse<String> likeAnswer(
+    ApiResponse<LikeToggleResponse> likeAnswer(
             @Parameter(hidden = true) @LoginMember Member member,
             @Parameter(description = "답변이 속한 질문 ID")
             @PathVariable Long questionId,

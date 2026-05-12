@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.domain.qna.question.dto.request.CreateQuestionRequest;
 import mju.capstone.ddingconnect.domain.qna.question.dto.request.UpdateQuestionRequest;
+import mju.capstone.ddingconnect.domain.qna.question.dto.response.LikeToggleResponse;
 import mju.capstone.ddingconnect.domain.qna.question.dto.response.QuestionResponse;
 import mju.capstone.ddingconnect.domain.qna.question.service.QuestionService;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMember;
@@ -30,14 +31,17 @@ public class QuestionController implements QuestionSwagger {
 
     /** 질문 목록 조회 (Read) */
     @GetMapping
-    public ApiResponse<List<QuestionResponse>> getQuestions() {
-        return ApiResponse.onSuccess(questionService.getList());
+    public ApiResponse<List<QuestionResponse>> getQuestions(
+            @Parameter(hidden = true) @LoginMember Member member) {
+        return ApiResponse.onSuccess(questionService.getList(member));
     }
 
     /** 질문 상세 조회 (Read - 질문 카드를 클릭했을 때 본문 + 답변 화면 진입 시 호출, 조회수 +1 증가) */
     @GetMapping("/{questionId}")
-    public ApiResponse<QuestionResponse> getQuestion(@PathVariable Long questionId) {
-        return ApiResponse.onSuccess(questionService.getOne(questionId));
+    public ApiResponse<QuestionResponse> getQuestion(
+            @Parameter(hidden = true) @LoginMember Member member,
+            @PathVariable Long questionId) {
+        return ApiResponse.onSuccess(questionService.getOne(member, questionId));
     }
 
     /** 질문 수정 (Update) */
@@ -58,12 +62,11 @@ public class QuestionController implements QuestionSwagger {
         return ApiResponse.onSuccess("질문이 삭제되었습니다.");
     }
 
-    /** 질문 좋아요 토글 */
+    /** 질문 좋아요 토글 — 토글 후 새 상태와 카운트를 즉시 반환 */
     @PostMapping("/{questionId}/like")
-    public ApiResponse<String> likeQuestion(
+    public ApiResponse<LikeToggleResponse> likeQuestion(
             @Parameter(hidden = true) @LoginMember Member member,
             @PathVariable Long questionId) {
-        questionService.toggleLike(member, questionId);
-        return ApiResponse.onSuccess("좋아요가 처리되었습니다.");
+        return ApiResponse.onSuccess(questionService.toggleLike(member, questionId));
     }
 }

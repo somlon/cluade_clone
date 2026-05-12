@@ -14,4 +14,6 @@ public interface GraduateRepository extends JpaRepository<Graduate, Long> {
     Optional<Graduate> findByMemberId(Long memberId);
 
     boolean existsByMemberId(Long memberId);
+
+    void deleteByMemberId(Long memberId);
 }

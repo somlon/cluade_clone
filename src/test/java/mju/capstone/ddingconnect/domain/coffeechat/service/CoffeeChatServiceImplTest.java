@@ -9,6 +9,7 @@ import mju.capstone.ddingconnect.domain.coffeechat.dto.request.CreateCoffeeChatR
 import mju.capstone.ddingconnect.domain.coffeechat.dto.request.UpdateCoffeeChatStatusRequest;
 import mju.capstone.ddingconnect.domain.coffeechat.dto.response.CoffeeChatResponse;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
+import mju.capstone.ddingconnect.domain.member.domain.MemberRole;
 import mju.capstone.ddingconnect.domain.member.domain.repository.MemberRepository;
 import mju.capstone.ddingconnect.global.response.exception.handler.CoffeeChatHandler;
 import mju.capstone.ddingconnect.global.response.exception.handler.MemberHandler;
@@ -39,40 +40,114 @@ class CoffeeChatServiceImplTest {
     @Mock MemberRepository memberRepository;
     @InjectMocks CoffeeChatServiceImpl coffeeChatService;
 
-    private Member requester;
-    private Member receiver;
+    private Member studentRequester;
+    private Member graduateReceiver;
     private Member other;
     private CoffeeChat coffeeChat;
 
     @BeforeEach
     void setUp() {
-        requester = Member.builder().id(1L).email("req@mju.ac.kr").nickname("요청자").build();
-        receiver = Member.builder().id(2L).email("rec@mju.ac.kr").nickname("수신자").build();
-        other = Member.builder().id(3L).email("o@mju.ac.kr").nickname("타인").build();
-        coffeeChat = CoffeeChat.builder().id(10L).requester(requester).receiver(receiver)
+        studentRequester = Member.builder().id(1L).email("req@mju.ac.kr").nickname("김후배")
+                .department("응용소프트웨어학과").role(MemberRole.STUDENT).build();
+        graduateReceiver = Member.builder().id(2L).email("rec@mju.ac.kr").nickname("이선배")
+                .department("응용소프트웨어학과").role(MemberRole.GRADUATE).build();
+        other = Member.builder().id(3L).email("o@mju.ac.kr").nickname("타인").role(MemberRole.GRADUATE).build();
+        coffeeChat = CoffeeChat.builder().id(10L).requester(studentRequester).receiver(graduateReceiver)
                 .status(CoffeeChatStatus.PENDING)
                 .kakaoOpenChatLink("https://open.kakao.com/test").build();
     }
 
     @Test
-    @DisplayName("create - 커피챗을 정상 요청하고 수신자에게 알람 1건 발행한다")
-    void create_정상요청_알람발행() {
-        CreateCoffeeChatRequest req = new CreateCoffeeChatRequest(receiver.getId(), "https://link");
-        when(memberRepository.findById(receiver.getId())).thenReturn(Optional.of(receiver));
+    @DisplayName("create - 학생→졸업생 요청 시 수신자에게 알람 1건 발행, content 에 요청자 학과/닉네임 포함")
+    void create_정상요청_알람발행_동적content() {
+        CreateCoffeeChatRequest req = new CreateCoffeeChatRequest(graduateReceiver.getId(), "https://link");
+        when(memberRepository.findById(graduateReceiver.getId())).thenReturn(Optional.of(graduateReceiver));
         when(coffeeChatRepository.save(any(CoffeeChat.class))).thenReturn(coffeeChat);
 
-        CoffeeChatResponse response = coffeeChatService.create(requester, req);
+        CoffeeChatResponse response = coffeeChatService.create(studentRequester, req);
 
         assertThat(response.id()).isEqualTo(10L);
         assertThat(response.status()).isEqualTo(CoffeeChatStatus.PENDING);
 
-        // 알람 1건 발행 검증 (수신자에게)
         ArgumentCaptor<CoffeeChatAlarm> captor = ArgumentCaptor.forClass(CoffeeChatAlarm.class);
         verify(coffeeChatAlarmRepository, times(1)).save(captor.capture());
         CoffeeChatAlarm alarm = captor.getValue();
-        assertThat(alarm.getMember().getId()).isEqualTo(receiver.getId());
+        assertThat(alarm.getMember().getId()).isEqualTo(graduateReceiver.getId());
         assertThat(alarm.getIsRead()).isFalse();
-        assertThat(alarm.getContent()).contains("도착");
+        assertThat(alarm.getContent()).isEqualTo("응용소프트웨어학과 김후배님이 커피챗을 요청했어요!");
+    }
+
+    @Test
+    @DisplayName("create - 졸업생→학생 요청도 정상 통과")
+    void create_졸업생_학생_허용() {
+        Member studentReceiver = Member.builder().id(5L).nickname("재학생").department("학과")
+                .role(MemberRole.STUDENT).build();
+        Member graduateRequester = Member.builder().id(6L).nickname("졸업생").department("학과")
+                .role(MemberRole.GRADUATE).build();
+        CreateCoffeeChatRequest req = new CreateCoffeeChatRequest(studentReceiver.getId(), "https://link");
+        when(memberRepository.findById(studentReceiver.getId())).thenReturn(Optional.of(studentReceiver));
+        when(coffeeChatRepository.save(any(CoffeeChat.class))).thenReturn(coffeeChat);
+
+        coffeeChatService.create(graduateRequester, req);
+
+        verify(coffeeChatAlarmRepository).save(any(CoffeeChatAlarm.class));
+    }
+
+    @Test
+    @DisplayName("create - 자기 자신에게 요청 시 COFFEE_CHAT_SELF_REQUEST 예외")
+    void create_자기자신_예외() {
+        CreateCoffeeChatRequest req = new CreateCoffeeChatRequest(studentRequester.getId(), "https://link");
+        when(memberRepository.findById(studentRequester.getId())).thenReturn(Optional.of(studentRequester));
+
+        assertThatThrownBy(() -> coffeeChatService.create(studentRequester, req))
+                .isInstanceOf(CoffeeChatHandler.class);
+        verify(coffeeChatRepository, never()).save(any());
+        verify(coffeeChatAlarmRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("create - STUDENT 가 STUDENT 에게 요청 시 COFFEE_CHAT_ROLE_MISMATCH 예외")
+    void create_학생_학생_예외() {
+        Member otherStudent = Member.builder().id(8L).role(MemberRole.STUDENT).build();
+        CreateCoffeeChatRequest req = new CreateCoffeeChatRequest(otherStudent.getId(), "https://link");
+        when(memberRepository.findById(otherStudent.getId())).thenReturn(Optional.of(otherStudent));
+
+        assertThatThrownBy(() -> coffeeChatService.create(studentRequester, req))
+                .isInstanceOf(CoffeeChatHandler.class);
+        verify(coffeeChatRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("create - GRADUATE 가 GRADUATE 에게 요청 시 COFFEE_CHAT_ROLE_MISMATCH 예외")
+    void create_졸업생_졸업생_예외() {
+        Member otherGraduate = Member.builder().id(9L).role(MemberRole.GRADUATE).build();
+        CreateCoffeeChatRequest req = new CreateCoffeeChatRequest(otherGraduate.getId(), "https://link");
+        when(memberRepository.findById(otherGraduate.getId())).thenReturn(Optional.of(otherGraduate));
+
+        assertThatThrownBy(() -> coffeeChatService.create(graduateReceiver, req))
+                .isInstanceOf(CoffeeChatHandler.class);
+    }
+
+    @Test
+    @DisplayName("create - UNKNOWN 이 요청자 시 COFFEE_CHAT_ROLE_MISMATCH 예외")
+    void create_UNKNOWN_요청자_예외() {
+        Member unknown = Member.builder().id(11L).role(MemberRole.UNKNOWN).build();
+        CreateCoffeeChatRequest req = new CreateCoffeeChatRequest(graduateReceiver.getId(), "https://link");
+        when(memberRepository.findById(graduateReceiver.getId())).thenReturn(Optional.of(graduateReceiver));
+
+        assertThatThrownBy(() -> coffeeChatService.create(unknown, req))
+                .isInstanceOf(CoffeeChatHandler.class);
+    }
+
+    @Test
+    @DisplayName("create - UNKNOWN 이 수신자 시 COFFEE_CHAT_ROLE_MISMATCH 예외")
+    void create_UNKNOWN_수신자_예외() {
+        Member unknownReceiver = Member.builder().id(12L).role(MemberRole.UNKNOWN).build();
+        CreateCoffeeChatRequest req = new CreateCoffeeChatRequest(unknownReceiver.getId(), "https://link");
+        when(memberRepository.findById(unknownReceiver.getId())).thenReturn(Optional.of(unknownReceiver));
+
+        assertThatThrownBy(() -> coffeeChatService.create(studentRequester, req))
+                .isInstanceOf(CoffeeChatHandler.class);
     }
 
     @Test
@@ -81,7 +156,7 @@ class CoffeeChatServiceImplTest {
         CreateCoffeeChatRequest req = new CreateCoffeeChatRequest(999L, "https://link");
         when(memberRepository.findById(999L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> coffeeChatService.create(requester, req))
+        assertThatThrownBy(() -> coffeeChatService.create(studentRequester, req))
                 .isInstanceOf(MemberHandler.class);
         verify(coffeeChatAlarmRepository, never()).save(any());
     }
@@ -89,23 +164,23 @@ class CoffeeChatServiceImplTest {
     @Test
     @DisplayName("getSentList - 보낸 커피챗 목록을 반환한다")
     void getSentList_정상반환() {
-        when(coffeeChatRepository.findByRequesterId(requester.getId())).thenReturn(List.of(coffeeChat));
+        when(coffeeChatRepository.findByRequesterId(studentRequester.getId())).thenReturn(List.of(coffeeChat));
 
-        List<CoffeeChatResponse> result = coffeeChatService.getSentList(requester);
+        List<CoffeeChatResponse> result = coffeeChatService.getSentList(studentRequester);
 
         assertThat(result).hasSize(1);
-        assertThat(result.get(0).requesterId()).isEqualTo(requester.getId());
+        assertThat(result.get(0).requesterId()).isEqualTo(studentRequester.getId());
     }
 
     @Test
     @DisplayName("getReceivedList - 받은 커피챗 목록을 반환한다")
     void getReceivedList_정상반환() {
-        when(coffeeChatRepository.findByReceiverId(receiver.getId())).thenReturn(List.of(coffeeChat));
+        when(coffeeChatRepository.findByReceiverId(graduateReceiver.getId())).thenReturn(List.of(coffeeChat));
 
-        List<CoffeeChatResponse> result = coffeeChatService.getReceivedList(receiver);
+        List<CoffeeChatResponse> result = coffeeChatService.getReceivedList(graduateReceiver);
 
         assertThat(result).hasSize(1);
-        assertThat(result.get(0).receiverId()).isEqualTo(receiver.getId());
+        assertThat(result.get(0).receiverId()).isEqualTo(graduateReceiver.getId());
     }
 
     @Test
@@ -115,17 +190,16 @@ class CoffeeChatServiceImplTest {
         when(coffeeChatRepository.findById(10L)).thenReturn(Optional.of(coffeeChat));
         when(coffeeChatRepository.save(any(CoffeeChat.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        CoffeeChatResponse response = coffeeChatService.updateStatus(receiver, 10L, req);
+        CoffeeChatResponse response = coffeeChatService.updateStatus(graduateReceiver, 10L, req);
 
         assertThat(response.status()).isEqualTo(CoffeeChatStatus.ACCEPTED);
 
-        // 알람 2건 발행 검증 (요청자 + 수신자)
         ArgumentCaptor<CoffeeChatAlarm> captor = ArgumentCaptor.forClass(CoffeeChatAlarm.class);
         verify(coffeeChatAlarmRepository, times(2)).save(captor.capture());
         List<CoffeeChatAlarm> alarms = captor.getAllValues();
 
         assertThat(alarms).extracting(a -> a.getMember().getId())
-                .containsExactlyInAnyOrder(requester.getId(), receiver.getId());
+                .containsExactlyInAnyOrder(studentRequester.getId(), graduateReceiver.getId());
         assertThat(alarms).allSatisfy(a -> {
             assertThat(a.getContent()).contains("수락");
             assertThat(a.getContent()).contains(coffeeChat.getKakaoOpenChatLink());
@@ -140,12 +214,12 @@ class CoffeeChatServiceImplTest {
         when(coffeeChatRepository.findById(10L)).thenReturn(Optional.of(coffeeChat));
         when(coffeeChatRepository.save(any(CoffeeChat.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        coffeeChatService.updateStatus(receiver, 10L, req);
+        coffeeChatService.updateStatus(graduateReceiver, 10L, req);
 
         ArgumentCaptor<CoffeeChatAlarm> captor = ArgumentCaptor.forClass(CoffeeChatAlarm.class);
         verify(coffeeChatAlarmRepository, times(1)).save(captor.capture());
         CoffeeChatAlarm alarm = captor.getValue();
-        assertThat(alarm.getMember().getId()).isEqualTo(requester.getId());
+        assertThat(alarm.getMember().getId()).isEqualTo(studentRequester.getId());
         assertThat(alarm.getContent()).contains("거절");
     }
 
@@ -166,7 +240,7 @@ class CoffeeChatServiceImplTest {
         UpdateCoffeeChatStatusRequest req = new UpdateCoffeeChatStatusRequest(CoffeeChatStatus.ACCEPTED);
         when(coffeeChatRepository.findById(999L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> coffeeChatService.updateStatus(receiver, 999L, req))
+        assertThatThrownBy(() -> coffeeChatService.updateStatus(graduateReceiver, 999L, req))
                 .isInstanceOf(CoffeeChatHandler.class);
         verify(coffeeChatAlarmRepository, never()).save(any());
     }
@@ -176,7 +250,7 @@ class CoffeeChatServiceImplTest {
     void delete_정상취소() {
         when(coffeeChatRepository.findById(10L)).thenReturn(Optional.of(coffeeChat));
 
-        coffeeChatService.delete(requester, 10L);
+        coffeeChatService.delete(studentRequester, 10L);
 
         InOrder inOrder = inOrder(coffeeChatAlarmRepository, coffeeChatRepository);
         inOrder.verify(coffeeChatAlarmRepository).deleteByCoffeeChatId(10L);
@@ -188,7 +262,7 @@ class CoffeeChatServiceImplTest {
     void delete_권한없음_예외() {
         when(coffeeChatRepository.findById(10L)).thenReturn(Optional.of(coffeeChat));
 
-        assertThatThrownBy(() -> coffeeChatService.delete(receiver, 10L))
+        assertThatThrownBy(() -> coffeeChatService.delete(graduateReceiver, 10L))
                 .isInstanceOf(CoffeeChatHandler.class);
         verify(coffeeChatAlarmRepository, never()).deleteByCoffeeChatId(any());
         verify(coffeeChatRepository, never()).delete(any());
@@ -199,7 +273,7 @@ class CoffeeChatServiceImplTest {
     void delete_없음_예외() {
         when(coffeeChatRepository.findById(999L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> coffeeChatService.delete(requester, 999L))
+        assertThatThrownBy(() -> coffeeChatService.delete(studentRequester, 999L))
                 .isInstanceOf(CoffeeChatHandler.class);
     }
 }

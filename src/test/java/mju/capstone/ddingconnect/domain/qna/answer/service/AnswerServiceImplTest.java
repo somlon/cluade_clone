@@ -1,6 +1,7 @@
 package mju.capstone.ddingconnect.domain.qna.answer.service;
 
 import mju.capstone.ddingconnect.domain.member.domain.Member;
+import mju.capstone.ddingconnect.domain.member.domain.MemberRole;
 import mju.capstone.ddingconnect.domain.qna.answer.domain.Answer;
 import mju.capstone.ddingconnect.domain.qna.answer.domain.AnswerAlarm;
 import mju.capstone.ddingconnect.domain.qna.answer.domain.AnswerLike;
@@ -14,6 +15,7 @@ import mju.capstone.ddingconnect.domain.qna.answer.dto.response.AnswerResponse;
 import mju.capstone.ddingconnect.domain.qna.question.domain.Question;
 import mju.capstone.ddingconnect.domain.qna.question.domain.QuestionCategory;
 import mju.capstone.ddingconnect.domain.qna.question.domain.repository.QuestionRepository;
+import mju.capstone.ddingconnect.domain.qna.question.dto.response.LikeToggleResponse;
 import mju.capstone.ddingconnect.global.response.exception.handler.AnswerHandler;
 import mju.capstone.ddingconnect.global.response.exception.handler.QuestionHandler;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,6 +33,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -51,16 +54,18 @@ class AnswerServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        questioner = Member.builder().id(1L).nickname("질문자").build();
-        answerer = Member.builder().id(2L).nickname("답변자").build();
-        other = Member.builder().id(3L).nickname("타인").build();
+        // questioner 는 STUDENT (질문 작성자)
+        questioner = Member.builder().id(1L).nickname("질문자").role(MemberRole.STUDENT).build();
+        // answerer 는 GRADUATE (답변 작성자 — TODO #11 로 GRADUATE 만 답변 가능)
+        answerer = Member.builder().id(2L).nickname("답변자").role(MemberRole.GRADUATE).build();
+        other = Member.builder().id(3L).nickname("타인").role(MemberRole.GRADUATE).build();
         question = Question.builder().id(10L).member(questioner)
                 .category(QuestionCategory.STUDY).title("질문").content("내용").viewCount(0).build();
         answer = Answer.builder().id(20L).question(question).member(answerer).content("답변내용").build();
     }
 
     @Test
-    @DisplayName("create - 다른 사람 질문에 답변 시 AnswerAlarm 1건 발행한다")
+    @DisplayName("create - 졸업생이 다른 사람 질문에 답변 시 AnswerAlarm 1건 발행한다")
     void create_정상등록_타인질문_알람발행() {
         CreateAnswerRequest req = new CreateAnswerRequest("답변내용");
         when(questionRepository.findById(10L)).thenReturn(Optional.of(question));
@@ -70,21 +75,47 @@ class AnswerServiceImplTest {
 
         assertThat(response.id()).isEqualTo(20L);
         assertThat(response.questionId()).isEqualTo(10L);
+        assertThat(response.likeCount()).isZero();
+        assertThat(response.likedByMe()).isFalse();
         verify(answerAlarmRepository).save(any(AnswerAlarm.class));
     }
 
     @Test
-    @DisplayName("create - 본인이 본인 질문에 답변하면 AnswerAlarm 미발행")
+    @DisplayName("create - 졸업생이 본인 질문에 답변하면 AnswerAlarm 미발행")
     void create_본인질문_본인답변_알람미발행() {
-        // questioner 가 자기 질문에 직접 답변
-        Answer selfAnswer = Answer.builder().id(21L).question(question).member(questioner).content("자답").build();
+        // graduate 가 자기 질문에 직접 답변
+        Member graduateAuthor = Member.builder().id(7L).nickname("졸업생작성자").role(MemberRole.GRADUATE).build();
+        Question myQuestion = Question.builder().id(11L).member(graduateAuthor)
+                .category(QuestionCategory.STUDY).title("내질문").content("내용").viewCount(0).build();
+        Answer selfAnswer = Answer.builder().id(21L).question(myQuestion).member(graduateAuthor).content("자답").build();
         CreateAnswerRequest req = new CreateAnswerRequest("자답");
-        when(questionRepository.findById(10L)).thenReturn(Optional.of(question));
+        when(questionRepository.findById(11L)).thenReturn(Optional.of(myQuestion));
         when(answerRepository.save(any(Answer.class))).thenReturn(selfAnswer);
 
-        answerService.create(questioner, 10L, req);
+        answerService.create(graduateAuthor, 11L, req);
 
         verify(answerAlarmRepository, never()).save(any(AnswerAlarm.class));
+    }
+
+    @Test
+    @DisplayName("create - 학생이 답변 시도 시 ANSWER_NOT_GRADUATE 예외")
+    void create_학생답변_예외() {
+        CreateAnswerRequest req = new CreateAnswerRequest("답변");
+
+        assertThatThrownBy(() -> answerService.create(questioner, 10L, req))
+                .isInstanceOf(AnswerHandler.class);
+        verify(questionRepository, never()).findById(any());
+        verify(answerRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("create - UNKNOWN 역할은 답변 불가")
+    void create_UNKNOWN답변_예외() {
+        Member unknown = Member.builder().id(99L).role(MemberRole.UNKNOWN).build();
+        CreateAnswerRequest req = new CreateAnswerRequest("답변");
+
+        assertThatThrownBy(() -> answerService.create(unknown, 10L, req))
+                .isInstanceOf(AnswerHandler.class);
     }
 
     @Test
@@ -99,14 +130,18 @@ class AnswerServiceImplTest {
     }
 
     @Test
-    @DisplayName("getList - 특정 질문의 답변 목록을 반환한다")
-    void getList_정상반환() {
+    @DisplayName("getList - 특정 질문의 답변 목록을 카운트/likedByMe와 함께 반환한다")
+    void getList_카운트_likedByMe_포함() {
         when(answerRepository.findByQuestionId(10L)).thenReturn(List.of(answer));
+        when(answerLikeRepository.countByAnswerId(20L)).thenReturn(4L);
+        when(answerLikeRepository.existsByMemberIdAndAnswerId(other.getId(), 20L)).thenReturn(true);
 
-        List<AnswerResponse> result = answerService.getList(10L);
+        List<AnswerResponse> result = answerService.getList(other, 10L);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).content()).isEqualTo("답변내용");
+        assertThat(result.get(0).likeCount()).isEqualTo(4L);
+        assertThat(result.get(0).likedByMe()).isTrue();
     }
 
     @Test
@@ -176,28 +211,47 @@ class AnswerServiceImplTest {
     }
 
     @Test
-    @DisplayName("toggleLike - 좋아요가 없으면 새로 추가한다")
+    @DisplayName("toggleLike - 좋아요가 없으면 새로 추가하고 liked=true/likeCount 반환")
     void toggleLike_좋아요추가() {
         when(answerRepository.findById(20L)).thenReturn(Optional.of(answer));
         when(answerLikeRepository.findById(any(AnswerLikeId.class))).thenReturn(Optional.empty());
+        when(answerLikeRepository.existsByMemberIdAndAnswerId(other.getId(), 20L)).thenReturn(true);
+        when(answerLikeRepository.countByAnswerId(20L)).thenReturn(1L);
 
-        answerService.toggleLike(other, 20L);
+        LikeToggleResponse response = answerService.toggleLike(other, 20L);
 
         verify(answerLikeRepository).save(any(AnswerLike.class));
         verify(answerLikeRepository, never()).delete(any());
+        assertThat(response.liked()).isTrue();
+        assertThat(response.likeCount()).isEqualTo(1L);
     }
 
     @Test
-    @DisplayName("toggleLike - 이미 좋아요가 있으면 삭제한다")
+    @DisplayName("toggleLike - 이미 좋아요가 있으면 삭제하고 liked=false/likeCount 반환")
     void toggleLike_좋아요취소() {
         AnswerLike existing = AnswerLike.builder().answer(answer).member(other).build();
         when(answerRepository.findById(20L)).thenReturn(Optional.of(answer));
         when(answerLikeRepository.findById(any(AnswerLikeId.class))).thenReturn(Optional.of(existing));
+        when(answerLikeRepository.existsByMemberIdAndAnswerId(other.getId(), 20L)).thenReturn(false);
+        when(answerLikeRepository.countByAnswerId(20L)).thenReturn(0L);
 
-        answerService.toggleLike(other, 20L);
+        LikeToggleResponse response = answerService.toggleLike(other, 20L);
 
         verify(answerLikeRepository).delete(existing);
         verify(answerLikeRepository, never()).save(any());
+        assertThat(response.liked()).isFalse();
+        assertThat(response.likeCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("toggleLike - 본인 답변이면 ANSWER_SELF_LIKE 예외")
+    void toggleLike_본인답변_예외() {
+        when(answerRepository.findById(20L)).thenReturn(Optional.of(answer));
+
+        assertThatThrownBy(() -> answerService.toggleLike(answerer, 20L))
+                .isInstanceOf(AnswerHandler.class);
+        verify(answerLikeRepository, never()).save(any());
+        verify(answerLikeRepository, never()).delete(any());
     }
 
     @Test

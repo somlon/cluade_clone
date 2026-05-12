@@ -27,10 +27,15 @@ public enum ErrorStatus implements BaseErrorCode {
 
     // Member
     MEMBER_UNAUTHORIZED(HttpStatus.FORBIDDEN, "MEMBER403", "회원 정보를 수정/삭제할 권한이 없습니다."),
+    MEMBER_INVALID_SOCIAL_LINK(HttpStatus.BAD_REQUEST, "MEMBER400", "github 또는 linkedin 링크 형식이 올바르지 않습니다."),
+    MEMBER_INVALID_GRADE(HttpStatus.BAD_REQUEST, "MEMBER400", "학년은 1 이상이어야 합니다."),
+    MEMBER_FIELD_ROLE_MISMATCH(HttpStatus.BAD_REQUEST, "MEMBER400", "본인 역할과 일치하지 않는 필드는 수정할 수 없습니다."),
 
     // CoffeeChat
     COFFEE_CHAT_NOT_FOUND(HttpStatus.NOT_FOUND, "COFFEECHAT404", "존재하지 않는 커피챗입니다."),
     COFFEE_CHAT_UNAUTHORIZED(HttpStatus.FORBIDDEN, "COFFEECHAT403", "커피챗에 대한 권한이 없습니다."),
+    COFFEE_CHAT_SELF_REQUEST(HttpStatus.BAD_REQUEST, "COFFEECHAT400", "자기 자신에게는 커피챗을 요청할 수 없습니다."),
+    COFFEE_CHAT_ROLE_MISMATCH(HttpStatus.BAD_REQUEST, "COFFEECHAT400", "커피챗은 학생과 졸업생 사이에만 가능합니다."),
 
     // PostContents
     POST_CONTENTS_NOT_FOUND(HttpStatus.NOT_FOUND, "POST404", "존재하지 않는 구직 공고입니다."),
@@ -40,10 +45,13 @@ public enum ErrorStatus implements BaseErrorCode {
     // Question
     QUESTION_NOT_FOUND(HttpStatus.NOT_FOUND, "QUESTION404", "존재하지 않는 질문입니다."),
     QUESTION_UNAUTHORIZED(HttpStatus.FORBIDDEN, "QUESTION403", "질문을 수정/삭제할 권한이 없습니다."),
+    QUESTION_SELF_LIKE(HttpStatus.BAD_REQUEST, "QUESTION400", "본인이 작성한 질문에는 좋아요를 누를 수 없습니다."),
 
     // Answer
     ANSWER_NOT_FOUND(HttpStatus.NOT_FOUND, "ANSWER404", "존재하지 않는 답변입니다."),
     ANSWER_UNAUTHORIZED(HttpStatus.FORBIDDEN, "ANSWER403", "답변을 수정/삭제할 권한이 없습니다."),
+    ANSWER_SELF_LIKE(HttpStatus.BAD_REQUEST, "ANSWER400", "본인이 작성한 답변에는 좋아요를 누를 수 없습니다."),
+    ANSWER_NOT_GRADUATE(HttpStatus.FORBIDDEN, "ANSWER403", "졸업생만 답변을 등록할 수 있습니다."),
 
     // Roadmap
     ROADMAP_NOT_FOUND(HttpStatus.NOT_FOUND, "ROADMAP404", "존재하지 않는 로드맵입니다."),
@@ -53,10 +61,12 @@ public enum ErrorStatus implements BaseErrorCode {
     // TechStack
     TECH_STACK_NOT_FOUND(HttpStatus.NOT_FOUND, "TECHSTACK404", "존재하지 않는 기술 스택입니다."),
     TECH_STACK_UNAUTHORIZED(HttpStatus.FORBIDDEN, "TECHSTACK403", "기술 스택을 삭제할 권한이 없습니다."),
+    TECH_STACK_DUPLICATE(HttpStatus.CONFLICT, "TECHSTACK409", "이미 등록된 기술 스택입니다."),
 
     // TargetJob
     TARGET_JOB_NOT_FOUND(HttpStatus.NOT_FOUND, "TARGETJOB404", "존재하지 않는 관심 직군입니다."),
     TARGET_JOB_UNAUTHORIZED(HttpStatus.FORBIDDEN, "TARGETJOB403", "관심 직군을 수정/삭제할 권한이 없습니다."),
+    TARGET_JOB_DUPLICATE(HttpStatus.CONFLICT, "TARGETJOB409", "이미 등록된 관심 직군입니다."),
 
     // Alarm
     ALARM_NOT_FOUND(HttpStatus.NOT_FOUND, "ALARM404", "존재하지 않는 알람입니다."),

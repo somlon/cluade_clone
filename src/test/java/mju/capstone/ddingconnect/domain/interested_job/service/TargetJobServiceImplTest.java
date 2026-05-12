@@ -47,12 +47,36 @@ class TargetJobServiceImplTest {
     @DisplayName("create - 관심 직군을 정상 추가한다")
     void create_정상추가() {
         CreateTargetJobRequest req = new CreateTargetJobRequest(TargetJobCategory.BACKEND);
+        when(targetJobRepository.existsByMemberIdAndInterestedJob(owner.getId(), TargetJobCategory.BACKEND)).thenReturn(false);
         when(targetJobRepository.save(any(TargetJob.class))).thenReturn(targetJob);
 
         TargetJobResponse response = targetJobService.create(owner, req);
 
         assertThat(response.id()).isEqualTo(10L);
         assertThat(response.interestedJob()).isEqualTo(TargetJobCategory.BACKEND);
+    }
+
+    @Test
+    @DisplayName("create - 같은 회원이 같은 카테고리로 중복 추가 시 TARGET_JOB_DUPLICATE 예외")
+    void create_중복_예외() {
+        CreateTargetJobRequest req = new CreateTargetJobRequest(TargetJobCategory.BACKEND);
+        when(targetJobRepository.existsByMemberIdAndInterestedJob(owner.getId(), TargetJobCategory.BACKEND)).thenReturn(true);
+
+        assertThatThrownBy(() -> targetJobService.create(owner, req))
+                .isInstanceOf(TargetJobHandler.class);
+        verify(targetJobRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("create - 다른 회원이 같은 카테고리로 추가하는 건 허용")
+    void create_다른회원_같은카테고리_허용() {
+        CreateTargetJobRequest req = new CreateTargetJobRequest(TargetJobCategory.BACKEND);
+        when(targetJobRepository.existsByMemberIdAndInterestedJob(other.getId(), TargetJobCategory.BACKEND)).thenReturn(false);
+        when(targetJobRepository.save(any(TargetJob.class))).thenReturn(targetJob);
+
+        TargetJobResponse response = targetJobService.create(other, req);
+
+        assertThat(response.id()).isEqualTo(10L);
     }
 
     @Test
@@ -66,15 +90,42 @@ class TargetJobServiceImplTest {
     }
 
     @Test
-    @DisplayName("update - 본인의 관심 직군을 정상 수정한다")
+    @DisplayName("update - 본인의 관심 직군을 다른 카테고리로 정상 수정한다")
     void update_정상수정() {
         UpdateTargetJobRequest req = new UpdateTargetJobRequest(TargetJobCategory.FRONTEND);
         when(targetJobRepository.findById(10L)).thenReturn(Optional.of(targetJob));
+        when(targetJobRepository.existsByMemberIdAndInterestedJob(owner.getId(), TargetJobCategory.FRONTEND)).thenReturn(false);
         when(targetJobRepository.save(any(TargetJob.class))).thenAnswer(inv -> inv.getArgument(0));
 
         TargetJobResponse response = targetJobService.update(owner, 10L, req);
 
         assertThat(response.interestedJob()).isEqualTo(TargetJobCategory.FRONTEND);
+    }
+
+    @Test
+    @DisplayName("update - 같은 카테고리로 수정하는 것은 통과한다")
+    void update_같은카테고리_통과() {
+        UpdateTargetJobRequest req = new UpdateTargetJobRequest(TargetJobCategory.BACKEND);
+        when(targetJobRepository.findById(10L)).thenReturn(Optional.of(targetJob));
+        when(targetJobRepository.save(any(TargetJob.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        TargetJobResponse response = targetJobService.update(owner, 10L, req);
+
+        assertThat(response.interestedJob()).isEqualTo(TargetJobCategory.BACKEND);
+        // 같은 카테고리이므로 existsBy 호출 안 함
+        verify(targetJobRepository, never()).existsByMemberIdAndInterestedJob(any(), any());
+    }
+
+    @Test
+    @DisplayName("update - 이미 보유한 다른 카테고리로 변경 시 TARGET_JOB_DUPLICATE 예외")
+    void update_이미보유한_카테고리_예외() {
+        UpdateTargetJobRequest req = new UpdateTargetJobRequest(TargetJobCategory.FRONTEND);
+        when(targetJobRepository.findById(10L)).thenReturn(Optional.of(targetJob));
+        when(targetJobRepository.existsByMemberIdAndInterestedJob(owner.getId(), TargetJobCategory.FRONTEND)).thenReturn(true);
+
+        assertThatThrownBy(() -> targetJobService.update(owner, 10L, req))
+                .isInstanceOf(TargetJobHandler.class);
+        verify(targetJobRepository, never()).save(any());
     }
 
     @Test

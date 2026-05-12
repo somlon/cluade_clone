@@ -6,14 +6,18 @@ public record AnswerResponse(
         Long id,
         Long questionId,
         Long memberId,
-        String content
+        String content,
+        Long likeCount,
+        Boolean likedByMe
 ) {
-    public static AnswerResponse from(Answer answer) {
+    public static AnswerResponse from(Answer answer, long likeCount, boolean likedByMe) {
         return new AnswerResponse(
                 answer.getId(),
                 answer.getQuestion().getId(),
                 answer.getMember().getId(),
-                answer.getContent()
+                answer.getContent(),
+                likeCount,
+                likedByMe
         );
     }
 }

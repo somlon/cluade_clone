@@ -10,6 +10,7 @@ import mju.capstone.ddingconnect.domain.coffeechat.dto.request.CreateCoffeeChatR
 import mju.capstone.ddingconnect.domain.coffeechat.dto.request.UpdateCoffeeChatStatusRequest;
 import mju.capstone.ddingconnect.domain.coffeechat.dto.response.CoffeeChatResponse;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
+import mju.capstone.ddingconnect.domain.member.domain.MemberRole;
 import mju.capstone.ddingconnect.domain.member.domain.repository.MemberRepository;
 import mju.capstone.ddingconnect.global.response.code.status.ErrorStatus;
 import mju.capstone.ddingconnect.global.response.exception.handler.CoffeeChatHandler;
@@ -42,6 +43,20 @@ public class CoffeeChatServiceImpl implements CoffeeChatService {
         Member receiver = memberRepository.findById(request.receiverId())
                 .orElseThrow(() -> new MemberHandler(ErrorStatus.MEMBER_NOT_FOUND));
 
+        // 자기 자신 거부 (정보 노출 최소화 위해 self 가 먼저)
+        if (member.getId().equals(receiver.getId())) {
+            throw new CoffeeChatHandler(ErrorStatus.COFFEE_CHAT_SELF_REQUEST);
+        }
+
+        // 학생 ↔ 졸업생 쌍만 허용 (UNKNOWN 양쪽 모두 거부)
+        boolean studentToGraduate = member.getRole() == MemberRole.STUDENT
+                && receiver.getRole() == MemberRole.GRADUATE;
+        boolean graduateToStudent = member.getRole() == MemberRole.GRADUATE
+                && receiver.getRole() == MemberRole.STUDENT;
+        if (!studentToGraduate && !graduateToStudent) {
+            throw new CoffeeChatHandler(ErrorStatus.COFFEE_CHAT_ROLE_MISMATCH);
+        }
+
         CoffeeChat coffeeChat = CoffeeChat.builder()
                 .requester(member)
                 .receiver(receiver)
@@ -52,10 +67,13 @@ public class CoffeeChatServiceImpl implements CoffeeChatService {
         CoffeeChat saved = coffeeChatRepository.save(coffeeChat);
 
         // [알람 발행] 수신자에게 "요청 도착" 알람 1건
+        // content 에 요청자 학과/닉네임을 포함해 알림 화면에서 식별 가능하게 함
+        String pendingContent = String.format("%s %s님이 커피챗을 요청했어요!",
+                member.getDepartment(), member.getNickname());
         coffeeChatAlarmRepository.save(CoffeeChatAlarm.builder()
                 .coffeeChat(saved)
                 .member(receiver)
-                .content("새로운 커피챗 요청이 도착했습니다.")
+                .content(pendingContent)
                 .isRead(false)
                 .build());
 

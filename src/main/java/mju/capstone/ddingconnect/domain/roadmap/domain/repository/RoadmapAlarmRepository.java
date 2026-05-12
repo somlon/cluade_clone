@@ -2,6 +2,7 @@ package mju.capstone.ddingconnect.domain.roadmap.domain.repository;
 
 import mju.capstone.ddingconnect.domain.roadmap.domain.RoadmapAlarm;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -26,4 +27,11 @@ public interface RoadmapAlarmRepository extends JpaRepository<RoadmapAlarm, Long
      */
     @Query("SELECT ra FROM RoadmapAlarm ra WHERE ra.roadmap.member.id = :memberId")
     List<RoadmapAlarm> findByRoadmapOwnerId(@Param("memberId") Long memberId);
+
+    /**
+     * 회원 hard delete 시 사용: 해당 회원이 받은 (= 본인 로드맵에 달린) 알람 일괄 정리.
+     */
+    @Modifying
+    @Query("DELETE FROM RoadmapAlarm ra WHERE ra.roadmap.member.id = :memberId")
+    void deleteByMemberId(@Param("memberId") Long memberId);
 }

@@ -17,4 +17,8 @@ public interface TargetJobRepository extends JpaRepository<TargetJob, Long> {
     List<TargetJob> findByMemberIdAndInterestedJob(Long memberId, TargetJobCategory interestedJob);
 
     List<TargetJob> findByInterestedJob(TargetJobCategory interestedJob);
+
+    boolean existsByMemberIdAndInterestedJob(Long memberId, TargetJobCategory interestedJob);
+
+    void deleteByMemberId(Long memberId);
 }

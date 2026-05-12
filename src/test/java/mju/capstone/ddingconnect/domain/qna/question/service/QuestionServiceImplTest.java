@@ -11,6 +11,7 @@ import mju.capstone.ddingconnect.domain.qna.question.domain.repository.QuestionL
 import mju.capstone.ddingconnect.domain.qna.question.domain.repository.QuestionRepository;
 import mju.capstone.ddingconnect.domain.qna.question.dto.request.CreateQuestionRequest;
 import mju.capstone.ddingconnect.domain.qna.question.dto.request.UpdateQuestionRequest;
+import mju.capstone.ddingconnect.domain.qna.question.dto.response.LikeToggleResponse;
 import mju.capstone.ddingconnect.domain.qna.question.dto.response.QuestionResponse;
 import mju.capstone.ddingconnect.global.response.exception.handler.QuestionHandler;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,6 +30,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -68,26 +71,38 @@ class QuestionServiceImplTest {
     }
 
     @Test
-    @DisplayName("getList - 질문 목록을 반환한다")
-    void getList_정상반환() {
+    @DisplayName("getList - 질문 목록을 카운트/likedByMe와 함께 반환한다")
+    void getList_카운트_likedByMe_포함() {
         when(questionRepository.findAll()).thenReturn(List.of(question));
+        when(questionLikeRepository.countByQuestionId(10L)).thenReturn(7L);
+        when(answerRepository.countByQuestionId(10L)).thenReturn(3L);
+        when(questionLikeRepository.existsByMemberIdAndQuestionId(other.getId(), 10L)).thenReturn(true);
 
-        List<QuestionResponse> result = questionService.getList();
+        List<QuestionResponse> result = questionService.getList(other);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).title()).isEqualTo("제목");
+        assertThat(result.get(0).likeCount()).isEqualTo(7L);
+        assertThat(result.get(0).answerCount()).isEqualTo(3L);
+        assertThat(result.get(0).likedByMe()).isTrue();
     }
 
     @Test
-    @DisplayName("getOne - 상세 조회 시 조회수가 +1 증가한다")
-    void getOne_조회수증가() {
+    @DisplayName("getOne - 상세 조회 시 조회수가 +1 증가하고 카운트/likedByMe가 반환된다")
+    void getOne_조회수증가_카운트반환() {
         when(questionRepository.findById(10L)).thenReturn(Optional.of(question));
         ArgumentCaptor<Question> captor = ArgumentCaptor.forClass(Question.class);
         when(questionRepository.save(captor.capture())).thenAnswer(inv -> inv.getArgument(0));
+        when(questionLikeRepository.countByQuestionId(10L)).thenReturn(2L);
+        when(answerRepository.countByQuestionId(10L)).thenReturn(3L);
+        when(questionLikeRepository.existsByMemberIdAndQuestionId(other.getId(), 10L)).thenReturn(true);
 
-        questionService.getOne(10L);
+        QuestionResponse response = questionService.getOne(other, 10L);
 
         assertThat(captor.getValue().getViewCount()).isEqualTo(6);
+        assertThat(response.likeCount()).isEqualTo(2L);
+        assertThat(response.answerCount()).isEqualTo(3L);
+        assertThat(response.likedByMe()).isTrue();
     }
 
     @Test
@@ -95,7 +110,7 @@ class QuestionServiceImplTest {
     void getOne_없음_예외() {
         when(questionRepository.findById(999L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> questionService.getOne(999L))
+        assertThatThrownBy(() -> questionService.getOne(other, 999L))
                 .isInstanceOf(QuestionHandler.class);
     }
 
@@ -172,28 +187,47 @@ class QuestionServiceImplTest {
     }
 
     @Test
-    @DisplayName("toggleLike - 좋아요가 없으면 새로 추가한다")
+    @DisplayName("toggleLike - 좋아요가 없으면 새로 추가하고 liked=true/likeCount 반환")
     void toggleLike_좋아요추가() {
         when(questionRepository.findById(10L)).thenReturn(Optional.of(question));
         when(questionLikeRepository.findAll()).thenReturn(List.of());
+        when(questionLikeRepository.existsByMemberIdAndQuestionId(other.getId(), 10L)).thenReturn(true);
+        when(questionLikeRepository.countByQuestionId(10L)).thenReturn(1L);
 
-        questionService.toggleLike(other, 10L);
+        LikeToggleResponse response = questionService.toggleLike(other, 10L);
 
         verify(questionLikeRepository).save(any(QuestionLike.class));
         verify(questionLikeRepository, never()).delete(any());
+        assertThat(response.liked()).isTrue();
+        assertThat(response.likeCount()).isEqualTo(1L);
     }
 
     @Test
-    @DisplayName("toggleLike - 이미 좋아요가 있으면 삭제한다")
+    @DisplayName("toggleLike - 이미 좋아요가 있으면 삭제하고 liked=false/likeCount 반환")
     void toggleLike_좋아요취소() {
         QuestionLike existing = QuestionLike.builder().question(question).member(other).build();
         when(questionRepository.findById(10L)).thenReturn(Optional.of(question));
         when(questionLikeRepository.findAll()).thenReturn(List.of(existing));
+        when(questionLikeRepository.existsByMemberIdAndQuestionId(other.getId(), 10L)).thenReturn(false);
+        when(questionLikeRepository.countByQuestionId(10L)).thenReturn(0L);
 
-        questionService.toggleLike(other, 10L);
+        LikeToggleResponse response = questionService.toggleLike(other, 10L);
 
         verify(questionLikeRepository).delete(existing);
         verify(questionLikeRepository, never()).save(any());
+        assertThat(response.liked()).isFalse();
+        assertThat(response.likeCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("toggleLike - 본인 질문이면 QUESTION_SELF_LIKE 예외")
+    void toggleLike_본인질문_예외() {
+        when(questionRepository.findById(10L)).thenReturn(Optional.of(question));
+
+        assertThatThrownBy(() -> questionService.toggleLike(author, 10L))
+                .isInstanceOf(QuestionHandler.class);
+        verify(questionLikeRepository, never()).save(any());
+        verify(questionLikeRepository, never()).delete(any());
     }
 
     @Test

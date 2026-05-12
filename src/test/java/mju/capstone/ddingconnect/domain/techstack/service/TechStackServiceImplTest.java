@@ -45,12 +45,36 @@ class TechStackServiceImplTest {
     @DisplayName("add - 기술 스택을 정상 추가한다")
     void add_정상추가() {
         CreateTechStackRequest req = new CreateTechStackRequest(TechStackName.JAVA);
+        when(techStackRepository.existsByMemberIdAndName(owner.getId(), TechStackName.JAVA)).thenReturn(false);
         when(techStackRepository.save(any(TechStack.class))).thenReturn(stack);
 
         TechStackResponse response = techStackService.add(owner, req);
 
         assertThat(response.id()).isEqualTo(10L);
         assertThat(response.name()).isEqualTo(TechStackName.JAVA);
+    }
+
+    @Test
+    @DisplayName("add - 같은 회원이 같은 이름으로 중복 추가하면 TECH_STACK_DUPLICATE 예외")
+    void add_중복_예외() {
+        CreateTechStackRequest req = new CreateTechStackRequest(TechStackName.JAVA);
+        when(techStackRepository.existsByMemberIdAndName(owner.getId(), TechStackName.JAVA)).thenReturn(true);
+
+        assertThatThrownBy(() -> techStackService.add(owner, req))
+                .isInstanceOf(TechStackHandler.class);
+        verify(techStackRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("add - 다른 회원이 같은 이름 등록하는 건 허용")
+    void add_다른회원_같은이름_허용() {
+        CreateTechStackRequest req = new CreateTechStackRequest(TechStackName.JAVA);
+        when(techStackRepository.existsByMemberIdAndName(other.getId(), TechStackName.JAVA)).thenReturn(false);
+        when(techStackRepository.save(any(TechStack.class))).thenReturn(stack);
+
+        TechStackResponse response = techStackService.add(other, req);
+
+        assertThat(response.id()).isEqualTo(10L);
     }
 
     @Test

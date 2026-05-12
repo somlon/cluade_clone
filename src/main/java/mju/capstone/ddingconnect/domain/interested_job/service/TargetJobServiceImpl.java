@@ -23,6 +23,10 @@ public class TargetJobServiceImpl implements TargetJobService {
     @Override
     @Transactional
     public TargetJobResponse create(Member member, CreateTargetJobRequest request) {
+        if (targetJobRepository.existsByMemberIdAndInterestedJob(member.getId(), request.interestedJob())) {
+            throw new TargetJobHandler(ErrorStatus.TARGET_JOB_DUPLICATE);
+        }
+
         TargetJob targetJob = TargetJob.builder()
                 .member(member)
                 .interestedJob(request.interestedJob())
@@ -49,6 +53,11 @@ public class TargetJobServiceImpl implements TargetJobService {
         // 본인 소유 확인
         if (!targetJob.getMember().getId().equals(member.getId())) {
             throw new TargetJobHandler(ErrorStatus.TARGET_JOB_UNAUTHORIZED);
+        }
+
+        boolean unchanged = targetJob.getInterestedJob() == request.interestedJob();
+        if (!unchanged && targetJobRepository.existsByMemberIdAndInterestedJob(member.getId(), request.interestedJob())) {
+            throw new TargetJobHandler(ErrorStatus.TARGET_JOB_DUPLICATE);
         }
 
         TargetJob updated = TargetJob.builder()

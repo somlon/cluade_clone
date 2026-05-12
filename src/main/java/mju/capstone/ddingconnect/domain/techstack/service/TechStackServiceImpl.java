@@ -22,6 +22,9 @@ public class TechStackServiceImpl implements TechStackService {
     @Override
     @Transactional
     public TechStackResponse add(Member member, CreateTechStackRequest request) {
+        if (techStackRepository.existsByMemberIdAndName(member.getId(), request.name())) {
+            throw new TechStackHandler(ErrorStatus.TECH_STACK_DUPLICATE);
+        }
         TechStack techStack = TechStack.builder()
                 .member(member)
                 .name(request.name())

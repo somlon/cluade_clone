@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.domain.qna.question.dto.request.CreateQuestionRequest;
 import mju.capstone.ddingconnect.domain.qna.question.dto.request.UpdateQuestionRequest;
+import mju.capstone.ddingconnect.domain.qna.question.dto.response.LikeToggleResponse;
 import mju.capstone.ddingconnect.domain.qna.question.dto.response.QuestionResponse;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMember;
 import mju.capstone.ddingconnect.global.response.exception.handler.ApiResponse;
@@ -31,20 +32,22 @@ public interface QuestionSwagger {
 
     @Operation(
             summary = "질문 목록 조회",
-            description = "등록된 모든 질문 목록을 조회합니다."
+            description = "등록된 모든 질문 목록을 조회합니다. 각 항목에 좋아요 개수(`likeCount`), 답변 개수(`answerCount`), 본인 좋아요 여부(`likedByMe`)가 포함됩니다."
     )
     @GetMapping
-    ApiResponse<List<QuestionResponse>> getQuestions();
+    ApiResponse<List<QuestionResponse>> getQuestions(
+            @Parameter(hidden = true) @LoginMember Member member);
 
 
 
 
     @Operation(
             summary = "질문 상세 조회",
-            description = "질문 카드를 클릭했을 때 본문과 답변 화면 진입 시 호출되며, 조회수가 +1 증가합니다."
+            description = "질문 카드를 클릭했을 때 본문과 답변 화면 진입 시 호출되며, 조회수가 +1 증가합니다. 응답에 좋아요 개수(`likeCount`), 답변 개수(`answerCount`), 본인 좋아요 여부(`likedByMe`)가 포함됩니다."
     )
     @GetMapping("/{questionId}")
     ApiResponse<QuestionResponse> getQuestion(
+            @Parameter(hidden = true) @LoginMember Member member,
             @Parameter(description = "조회할 질문 ID")
             @PathVariable Long questionId);
 
@@ -81,10 +84,10 @@ public interface QuestionSwagger {
 
     @Operation(
             summary = "질문 좋아요 토글",
-            description = "특정 질문에 좋아요를 누르거나 취소합니다. 이미 좋아요를 누른 상태라면 좋아요가 취소됩니다."
+            description = "특정 질문에 좋아요를 누르거나 취소합니다. 이미 좋아요를 누른 상태라면 좋아요가 취소됩니다. 본인이 작성한 질문에는 좋아요 불가(400). 토글 후 새 상태(`liked`)와 카운트(`likeCount`)가 응답에 포함됩니다."
     )
     @PostMapping("/{questionId}/like")
-    ApiResponse<String> likeQuestion(
+    ApiResponse<LikeToggleResponse> likeQuestion(
             @Parameter(hidden = true) @LoginMember Member member,
             @Parameter(description = "좋아요를 토글할 질문 ID")
             @PathVariable Long questionId);

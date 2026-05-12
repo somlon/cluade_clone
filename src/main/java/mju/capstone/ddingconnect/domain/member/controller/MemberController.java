@@ -1,6 +1,7 @@
 package mju.capstone.ddingconnect.domain.member.controller;
 
 import io.swagger.v3.oas.annotations.Parameter;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.domain.member.dto.request.UpdateMemberRequest;
@@ -35,7 +36,7 @@ public class MemberController implements MemberSwagger {
     @PatchMapping("/me")
     public ApiResponse<MemberResponse> updateMyProfile(
             @Parameter(hidden = true) @LoginMember Member member,
-            @RequestBody UpdateMemberRequest request) {
+            @Valid @RequestBody UpdateMemberRequest request) {
         return ApiResponse.onSuccess(memberService.updateMyProfile(member, request));
     }
 

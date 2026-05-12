@@ -14,4 +14,6 @@ public interface QuestionLikeRepository extends JpaRepository<QuestionLike, Long
     long countByQuestionId(Long questionId);
 
     void deleteByQuestionId(Long questionId);
+
+    void deleteByMemberId(Long memberId);
 }
