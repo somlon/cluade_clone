@@ -189,7 +189,7 @@ mju.capstone.ddingconnect
 >
 > 각 항목은 완료(머지) 후 이 섹션에서 삭제하거나 "완료" 로 표시하고, 본문 도메인 섹션에 정식 규칙으로 통합 기록한다.
 
-_(아래 TODO #1 ~ #7 는 회원(member) 4개 + 기술 스택 1개 + 관심 직군 1개 + 커피챗 1개 이슈. 각 항목 완료 후 본문 `### 회원 (Member)` / `### 기술 스택 (techstack)` / `### 커피챗 (coffeechat)` 섹션 등에 정식 규칙으로 통합하고 이 섹션에서 제거.)_
+_(아래 TODO #1 ~ #8 는 회원(member) 4개 + 기술 스택 1개 + 관심 직군 1개 + 커피챗 2개 이슈. 각 항목 완료 후 본문 `### 회원 (Member)` / `### 기술 스택 (techstack)` / `### 커피챗 (coffeechat)` 섹션 등에 정식 규칙으로 통합하고 이 섹션에서 제거.)_
 
 ### TODO #1: 회원 탈퇴 시 관련 DB 데이터 전부 hard delete
 
@@ -604,9 +604,92 @@ if (!studentToGraduate && !graduateToStudent) {
 
 ---
 
-### 7개 TODO 공통 작업자 노트
+---
 
-- **브랜치 정책**: 각 TODO 를 **개별 브랜치 + 개별 PR** 로 처리하는 것을 기본으로 한다. TODO #1 은 영향 범위가 커서 단독 PR 필수. TODO #2/#3/#4 는 회원 도메인의 작은 검증 변경이라 묶어서 1개 PR 도 허용 (작업자 판단). TODO #5/#6/#7 도 각각 다른 도메인이라 단독 PR 권장. 사용자가 "TODO #N 작업" 으로 단일 항목 지목 시 그 항목만 단독 PR.
+### TODO #8: PENDING 커피챗 알람 content 동적 생성 (요청자 정보 노출)
+
+**배경**
+현재 `CoffeeChatServiceImpl.create:54-60` 가 PENDING 알람을 발행할 때 content 를 정적 문자열 `"새로운 커피챗 요청이 도착했습니다."` 로 세팅. 결과 = 알람 목록/상세 화면(Figma)에서 요청자가 누구인지 표시할 수 없음. UI 가 요구하는 본문 = `"응용소프트웨어학과 김후배님이 커피챗을 요청했어요!"` 같은 사람 친화 메시지. 백엔드는 PENDING 알람의 content 에 요청자의 `department` + `nickname` 을 동적으로 포함시켜 발행.
+
+**확정된 결정 사항 (재논의 금지)**
+
+| # | 결정 |
+|---|---|
+| 1 | **방향 A 채택**: `AlarmResponse` DTO 는 그대로 두고 알람 `content` 메시지만 동적 생성. 최소 변경 (한 곳 한 줄). |
+| 2 | PENDING 알람 content 형식: `"%s %s님이 커피챗을 요청했어요!"` 에 `requester.department`, `requester.nickname` 순서로 포맷팅 |
+| 3 | ACCEPTED / REJECTED 알람 content 는 **변경 없음** (현재 정적 메시지 유지). 화면이 PENDING 상세 모달만 요구한 상태 |
+| 4 | 헤더 텍스트 `"새로운 커피챗 신청이 들어왔습니다"` 는 프론트가 type 별 상수로 표시 (백엔드 미관여) |
+| 5 | 수락/거절 액션 = 기존 `PATCH /api/v1/coffeechat/{coffeeChatId}/status` 그대로. 알람의 `refId` 를 `coffeeChatId` 로 사용 |
+| 6 | requester 의 `department` / `nickname` 이 null 이어도 그대로 노출 (회원가입 시 모두 채워진다는 전제). 추후 필요시 별도 처리 |
+| 7 | 새 에러코드 없음. 기존 흐름 그대로 200 OK |
+
+**구현 단계**
+
+#### Step 1: `CoffeeChatServiceImpl.create` 의 알람 content 동적화
+파일: `src/main/java/mju/capstone/ddingconnect/domain/coffeechat/service/CoffeeChatServiceImpl.java`
+
+기존 (L54–60):
+```java
+coffeeChatAlarmRepository.save(CoffeeChatAlarm.builder()
+        .coffeeChat(saved)
+        .member(receiver)
+        .content("새로운 커피챗 요청이 도착했습니다.")
+        .isRead(false)
+        .build());
+```
+
+변경 후:
+```java
+String content = String.format("%s %s님이 커피챗을 요청했어요!",
+        member.getDepartment(),
+        member.getNickname());
+coffeeChatAlarmRepository.save(CoffeeChatAlarm.builder()
+        .coffeeChat(saved)
+        .member(receiver)
+        .content(content)
+        .isRead(false)
+        .build());
+```
+
+#### Step 2: 테스트 보강
+파일: `src/test/java/mju/capstone/ddingconnect/domain/coffeechat/service/CoffeeChatServiceImplTest.java` (없으면 신설)
+
+추가 시나리오:
+- `create_PENDING_알람_content_요청자정보포함` — requester 가 `department="응용소프트웨어학과"`, `nickname="김후배"` 일 때 발행된 알람의 `content` 가 `"응용소프트웨어학과 김후배님이 커피챗을 요청했어요!"` 인지 `ArgumentCaptor<CoffeeChatAlarm>` 로 검증
+- 기존 테스트 중 `content` 비교 어서션이 있다면 새 메시지로 갱신
+
+#### Step 3: CLAUDE.md 갱신
+`### 커피챗 (coffeechat)` 섹션의 알람 발행 규칙 bullet 수정:
+
+기존:
+> - 생성(PENDING): 수신자에게 1건
+
+변경 후:
+> - 생성(PENDING): 수신자에게 1건. content = `String.format("%s %s님이 커피챗을 요청했어요!", requester.department, requester.nickname)` 으로 동적 생성 (요청자 정보 노출). 헤더 텍스트는 프론트가 type 별 상수로 표시.
+
+또 알람 발행 위치 섹션의 `CoffeeChatAlarm` 줄에 "PENDING content 는 요청자 학과·닉네임 포함" 보강.
+
+#### Step 4: 커밋, 푸시, PR
+- 커밋 메시지: `feat(coffeechat): PENDING 알람 content 에 요청자 학과·닉네임 포함`
+- PR 제목: 동일
+- PR 본문: 결정표 + 테스트 시나리오 + Swagger 검증 가이드
+
+#### Step 5: Swagger 수동 검증
+- 학생 S(department="응용소프트웨어학과", nickname="김후배") 가 졸업생 G 에게 `POST /api/v1/coffeechat` 요청
+- G 토큰으로 `GET /api/v1/alarms` → 첫 항목 `content == "응용소프트웨어학과 김후배님이 커피챗을 요청했어요!"` 확인
+- `GET /api/v1/alarms/COFFEE_CHAT/{알람PK}` 상세 호출도 동일 content
+- `PATCH /api/v1/coffeechat/{refId}/status` 로 ACCEPTED → 기존 정적 메시지(`"커피챗 요청이 수락되었습니다. ..."`) 그대로 발행
+
+#### 작업자 노트
+- ACCEPTED / REJECTED 알람은 본 TODO 범위 외. 필요해지면 후속 TODO 로 분리
+- 동적 content 는 i18n 도입 시점에 다국어 처리 어렵게 만들 수 있음. 그때는 방향 B (AlarmResponse 메타 필드 추가) 로 진화 검토
+- TODO #7 (커피챗 자기 자신/동일 role 거부) 과 같은 도메인 — 둘 다 머지 시점 충돌 가능성. 가능하면 #7 머지 후 #8 진행
+
+---
+
+### 8개 TODO 공통 작업자 노트
+
+- **브랜치 정책**: 각 TODO 를 **개별 브랜치 + 개별 PR** 로 처리하는 것을 기본으로 한다. TODO #1 은 영향 범위가 커서 단독 PR 필수. TODO #2/#3/#4 는 회원 도메인의 작은 검증 변경이라 묶어서 1개 PR 도 허용 (작업자 판단). TODO #5/#6/#7/#8 도 각각 다른 변경 지점이라 단독 PR 권장. 사용자가 "TODO #N 작업" 으로 단일 항목 지목 시 그 항목만 단독 PR.
 - **공통 커밋 메시지 컨벤션**: `feat(member): ...` / `fix(member): ...` / `feat(techstack): ...` / `feat(coffeechat): ...` / `docs(CLAUDE.md): ...` prefix. 마지막 줄에 항상 `https://claude.ai/code/session_...` 포함.
 - **Swagger 검증**: 가능하면 PR 본문 Test plan 에 Swagger 시나리오 체크박스 포함.
 - **테스트 실패 시**: `--no-verify` 등으로 우회 금지. 원인 분석 후 수정.
