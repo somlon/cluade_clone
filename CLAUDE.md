@@ -189,7 +189,7 @@ mju.capstone.ddingconnect
 >
 > 각 항목은 완료(머지) 후 이 섹션에서 삭제하거나 "완료" 로 표시하고, 본문 도메인 섹션에 정식 규칙으로 통합 기록한다.
 
-_(아래 TODO #1 ~ #9 는 회원(member) 4개 + 기술 스택 1개 + 관심 직군 1개 + 커피챗 2개 + Q&A 1개 이슈. 각 항목 완료 후 본문 `### 회원 (Member)` / `### 기술 스택 (techstack)` / `### 커피챗 (coffeechat)` / `### Q&A` 섹션 등에 정식 규칙으로 통합하고 이 섹션에서 제거.)_
+_(아래 TODO #1 ~ #11 는 회원(member) 4개 + 기술 스택 1개 + 관심 직군 1개 + 커피챗 2개 + Q&A 3개 이슈. 각 항목 완료 후 본문 `### 회원 (Member)` / `### 기술 스택 (techstack)` / `### 커피챗 (coffeechat)` / `### Q&A` 섹션 등에 정식 규칙으로 통합하고 이 섹션에서 제거.)_
 
 ### TODO #1: 회원 탈퇴 시 관련 DB 데이터 전부 hard delete
 
@@ -809,9 +809,125 @@ public record QuestionResponse(
 
 ---
 
-### 9개 TODO 공통 작업자 노트
+---
 
-- **브랜치 정책**: 각 TODO 를 **개별 브랜치 + 개별 PR** 로 처리하는 것을 기본으로 한다. TODO #1 은 영향 범위가 커서 단독 PR 필수. TODO #2/#3/#4 는 회원 도메인의 작은 검증 변경이라 묶어서 1개 PR 도 허용 (작업자 판단). TODO #5/#6/#7/#8/#9 도 각각 다른 변경 지점이라 단독 PR 권장. 사용자가 "TODO #N 작업" 으로 단일 항목 지목 시 그 항목만 단독 PR.
+### TODO #10: Q&A 본인이 쓴 글에 본인이 좋아요 토글 거부
+
+**배경**
+`QuestionServiceImpl.toggleLike` (L114-128), `AnswerServiceImpl.toggleLike` (L104-117) 둘 다 본인 글 체크 없음. 본인이 자기 질문/답변에 좋아요를 누르면 `QuestionLike`/`AnswerLike` row 가 그대로 INSERT 됨. 카운트 부풀리기 가능.
+
+비교: 알람 도메인의 "본인이 본인 질문에 답변 시 알람 미발행" (`AnswerServiceImpl.create` L49) 같은 자기 자신 방어 패턴은 이미 코드 곳곳에 존재. 좋아요에도 동일 패턴 필요.
+
+**확정된 결정 사항 (재논의 금지)**
+
+| # | 결정 |
+|---|---|
+| 1 | Question/Answer 좋아요 토글 모두 `member.id == 작성자.id` 인 경우 거부 — 한 TODO 로 묶어 처리 |
+| 2 | 응답 코드: **400 Bad Request** (TODO #7 의 `COFFEE_CHAT_SELF_REQUEST` 와 동일 패턴) |
+| 3 | 새 에러 2종:<br>- `QUESTION_SELF_LIKE(BAD_REQUEST, "QUESTION400", "본인이 작성한 질문에는 좋아요를 누를 수 없습니다.")`<br>- `ANSWER_SELF_LIKE(BAD_REQUEST, "ANSWER400", "본인이 작성한 답변에는 좋아요를 누를 수 없습니다.")` |
+| 4 | 검증 위치: `toggleLike` 진입부 (질문/답변 조회 직후, like row 조회/save 전) |
+| 5 | 화면 UI 에서 버튼이 비활성화돼 있더라도 백엔드는 항상 거부 (악성 사용자 대비) |
+| 6 | TODO #9 (좋아요 카운트 응답 노출) 머지 후 진행 권장 — `toggleLike` 시그니처 변경 충돌 회피 |
+
+**구현 단계**
+
+#### Step 1: `ErrorStatus` 에 두 에러 추가
+- `QUESTION_SELF_LIKE`
+- `ANSWER_SELF_LIKE`
+
+#### Step 2: `QuestionServiceImpl.toggleLike` 진입부 검증
+```java
+Question question = questionRepository.findById(questionId)
+        .orElseThrow(() -> new QuestionHandler(ErrorStatus.QUESTION_NOT_FOUND));
+
+if (question.getMember().getId().equals(member.getId())) {
+    throw new QuestionHandler(ErrorStatus.QUESTION_SELF_LIKE);
+}
+// 기존 toggle 로직 그대로
+```
+
+#### Step 3: `AnswerServiceImpl.toggleLike` 진입부 검증
+```java
+Answer answer = answerRepository.findById(answerId)
+        .orElseThrow(() -> new AnswerHandler(ErrorStatus.ANSWER_NOT_FOUND));
+
+if (answer.getMember().getId().equals(member.getId())) {
+    throw new AnswerHandler(ErrorStatus.ANSWER_SELF_LIKE);
+}
+// 기존 toggle 로직 그대로
+```
+
+#### Step 4: 테스트
+- `toggleLike_본인질문_400`
+- `toggleLike_타인질문_정상`
+- `toggleLike_본인답변_400`
+- `toggleLike_타인답변_정상`
+- (TODO #9 머지 후라면) 응답이 `LikeToggleResponse` 인지도 같이 검증
+
+#### Step 5: CLAUDE.md 갱신
+`### Q&A` 섹션 좋아요 bullet 보강:
+> - 좋아요: `QuestionLike`, `AnswerLike` (복합키 `AnswerLikeId`), toggle 방식. **본인이 작성한 글에는 좋아요 불가** (`QuestionServiceImpl.toggleLike` / `AnswerServiceImpl.toggleLike` 진입부에서 작성자 == 호출자 체크. 위반 시 400 `QUESTION_SELF_LIKE` / `ANSWER_SELF_LIKE`).
+
+#### 작업자 노트
+- `QuestionServiceImpl.toggleLike` 의 기존 코드는 `questionLikeRepository.findAll().stream().filter(...)` 로 **모든 좋아요 row 를 메모리에 로드 후 필터** 하는 비효율적 패턴. 본 TODO 범위 외지만 같이 개선 가능 — `existsByMemberIdAndQuestionId` 활용해서 O(1) 쿼리로 단순화. 다만 본 TODO 핵심은 self-like 거부.
+
+---
+
+### TODO #11: 답변 등록은 졸업생만 가능
+
+**배경**
+`AnswerServiceImpl.create` (L34-58) 에 role 체크 없음. 학생도 답변 가능. 도메인 의도 = Q&A 에서 답변은 졸업생(멘토) 만 작성. 비교: `JobPostServiceImpl.create` (L42-44) 는 `member.getRole() != MemberRole.GRADUATE` 일 때 `POST_CONTENTS_NOT_GRADUATE` throw — 동일 패턴 답변에도 적용.
+
+**확정된 결정 사항 (재논의 금지)**
+
+| # | 결정 |
+|---|---|
+| 1 | `AnswerServiceImpl.create` 진입부에서 `member.getRole() != MemberRole.GRADUATE` 시 즉시 거부 |
+| 2 | 응답 코드: **403 Forbidden** (`POST_CONTENTS_NOT_GRADUATE` 와 동일 패턴) |
+| 3 | 새 에러: `ANSWER_NOT_GRADUATE(FORBIDDEN, "ANSWER403", "졸업생만 답변을 등록할 수 있습니다.")` |
+| 4 | 기존 학생이 이미 등록한 답변 row 는 **그대로 둠** (마이그레이션 없음, 신규 호출만 차단) |
+| 5 | 답변 수정/삭제는 기존 작성자 권한 검증 그대로 유지 (역할 제한 X — 한 번 등록된 답변은 본인이 관리) |
+| 6 | UNKNOWN role 도 비-GRADUATE 라 자동 거부 |
+
+**구현 단계**
+
+#### Step 1: `ErrorStatus` 에 `ANSWER_NOT_GRADUATE` 추가
+
+#### Step 2: `AnswerServiceImpl.create` 진입부에 가드
+```java
+@Override
+@Transactional
+public AnswerResponse create(Member member, Long questionId, CreateAnswerRequest request) {
+    if (member.getRole() != MemberRole.GRADUATE) {
+        throw new AnswerHandler(ErrorStatus.ANSWER_NOT_GRADUATE);
+    }
+
+    Question question = questionRepository.findById(questionId)
+            .orElseThrow(() -> new QuestionHandler(ErrorStatus.QUESTION_NOT_FOUND));
+    // 기존 흐름 그대로
+    ...
+}
+```
+
+#### Step 3: 테스트
+- `create_GRADUATE_정상_등록`
+- `create_STUDENT_403_답변불가`
+- `create_UNKNOWN_403_답변불가`
+- 기존 `AnswerAlarm` 발행 테스트가 STUDENT 회원으로 작성됐다면 GRADUATE 로 변경 필요 (마이그레이션)
+
+#### Step 4: CLAUDE.md 갱신
+`### Q&A` 섹션에 bullet 추가:
+> - **답변 등록은 졸업생만** (`AnswerServiceImpl.create`): STUDENT/UNKNOWN 이 호출 시 403 (`ANSWER_NOT_GRADUATE`). 도메인 의도 = Q&A 답변은 멘토(졸업생) 가 학생 질문에 답하는 흐름. 수정/삭제는 기존 작성자 권한만 검증 (역할 제한 X).
+
+#### 작업자 노트
+- 기존 코드의 "본인이 본인 질문에 답변한 경우 알람 미발행" (L48-55) 분기는 그대로 유지 — 단 GRADUATE 가 본인 질문에 답하는 경우만 해당 (학생은 진입 자체 차단). 로직 그대로 두면 정상 동작.
+- 화면이 STUDENT 에게 답변 버튼을 노출하지 않는다는 전제. 백엔드는 악성 호출 대비 가드만 추가.
+
+---
+
+### 11개 TODO 공통 작업자 노트
+
+- **브랜치 정책**: 각 TODO 를 **개별 브랜치 + 개별 PR** 로 처리하는 것을 기본으로 한다. TODO #1 은 영향 범위가 커서 단독 PR 필수. TODO #2/#3/#4 는 회원 도메인의 작은 검증 변경이라 묶어서 1개 PR 도 허용 (작업자 판단). TODO #5/#6/#7/#8/#9/#10/#11 도 각각 다른 변경 지점이라 단독 PR 권장. 사용자가 "TODO #N 작업" 으로 단일 항목 지목 시 그 항목만 단독 PR.
 - **공통 커밋 메시지 컨벤션**: `feat(member): ...` / `fix(member): ...` / `feat(techstack): ...` / `feat(coffeechat): ...` / `feat(qna): ...` / `docs(CLAUDE.md): ...` prefix. 마지막 줄에 항상 `https://claude.ai/code/session_...` 포함.
 - **Swagger 검증**: 가능하면 PR 본문 Test plan 에 Swagger 시나리오 체크박스 포함.
 - **테스트 실패 시**: `--no-verify` 등으로 우회 금지. 원인 분석 후 수정.
