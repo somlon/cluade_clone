@@ -7,6 +7,7 @@ import mju.capstone.ddingconnect.domain.qna.answer.dto.request.CreateAnswerReque
 import mju.capstone.ddingconnect.domain.qna.answer.dto.request.UpdateAnswerRequest;
 import mju.capstone.ddingconnect.domain.qna.answer.dto.response.AnswerResponse;
 import mju.capstone.ddingconnect.domain.qna.answer.service.AnswerService;
+import mju.capstone.ddingconnect.domain.qna.question.dto.response.LikeToggleResponse;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMember;
 import mju.capstone.ddingconnect.global.response.exception.handler.ApiResponse;
 import org.springframework.web.bind.annotation.*;
@@ -31,8 +32,10 @@ public class AnswerController implements AnswerSwagger {
 
     /** 답변 목록 조회 (Read) */
     @GetMapping
-    public ApiResponse<List<AnswerResponse>> getAnswers(@PathVariable Long questionId) {
-        return ApiResponse.onSuccess(answerService.getList(questionId));
+    public ApiResponse<List<AnswerResponse>> getAnswers(
+            @Parameter(hidden = true) @LoginMember Member member,
+            @PathVariable Long questionId) {
+        return ApiResponse.onSuccess(answerService.getList(member, questionId));
     }
 
     /** 답변 수정 (Update) */
@@ -55,13 +58,12 @@ public class AnswerController implements AnswerSwagger {
         return ApiResponse.onSuccess("답변이 삭제되었습니다.");
     }
 
-    /** 답변 좋아요 토글 */
+    /** 답변 좋아요 토글 — 토글 후 새 상태와 카운트를 즉시 반환 */
     @PostMapping("/{answerId}/like")
-    public ApiResponse<String> likeAnswer(
+    public ApiResponse<LikeToggleResponse> likeAnswer(
             @Parameter(hidden = true) @LoginMember Member member,
             @PathVariable Long questionId,
             @PathVariable Long answerId) {
-        answerService.toggleLike(member, answerId);
-        return ApiResponse.onSuccess("좋아요가 처리되었습니다.");
+        return ApiResponse.onSuccess(answerService.toggleLike(member, answerId));
     }
 }

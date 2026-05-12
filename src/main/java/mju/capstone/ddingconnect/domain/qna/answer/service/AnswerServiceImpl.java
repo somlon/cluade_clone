@@ -2,6 +2,7 @@ package mju.capstone.ddingconnect.domain.qna.answer.service;
 
 import lombok.RequiredArgsConstructor;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
+import mju.capstone.ddingconnect.domain.member.domain.MemberRole;
 import mju.capstone.ddingconnect.domain.qna.answer.domain.Answer;
 import mju.capstone.ddingconnect.domain.qna.answer.domain.AnswerAlarm;
 import mju.capstone.ddingconnect.domain.qna.answer.domain.AnswerLike;
@@ -14,6 +15,7 @@ import mju.capstone.ddingconnect.domain.qna.answer.dto.request.UpdateAnswerReque
 import mju.capstone.ddingconnect.domain.qna.answer.dto.response.AnswerResponse;
 import mju.capstone.ddingconnect.domain.qna.question.domain.Question;
 import mju.capstone.ddingconnect.domain.qna.question.domain.repository.QuestionRepository;
+import mju.capstone.ddingconnect.domain.qna.question.dto.response.LikeToggleResponse;
 import mju.capstone.ddingconnect.global.response.code.status.ErrorStatus;
 import mju.capstone.ddingconnect.global.response.exception.handler.AnswerHandler;
 import mju.capstone.ddingconnect.global.response.exception.handler.QuestionHandler;
@@ -34,6 +36,11 @@ public class AnswerServiceImpl implements AnswerService {
     @Override
     @Transactional
     public AnswerResponse create(Member member, Long questionId, CreateAnswerRequest request) {
+        // 답변은 졸업생만 등록 가능 (도메인 정책)
+        if (member.getRole() != MemberRole.GRADUATE) {
+            throw new AnswerHandler(ErrorStatus.ANSWER_NOT_GRADUATE);
+        }
+
         Question question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new QuestionHandler(ErrorStatus.QUESTION_NOT_FOUND));
 
@@ -54,14 +61,15 @@ public class AnswerServiceImpl implements AnswerService {
                     .build());
         }
 
-        return AnswerResponse.from(saved);
+        // 새 답변이라 likeCount=0, likedByMe=false 가 자명
+        return AnswerResponse.from(saved, 0L, false);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<AnswerResponse> getList(Long questionId) {
+    public List<AnswerResponse> getList(Member member, Long questionId) {
         return answerRepository.findByQuestionId(questionId)
-                .stream().map(AnswerResponse::from).toList();
+                .stream().map(a -> toResponse(a, member)).toList();
     }
 
     @Override
@@ -81,7 +89,8 @@ public class AnswerServiceImpl implements AnswerService {
                 .content(request.content() != null ? request.content() : answer.getContent())
                 .build();
 
-        return AnswerResponse.from(answerRepository.save(updated));
+        Answer saved = answerRepository.save(updated);
+        return toResponse(saved, member);
     }
 
     @Override
@@ -102,9 +111,14 @@ public class AnswerServiceImpl implements AnswerService {
 
     @Override
     @Transactional
-    public void toggleLike(Member member, Long answerId) {
+    public LikeToggleResponse toggleLike(Member member, Long answerId) {
         Answer answer = answerRepository.findById(answerId)
                 .orElseThrow(() -> new AnswerHandler(ErrorStatus.ANSWER_NOT_FOUND));
+
+        // 본인이 작성한 답변에는 좋아요 불가
+        if (answer.getMember().getId().equals(member.getId())) {
+            throw new AnswerHandler(ErrorStatus.ANSWER_SELF_LIKE);
+        }
 
         AnswerLikeId likeId = new AnswerLikeId(answerId, member.getId());
 
@@ -114,5 +128,16 @@ public class AnswerServiceImpl implements AnswerService {
                         () -> answerLikeRepository.save(
                                 AnswerLike.builder().answer(answer).member(member).build())
                 );
+
+        boolean liked = answerLikeRepository.existsByMemberIdAndAnswerId(member.getId(), answerId);
+        long likeCount = answerLikeRepository.countByAnswerId(answerId);
+        return new LikeToggleResponse(liked, likeCount);
+    }
+
+    private AnswerResponse toResponse(Answer answer, Member member) {
+        long likeCount = answerLikeRepository.countByAnswerId(answer.getId());
+        boolean likedByMe = member != null
+                && answerLikeRepository.existsByMemberIdAndAnswerId(member.getId(), answer.getId());
+        return AnswerResponse.from(answer, likeCount, likedByMe);
     }
 }

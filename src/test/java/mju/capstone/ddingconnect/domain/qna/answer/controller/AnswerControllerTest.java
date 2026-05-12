@@ -5,6 +5,7 @@ import mju.capstone.ddingconnect.domain.qna.answer.dto.request.CreateAnswerReque
 import mju.capstone.ddingconnect.domain.qna.answer.dto.request.UpdateAnswerRequest;
 import mju.capstone.ddingconnect.domain.qna.answer.dto.response.AnswerResponse;
 import mju.capstone.ddingconnect.domain.qna.answer.service.AnswerService;
+import mju.capstone.ddingconnect.domain.qna.question.dto.response.LikeToggleResponse;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMemberArgumentResolver;
 import mju.capstone.ddingconnect.global.config.WebMvcConfig;
 import mju.capstone.ddingconnect.support.WithMockLoginMember;
@@ -40,7 +41,7 @@ class AnswerControllerTest {
     @MockitoBean AnswerService answerService;
 
     @BeforeEach
-    void setUp() { WithMockLoginMember.loginAsStudent(); }
+    void setUp() { WithMockLoginMember.loginAsGraduate(); }
 
     @AfterEach
     void tearDown() { WithMockLoginMember.clear(); }
@@ -50,7 +51,7 @@ class AnswerControllerTest {
     void 답변_등록() throws Exception {
         CreateAnswerRequest req = new CreateAnswerRequest("답변");
         given(answerService.create(any(), eq(10L), any()))
-                .willReturn(new AnswerResponse(1L, 10L, 1L, "답변"));
+                .willReturn(new AnswerResponse(1L, 10L, 1L, "답변", 0L, false));
 
         mockMvc.perform(post("/api/v1/questions/10/answers")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -62,7 +63,7 @@ class AnswerControllerTest {
     @Test
     @DisplayName("GET /api/v1/questions/{qid}/answers - 답변 목록")
     void 답변_목록() throws Exception {
-        given(answerService.getList(10L)).willReturn(List.of());
+        given(answerService.getList(any(), eq(10L))).willReturn(List.of());
 
         mockMvc.perform(get("/api/v1/questions/10/answers"))
                 .andExpect(status().isOk())
@@ -74,7 +75,7 @@ class AnswerControllerTest {
     void 답변_수정() throws Exception {
         UpdateAnswerRequest req = new UpdateAnswerRequest("수정된 답변");
         given(answerService.update(any(), eq(20L), any()))
-                .willReturn(new AnswerResponse(20L, 10L, 1L, "수정된 답변"));
+                .willReturn(new AnswerResponse(20L, 10L, 1L, "수정된 답변", 0L, false));
 
         mockMvc.perform(patch("/api/v1/questions/10/answers/20")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -93,11 +94,14 @@ class AnswerControllerTest {
     }
 
     @Test
-    @DisplayName("POST /api/v1/questions/{qid}/answers/{aid}/like - 답변 좋아요")
+    @DisplayName("POST /api/v1/questions/{qid}/answers/{aid}/like - 답변 좋아요 응답에 liked/likeCount 포함")
     void 답변_좋아요() throws Exception {
+        given(answerService.toggleLike(any(), eq(20L)))
+                .willReturn(new LikeToggleResponse(true, 3L));
+
         mockMvc.perform(post("/api/v1/questions/10/answers/20/like"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result").value("좋아요가 처리되었습니다."));
-        verify(answerService).toggleLike(any(), eq(20L));
+                .andExpect(jsonPath("$.result.liked").value(true))
+                .andExpect(jsonPath("$.result.likeCount").value(3));
     }
 }

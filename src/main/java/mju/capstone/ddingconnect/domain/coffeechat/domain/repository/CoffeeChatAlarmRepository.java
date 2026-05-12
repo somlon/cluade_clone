@@ -21,4 +21,6 @@ public interface CoffeeChatAlarmRepository extends JpaRepository<CoffeeChatAlarm
     List<CoffeeChatAlarm> findByMemberId(Long memberId);
 
     void deleteByCoffeeChatId(Long coffeeChatId);
+
+    void deleteByMemberId(Long memberId);
 }

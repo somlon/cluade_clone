@@ -14,4 +14,6 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
     Optional<Student> findByMemberId(Long memberId);
 
     boolean existsByMemberId(Long memberId);
+
+    void deleteByMemberId(Long memberId);
 }

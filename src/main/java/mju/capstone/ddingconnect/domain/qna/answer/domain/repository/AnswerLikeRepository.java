@@ -23,4 +23,6 @@ public interface AnswerLikeRepository extends JpaRepository<AnswerLike, AnswerLi
     @Modifying
     @Query("DELETE FROM AnswerLike al WHERE al.answer.question.id = :questionId")
     void deleteByQuestionId(@Param("questionId") Long questionId);
+
+    void deleteByMemberId(Long memberId);
 }

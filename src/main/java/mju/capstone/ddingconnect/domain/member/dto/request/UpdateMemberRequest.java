@@ -1,13 +1,22 @@
 package mju.capstone.ddingconnect.domain.member.dto.request;
 
+import jakarta.validation.constraints.Pattern;
+
 public record UpdateMemberRequest(
 
         // ── 공통 필드 (STUDENT / GRADUATE 모두 수정 가능) ──────────
         String nickname,
         String studentNumber,
         String department,
+
+        @Pattern(regexp = "^https?://(www\\.)?github\\.com/.+",
+                message = "github.com URL 만 허용됩니다.")
         String githubLink,
+
+        @Pattern(regexp = "^https?://(www\\.)?linkedin\\.com/.+",
+                message = "linkedin.com URL 만 허용됩니다.")
         String linkedinLink,
+
         String portfolio,
         String profileImage,
 

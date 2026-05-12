@@ -11,6 +11,7 @@ import mju.capstone.ddingconnect.domain.qna.question.domain.repository.QuestionL
 import mju.capstone.ddingconnect.domain.qna.question.domain.repository.QuestionRepository;
 import mju.capstone.ddingconnect.domain.qna.question.dto.request.CreateQuestionRequest;
 import mju.capstone.ddingconnect.domain.qna.question.dto.request.UpdateQuestionRequest;
+import mju.capstone.ddingconnect.domain.qna.question.dto.response.LikeToggleResponse;
 import mju.capstone.ddingconnect.domain.qna.question.dto.response.QuestionResponse;
 import mju.capstone.ddingconnect.global.response.code.status.ErrorStatus;
 import mju.capstone.ddingconnect.global.response.exception.handler.QuestionHandler;
@@ -39,19 +40,20 @@ public class QuestionServiceImpl implements QuestionService {
                 .content(request.content())
                 .viewCount(0)
                 .build();
-        return QuestionResponse.from(questionRepository.save(question));
+        Question saved = questionRepository.save(question);
+        return toResponse(saved, member);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<QuestionResponse> getList() {
+    public List<QuestionResponse> getList(Member member) {
         return questionRepository.findAll()
-                .stream().map(QuestionResponse::from).toList();
+                .stream().map(q -> toResponse(q, member)).toList();
     }
 
     @Override
     @Transactional
-    public QuestionResponse getOne(Long questionId) {
+    public QuestionResponse getOne(Member member, Long questionId) {
         Question question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new QuestionHandler(ErrorStatus.QUESTION_NOT_FOUND));
 
@@ -65,7 +67,8 @@ public class QuestionServiceImpl implements QuestionService {
                 .viewCount(question.getViewCount() + 1)
                 .build();
 
-        return QuestionResponse.from(questionRepository.save(updated));
+        Question saved = questionRepository.save(updated);
+        return toResponse(saved, member);
     }
 
     @Override
@@ -87,7 +90,8 @@ public class QuestionServiceImpl implements QuestionService {
                 .viewCount(question.getViewCount())
                 .build();
 
-        return QuestionResponse.from(questionRepository.save(updated));
+        Question saved = questionRepository.save(updated);
+        return toResponse(saved, member);
     }
 
     @Override
@@ -112,9 +116,14 @@ public class QuestionServiceImpl implements QuestionService {
 
     @Override
     @Transactional
-    public void toggleLike(Member member, Long questionId) {
+    public LikeToggleResponse toggleLike(Member member, Long questionId) {
         Question question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new QuestionHandler(ErrorStatus.QUESTION_NOT_FOUND));
+
+        // 본인이 작성한 질문에는 좋아요 불가
+        if (question.getMember().getId().equals(member.getId())) {
+            throw new QuestionHandler(ErrorStatus.QUESTION_SELF_LIKE);
+        }
 
         questionLikeRepository.findAll().stream()
                 .filter(like -> like.getQuestion().getId().equals(questionId)
@@ -125,5 +134,17 @@ public class QuestionServiceImpl implements QuestionService {
                         () -> questionLikeRepository.save(
                                 QuestionLike.builder().question(question).member(member).build())
                 );
+
+        boolean liked = questionLikeRepository.existsByMemberIdAndQuestionId(member.getId(), questionId);
+        long likeCount = questionLikeRepository.countByQuestionId(questionId);
+        return new LikeToggleResponse(liked, likeCount);
+    }
+
+    private QuestionResponse toResponse(Question question, Member member) {
+        long likeCount = questionLikeRepository.countByQuestionId(question.getId());
+        long answerCount = answerRepository.countByQuestionId(question.getId());
+        boolean likedByMe = member != null
+                && questionLikeRepository.existsByMemberIdAndQuestionId(member.getId(), question.getId());
+        return QuestionResponse.from(question, likeCount, answerCount, likedByMe);
     }
 }

@@ -32,4 +32,11 @@ public interface AnswerAlarmRepository extends JpaRepository<AnswerAlarm, Long> 
      */
     @Query("SELECT aa FROM AnswerAlarm aa WHERE aa.answer.question.member.id = :memberId")
     List<AnswerAlarm> findByQuestionOwnerId(@Param("memberId") Long memberId);
+
+    /**
+     * 회원 hard delete 시 사용: 해당 회원이 받은 (= 본인 질문에 달린) 답변 알람 일괄 정리.
+     */
+    @Modifying
+    @Query("DELETE FROM AnswerAlarm aa WHERE aa.answer.question.member.id = :memberId")
+    void deleteByMemberId(@Param("memberId") Long memberId);
 }
