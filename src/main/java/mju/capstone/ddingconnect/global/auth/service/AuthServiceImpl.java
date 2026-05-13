@@ -11,6 +11,7 @@ import mju.capstone.ddingconnect.domain.member.domain.Student;
 import mju.capstone.ddingconnect.domain.member.domain.repository.GraduateRepository;
 import mju.capstone.ddingconnect.domain.member.domain.repository.MemberRepository;
 import mju.capstone.ddingconnect.domain.member.domain.repository.StudentRepository;
+import mju.capstone.ddingconnect.global.aws.S3Service;
 import mju.capstone.ddingconnect.global.common.SuccessMessage;
 import mju.capstone.ddingconnect.global.jwt.JwtUtil;
 import mju.capstone.ddingconnect.global.response.code.status.ErrorStatus;
@@ -19,6 +20,7 @@ import mju.capstone.ddingconnect.global.response.exception.handler.MemberHandler
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @RequiredArgsConstructor
@@ -29,10 +31,11 @@ public class AuthServiceImpl implements AuthService {
     private final GraduateRepository graduateRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
+    private final S3Service s3Service;
 
     @Override
     @Transactional
-    public String signup(SignupRequest request) {
+    public String signup(SignupRequest request, MultipartFile certificate) {
 
         //멤버 역할 검증
         if (request.role() == null) {
@@ -46,6 +49,8 @@ public class AuthServiceImpl implements AuthService {
 
         //TODO 재학증명서 or 졸업증명서 확인
 
+        // 재학증명서 or 졸업증명서 S3 업로드
+        String certificateUrl = s3Service.uploadImage(certificate);
 
         //새 멤버 생성
         Member member = Member.builder()
@@ -53,6 +58,7 @@ public class AuthServiceImpl implements AuthService {
                 .password(passwordEncoder.encode(request.password()))
                 .nickname(request.nickname())
                 .role(request.role())
+                .certificate(certificateUrl)
                 .isDeleted(false)
                 .build();
 

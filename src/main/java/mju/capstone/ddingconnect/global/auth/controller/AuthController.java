@@ -10,7 +10,9 @@ import mju.capstone.ddingconnect.global.auth.dto.response.TokenResponse;
 import mju.capstone.ddingconnect.global.auth.service.AuthService;
 import mju.capstone.ddingconnect.global.auth.service.EmailService;
 import mju.capstone.ddingconnect.global.response.exception.handler.ApiResponse;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -20,10 +22,11 @@ public class AuthController implements AuthSwagger {
     private final AuthService authService;
     private final EmailService emailService;
 
-    @PostMapping("/signup")
-    public ApiResponse<String> signup(@RequestBody SignupRequest request) {
-        return ApiResponse.onSuccess(authService.signup(request));
-
+    @PostMapping(value = "/signup", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<String> signup(
+            @RequestPart("request") SignupRequest request,
+            @RequestPart("certificate") MultipartFile certificate) {
+        return ApiResponse.onSuccess(authService.signup(request, certificate));
     }
 
     @PostMapping("/login")
@@ -42,6 +45,5 @@ public class AuthController implements AuthSwagger {
         emailService.verifyCode(request);
         return ApiResponse.onSuccess("인증 코드가 일치합니다.");
     }
-
 
 }
