@@ -195,3 +195,131 @@ mju.capstone.ddingconnect
 - 커밋 메시지에 `docs(CLAUDE.md): ...` 항목을 함께 남기거나, 코드 커밋 본문에 갱신 사실 명시
 - 의심스러우면 갱신하는 쪽을 택할 것 — 문서 누락보다 과기록이 낫다
 
+## 진행 예정 작업 (To-do)
+
+> 사용자가 "to-do 리스트 수행" / "to-do 진행" / "TODO N 작업" 등 유사 명령을 내리면 아래 항목을 **즉시 코드 작성 → 테스트 보강 → CLAUDE.md 갱신 → 커밋/푸시 → PR 생성까지 일사천리로** 수행한다. 결정 사항은 이미 확정돼 있으니 다시 묻지 말고 명시된 디폴트로 진행할 것.
+>
+> 각 항목은 완료(머지) 후 이 섹션에서 삭제하고, 본문 도메인 섹션에 정식 규칙으로 통합 기록한다.
+
+_(아래 TODO A · B 는 마이페이지 수정 화면의 "수정 완료" 흐름을 위한 bulk REPLACE 엔드포인트 도입. Figma 검토 결과 마이페이지가 TechStack/TargetJob CRUD 의 유일한 진입점으로 확인되어, 단건 endpoint 는 모두 제거하는 정공법으로 결정.)_
+
+### 배경
+
+마이페이지 수정 화면 (Figma `0409.png` 의 마이페이지 수정 영역) 의 흐름:
+1. 사용자가 칩 추가/삭제 — **로컬 state 만 변함, 서버 호출 없음**
+2. **"수정 완료"** → 프론트가 최종 리스트 전체를 서버로 전송, 서버가 본인 row 전체를 입력 리스트로 교체 (REPLACE)
+3. **"취소"** → 프론트 로컬 state 만 버리고 마이페이지 보기 화면으로 복귀, **서버 호출 없음, DB 원본 그대로**
+
+→ 단건 add/delete 패턴 (POST/DELETE 호출을 화면 동작마다 발생시키는) 이 아니라, **"수정 완료" 시점 단일 호출로 일괄 교체** 가 도메인 의도. 단건 endpoint 는 마이페이지 외에 다른 흐름이 없어 dead code 가 되므로 제거.
+
+### TODO A: TechStack 단건 endpoint 제거 + bulk REPLACE PATCH 추가 (techstack 도메인 내 완결)
+
+**디폴트 결정**:
+- HTTP 메서드: `PATCH` (REPLACE 시맨틱이지만 사용자 명시 선택)
+- 입력 정책:
+  - `{"names": [...]}` → 리스트로 본인 row 전체 교체
+  - `{"names": []}` → 본인 row 전부 삭제 (정상 응답, 0개 보유 허용)
+  - `{"names": null}` 또는 body 누락 → 400 (`_BAD_REQUEST`)
+- 서버 dedup: `Set<TechStackName>` 또는 `Stream.distinct()` 로 입력 리스트 내부 중복 자동 제거
+- 단일 `@Transactional` — `deleteByMemberId` + `save` N회 원자성
+
+**추가**:
+- `domain/techstack/dto/request/ReplaceTechStackRequest.java` (record `(List<TechStackName> names)`)
+- `TechStackService.replace(Member, ReplaceTechStackRequest)` 인터페이스 메서드
+- `TechStackServiceImpl.replace` 구현
+- `PATCH /api/v1/tech-stacks` 컨트롤러 핸들러 + `TechStackSwagger` `@Operation` 명세
+
+**제거**:
+- `TechStackService.add` / `delete` 인터페이스 메서드 + impl
+- `POST /api/v1/tech-stacks` (단건 add) + `DELETE /api/v1/tech-stacks/{techStackId}` 컨트롤러 핸들러 + Swagger 명세
+- `domain/techstack/dto/request/CreateTechStackRequest.java`
+- `TechStackRepository.existsByMemberIdAndName`
+- `ErrorStatus.TECH_STACK_DUPLICATE`
+- `ErrorStatus.TECH_STACK_NOT_FOUND` (단건 delete 사라져 사용처 0)
+- `ErrorStatus.TECH_STACK_UNAUTHORIZED` (동일)
+
+**보존 (다른 도메인 의존)**:
+- `TechStackRepository.deleteByMemberId` — `MemberServiceImpl.withdraw` 가 호출 (회원 hard delete 캐스케이드)
+- `TechStackRepository.findByMemberId` — `getMyTechStacks` + REPLACE 응답에 사용
+- `TechStackRepository.save` — REPLACE 의 INSERT
+- `TechStack` 엔티티, `TechStackName` enum, `TechStackResponse`, `TechStackHandler`
+
+**테스트 갱신** (`TechStackServiceImplTest`, `TechStackControllerTest` 전면 재작성):
+- 기존 `add_*`, `delete_*` 케이스 모두 삭제
+- 신규 `replace_*` 시나리오:
+  - 정상 교체 (deleteByMemberId 호출 후 save N회 검증, InOrder)
+  - 빈 리스트 → 본인 row 전부 삭제, save 미호출
+  - 입력에 중복 enum 섞이면 dedup 후 1건만 저장
+  - null 리스트 → 400
+  - 다른 회원 row 격리 (deleteByMemberId 가 본인 id 만 호출)
+- `getMyTechStacks` 케이스는 보존
+- 컨트롤러 슬라이스: `PATCH /api/v1/tech-stacks` 응답 (`List<TechStackResponse>`) 검증
+
+**CLAUDE.md 갱신**:
+- `### 기술 스택 (techstack)` 섹션:
+  - "단건 등록 / 단건 삭제 / 단건 중복 거부" 규칙 제거
+  - "**REPLACE 단일 endpoint**: `PATCH /api/v1/tech-stacks` 로 본인 리스트 전체 교체. 단건 add/delete endpoint 미지원 (마이페이지가 유일 진입점). 입력 리스트 내부 중복은 서버에서 `Set` dedup. 빈 리스트 = 전부 삭제 의미. null = 400." 으로 갱신
+- `### 회원 (Member)` 의 hard delete 위임 순서: 변경 없음 (`techStackRepository.deleteByMemberId` 보존)
+
+### TODO B: TargetJob 단건 endpoint 제거 + bulk REPLACE PATCH 추가 (interested_job 도메인 내 완결)
+
+**디폴트 결정**: TODO A 와 동일 (PATCH 메서드, dedup, null 거부, 빈 리스트 허용, 단일 트랜잭션)
+
+**추가**:
+- `domain/interested_job/dto/request/ReplaceTargetJobRequest.java` (record `(List<TargetJobCategory> categories)`)
+- `TargetJobService.replace(Member, ReplaceTargetJobRequest)` 인터페이스 메서드
+- `TargetJobServiceImpl.replace` 구현
+- `PATCH /api/v1/target-jobs` 컨트롤러 핸들러 + `TargetJobSwagger` `@Operation` 명세
+
+**제거**:
+- `TargetJobService.create` / `update` / `delete` 인터페이스 메서드 + impl
+- `POST /api/v1/target-jobs` / `PATCH /api/v1/target-jobs/{targetJobId}` (단건 카테고리 변경) / `DELETE /api/v1/target-jobs/{targetJobId}` + Swagger 명세
+- `domain/interested_job/dto/request/CreateTargetJobRequest.java`
+- `domain/interested_job/dto/request/UpdateTargetJobRequest.java`
+- `TargetJobRepository.existsByMemberIdAndInterestedJob`
+- `TargetJobRepository.findByMemberIdAndInterestedJob` (이미 사용처 0건인 dead code — 함께 제거)
+- `ErrorStatus.TARGET_JOB_DUPLICATE`
+- `ErrorStatus.TARGET_JOB_NOT_FOUND`
+- `ErrorStatus.TARGET_JOB_UNAUTHORIZED`
+
+**보존 (다른 도메인 의존)**:
+- `TargetJobRepository.deleteByMemberId` — `MemberServiceImpl.withdraw`
+- `TargetJobRepository.findByMemberId` — `getMyTargetJobs` + REPLACE 응답
+- **`TargetJobRepository.findByInterestedJob` — `JobPostServiceImpl.create` / `update` 의 알람 매칭 핵심, 반드시 보존**
+- `TargetJobRepository.save` — REPLACE 의 INSERT
+- `TargetJob` 엔티티, `TargetJobCategory` enum, `TargetJobResponse`, `TargetJobHandler`
+
+**알람 정책**:
+- REPLACE 자체는 `JobAlarm` 발행 안 함 (현재 단건 흐름과 동일 정책 유지)
+- 새 공고 등록 시점에 `JobPostServiceImpl.create` 가 갱신된 `target_job` 매칭으로 발행
+- "REPLACE 직후 본인 카테고리 매칭 기존 공고 일괄 알람 생성" 같은 기능은 이번 TODO 범위 외 — 필요하면 별도 TODO 분리
+
+**테스트 갱신** (`TargetJobServiceImplTest`, `TargetJobControllerTest` 전면 재작성):
+- 기존 `create_*`, `update_*`, `delete_*` 케이스 모두 삭제
+- 신규 `replace_*` 시나리오 (TODO A 와 동일 5종)
+- `getMyTargetJobs` 케이스는 보존
+
+**CLAUDE.md 갱신**:
+- `### 관심 직군 (interested_job)` 섹션:
+  - "단건 등록 / 단건 변경 / 단건 삭제 / 단건 중복 거부" 규칙 제거
+  - "**REPLACE 단일 endpoint**: `PATCH /api/v1/target-jobs` ..." (TODO A 와 동일 패턴) 로 갱신
+  - 보류 사항 ("두 enum 통합 검토") 은 그대로 보존
+- `### 회원 (Member)` 의 hard delete 위임 순서: 변경 없음
+
+### 공통 진행 정책
+
+| 항목 | 결정 |
+|---|---|
+| HTTP 메서드 | `PATCH` (REPLACE 시맨틱이지만 사용자 명시) |
+| TODO A · B 머지 단위 | 단일 PR 권장 ("마이페이지 수정 화면용 REPLACE 도입" 단일 의도). 분리 PR 도 가능 |
+| 다른 도메인 영향 | 0 — `MemberServiceImpl.withdraw` 와 `JobPostServiceImpl` 의 의존 메서드는 모두 보존 |
+| 머지 충돌 위험 | 낮음 — 본인 도메인 내부 변경. 동시 작업 중인 다른 브랜치 없음 (검토 시점 기준) |
+| 검증 | 머지 전 `gradlew compileJava + compileTestJava` 통과 필수. Swagger UI 시나리오: 정상 / 빈 리스트 / 중복 입력 / null 거부 / 다른 회원 격리 |
+
+### 11개 작업자 노트 (TODO #1~#11 머지 완료 후 보존되는 일반 가이드)
+
+- **브랜치 정책**: 각 TODO 를 **개별 브랜치 + 개별 PR** 로 처리하는 것을 기본으로 한다. 영향 범위가 큰 TODO 는 단독 PR 필수. 같은 도메인 내 작은 변경은 묶어서 1개 PR 도 허용 (작업자 판단). 사용자가 "TODO N 작업" 으로 단일 항목 지목 시 그 항목만 단독 PR.
+- **공통 커밋 메시지 컨벤션**: `feat(<도메인>): ...` / `fix(<도메인>): ...` / `refactor(<도메인>): ...` / `docs(CLAUDE.md): ...` prefix. 마지막 줄에 항상 `https://claude.ai/code/session_...` 포함.
+- **Swagger 검증**: 가능하면 PR 본문 Test plan 에 Swagger 시나리오 체크박스 포함.
+- **테스트 실패 시**: `--no-verify` 등으로 우회 금지. 원인 분석 후 수정.
+
