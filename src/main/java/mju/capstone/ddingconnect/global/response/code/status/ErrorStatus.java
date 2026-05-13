@@ -29,6 +29,7 @@ public enum ErrorStatus implements BaseErrorCode {
     MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "AUTH404","존재하지 않는 회원입니다."),
     INVALID_ROLE(HttpStatus.BAD_REQUEST, "AUTH404","유효하지 않은 역할입니다. STUDENT 또는 GRADUATE만 가능합니다."),
 
+
     // Member
     MEMBER_UNAUTHORIZED(HttpStatus.FORBIDDEN, "MEMBER403", "회원 정보를 수정/삭제할 권한이 없습니다."),
     MEMBER_INVALID_SOCIAL_LINK(HttpStatus.BAD_REQUEST, "MEMBER400", "github 또는 linkedin 링크 형식이 올바르지 않습니다."),
@@ -67,8 +68,11 @@ public enum ErrorStatus implements BaseErrorCode {
 
     // Alarm
     ALARM_NOT_FOUND(HttpStatus.NOT_FOUND, "ALARM404", "존재하지 않는 알람입니다."),
-    ALARM_UNAUTHORIZED(HttpStatus.FORBIDDEN, "ALARM403", "알람을 조회/수정할 권한이 없습니다.");
+    ALARM_UNAUTHORIZED(HttpStatus.FORBIDDEN, "ALARM403", "알람을 조회/수정할 권한이 없습니다."),
 
+    //S3
+    _FILE_UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "S3500", "객체 저장에 실패하였습니다."),
+    _FILE_DELETE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "S3500", "객체 삭제에 실패하였습니다.");
     private final HttpStatus httpStatus;
     private final String code;
     private final String message;
