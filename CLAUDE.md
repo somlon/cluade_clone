@@ -346,13 +346,16 @@ _(아래 TODO A · B 는 마이페이지 수정 화면의 "수정 완료" 흐름
 
 **제약 (절대 준수)**:
 - **기존 SSE 푸시 코드는 수정 금지** — `global/sse` 의 `SseController`/`SseService`/`SseServiceImpl`/`SseEmitterRepository`/`SseSwagger`/`SseTestController`. `SseService.send()` 시그니처·동작을 그대로 둔 채 알람 코드가 거기에 맞춘다.
-- 기존 알람 코드(도메인 4곳 발행 로직, 알람 엔티티/레포, `global/sse` 의 `Alarm*` 조회 계층)는 자유롭게 변경 가능.
+- **`AlarmType` enum 완전 동결** — frozen `SseService.send()` 시그니처·`SseServiceImpl`(`type.name()`)·`SseTestController`(`defaultValue="ANSWER"`) 가 의존하므로 동결 대상에 포함. 기존 4상수·이름·위치·타입은 물론 **상수 추가·필드/메서드 추가까지 포함해 TODO E 범위 내 일절 수정 금지.** 새 알람 타입이 필요하면 별도 TODO.
+- 그 외 기존 알람 코드(도메인 4곳 발행 로직, 알람 엔티티/레포, `global/sse` 의 `Alarm*` 조회 계층 — 단 `AlarmType` 제외)는 자유롭게 변경 가능.
 
-**미확정 (착수 전 설계·결정 필요)**:
-- 재구성 구체안 — SSE 코드 동결 제약 하에서 알람 발행 코드를 어떻게 SSE 에 정합시킬지 (발행 지점 공통화, `send()` 호출 표준화 등).
+**미확정 (착수 전 설계·결정 필요)** — 하나씩 확정 중:
 - 영속화 유지 여부 — `GET /api/v1/alarms`·상세·읽음 처리가 알람 row 에 의존. `*AlarmRepository.save()` 제거 시 조회 API 무력화. push 와 DB 영속화의 관계 정리 필요.
 - 트랜잭션 경계 — `send()` 는 네트워크 전송이라 롤백 불가. 본체 `@Transactional` 인라인 발행 vs commit 이후 발행.
-- `AlarmType`(SSE·조회 공유 enum) 변경 허용 범위 — 변경 시 동결 대상 `SseServiceImpl` 에 영향 가능.
+- 재구성 구체안 — SSE 코드 동결 제약 하에서 알람 발행 코드를 어떻게 SSE 에 정합시킬지 (발행 지점 공통화, `send()` 호출 표준화 등). 위 2건 확정 후 결정.
+
+**확정 결정 로그**:
+- `AlarmType` 변경 범위 → **완전 동결** (frozen SSE 코드 의존, 상수 추가 포함 일절 수정 금지).
 
 **출처**: PR #22 (`ddd4004`) 가 SSE 인프라만 추가하고 도메인 연결을 누락. 본 대화에서 "SSE 1차 채널 + 기존 알람 코드 재구성, SSE 코드 동결" 로 방향 재확정 (구 TODO E 재작성).
 
