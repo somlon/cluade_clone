@@ -327,21 +327,41 @@ _(아래 TODO A · B 는 마이페이지 수정 화면의 "수정 완료" 흐름
 
 **출처**: PR #22.
 
-### TODO E: SSE 실시간 푸시가 도메인 알람 발행에 미연결 (PR #22 후속, global/sse)
+### TODO E: 알람 발송을 SSE 푸시 중심으로 재구성 (기존 알람 코드 ↔ SSE 정합, global/sse)
 
-**문제**: `SseService.send(receiver, AlarmType, content)` 는 구현돼 있으나 호출처가 `SseTestController`(`POST /api/v1/notifications/test`) 수동 발송뿐. 도메인 4곳의 알람 엔티티 `save` 직후 `send()` 호출이 없어, 실제 답변/구직/로드맵/커피챗 알람이 발생해도 SSE 실시간 푸시가 나가지 않음 (구독자는 `GET /api/v1/alarms` 폴링으로만 회수).
+**확정 아키텍처**: 알람은 SSE 로 실시간 전송한다. 단 영속화와 SSE 는 경쟁이 아니라 **보완 관계** — 다음 구조로 확정:
+- **영속화(DB) = 원천 데이터(source of truth)** — `*AlarmRepository.save()` 로 알람 row 저장 유지. 이력·읽음 상태(`isRead`)·상세 조회·정렬의 근거.
+- **SSE = 실시간 전송 채널** — 발송 시 수신자에게 즉시 push, 반복 폴링 제거.
+- 알람 발생 시 **DB 저장 + SSE 전송 양쪽 모두 수행**. `GET /api/v1/alarms` 조회 API 는 유지 — 초기 로드·재접속·이력 회수용 (SSE 는 폴링을 없앨 뿐 조회 API 를 대체하지 않음).
+- 작업 범위 = 이 구조에 맞춰 기존 알람 발행 코드(6개 발송 지점)를 재구성. 단순 `send()` 한 줄 추가가 아니라 발행 지점을 SSE 에 정합하게 정리하는 것 (구체안은 미확정 참조).
 
-**디폴트 결정**: 각 `*ServiceImpl` 에 `SseService` 주입 후, 알람 엔티티 `save` 직후 같은 `@Transactional` 안에서 `sseService.send(...)` 호출. 연결 지점:
-- `AnswerServiceImpl.create` — `AnswerAlarm` 저장 직후 (`AnswerServiceImpl.java:57`)
-- `JobPostServiceImpl.create` / `update` — `JobAlarm` 저장 직후 (`JobPostServiceImpl.java:83` / `:189` / `:199`), N건 발행은 수신자별로 `send` 호출
-- `RoadmapServiceImpl.create` — `RoadmapAlarm` 저장 직후 (`RoadmapServiceImpl.java:42`)
-- `CoffeeChatServiceImpl.create` / `updateStatus` — `CoffeeChatAlarm` 저장 직후 (`CoffeeChatServiceImpl.java:73` / `:127` / `:134` / `:143`)
+**배경 — 현재 알람 발송 방식 (pull 모델, SSE 와 전달 방향 반대)**:
+- 전용 알람 도메인 없음. 알람 엔티티 4종(`AnswerAlarm`/`JobAlarm`/`RoadmapAlarm`/`CoffeeChatAlarm`)은 각 도메인 패키지에 존재.
+- "발송" = 본체 `save()` 직후 같은 `@Transactional` 안에서 `*AlarmRepository.save()` 로 알람 row INSERT. 이벤트·AOP·push 전혀 없음.
+- 발송 지점 6곳:
+  - `AnswerServiceImpl.create` (`:57`) — `AnswerAlarm` 1건, 질문 작성자 (self-답변 시 생략)
+  - `JobPostServiceImpl.create` (`:83`) — `JobAlarm` N건, jobType 매칭 학생
+  - `JobPostServiceImpl.update` → `dispatchJobTypeChangeAlarms` (`:189`/`:199`) — `JobAlarm`, jobType 변경 영향 학생
+  - `RoadmapServiceImpl.create` (`:42`) — `RoadmapAlarm` 1건, 생성자 본인
+  - `CoffeeChatServiceImpl.create` (`:73`) — `CoffeeChatAlarm` 1건, 수신자
+  - `CoffeeChatServiceImpl.updateStatus` (`:127`/`:134`/`:143`) — ACCEPTED 2건 / REJECTED 1건
+- 수신자는 `GET /api/v1/alarms` 폴링으로 회수 (`AlarmServiceImpl.getMyAlarms` 가 4개 알람 테이블 집계).
+- `SseService.send(Member, AlarmType, String)` 은 구현돼 있으나 실 호출처가 `SseTestController` 수동 발송뿐 — 도메인 알람과 미연결.
 
-수신자·content 는 알람 엔티티 저장에 쓰는 값과 동일하게 사용. 본체 `@Transactional` 안에서 발행하므로 저장 실패 시 푸시도 함께 롤백 (알람 발행 위치 방침과 정합).
+**제약 (절대 준수)**:
+- **기존 SSE 푸시 코드는 수정 금지** — `global/sse` 의 `SseController`/`SseService`/`SseServiceImpl`/`SseEmitterRepository`/`SseSwagger`/`SseTestController`. `SseService.send()` 시그니처·동작을 그대로 둔 채 알람 코드가 거기에 맞춘다.
+- **`AlarmType` enum 완전 동결** — frozen `SseService.send()` 시그니처·`SseServiceImpl`(`type.name()`)·`SseTestController`(`defaultValue="ANSWER"`) 가 의존하므로 동결 대상에 포함. 기존 4상수·이름·위치·타입은 물론 **상수 추가·필드/메서드 추가까지 포함해 TODO E 범위 내 일절 수정 금지.** 새 알람 타입이 필요하면 별도 TODO.
+- 그 외 기존 알람 코드(도메인 4곳 발행 로직, 알람 엔티티/레포, `global/sse` 의 `Alarm*` 조회 계층 — 단 `AlarmType` 제외)는 자유롭게 변경 가능.
 
-**미확정 (사용자 결정 필요)**: SSE 페이로드. 현재 `send()` 는 `Map.of("type", "content")` 2필드만 전송 — 통합 `AlarmResponse`(`id`·`refId`·`isRead`·`createdAt`·`relativeTime` 포함)와 불일치해 프론트가 푸시 알람을 읽음 처리/상세 진입할 키가 없음. 연결 작업 시 `send()` 시그니처를 `AlarmResponse` 기반으로 확장할지 함께 결정 (확장은 본 TODO 와 묶거나 분리 가능).
+**미확정 — 다음 작업 (TODO E 착수 전 반드시 확정)**: 아래 2건이 모두 확정돼야 TODO E 코드 착수 가능. **세션 재개 시 ① → ② 순으로 결정하는 것이 다음 할 일.**
+- ① 트랜잭션 경계 — `send()` 는 네트워크 전송이라 롤백 불가. 본체 `@Transactional` 인라인 발행 vs commit 이후 발행.
+- ② 재구성 구체안 — SSE 코드 동결 제약 하에서 알람 발행 코드를 어떻게 SSE 에 정합시킬지 (발행 지점 공통화, `send()` 호출 표준화 등). ① 확정 후 결정.
 
-**출처**: PR #22 (`ddd4004`) 가 SSE 인프라만 추가하고 도메인 연결을 누락.
+**확정 결정 로그**:
+- `AlarmType` 변경 범위 → **완전 동결** (frozen SSE 코드 의존, 상수 추가 포함 일절 수정 금지).
+- 영속화 유지 여부 → **유지** — DB = source of truth. SSE 는 전송 수단이라 저장을 대체 못 함 (이력·읽음·상세는 저장 필요 기능). DB 영속화 + SSE 실시간 전송 병행이 효율적 정답이며, 영속화 제거는 효율 개선이 아니라 기능 상실.
+
+**출처**: PR #22 (`ddd4004`) 가 SSE 인프라만 추가하고 도메인 연결을 누락. 본 대화에서 "SSE 1차 채널 + 기존 알람 코드 재구성, SSE 코드 동결" 로 방향 재확정 (구 TODO E 재작성).
 
 ### 공통 진행 정책
 
