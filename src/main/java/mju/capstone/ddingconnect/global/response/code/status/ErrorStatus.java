@@ -17,6 +17,10 @@ public enum ErrorStatus implements BaseErrorCode {
     _UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "COMMON401", "인증이 필요합니다."),
     _FORBIDDEN(HttpStatus.FORBIDDEN, "COMMON403","금지된 요청입니다."),
 
+    // Mail
+    MAIL_SEND_FAIL(HttpStatus.INTERNAL_SERVER_ERROR, "MAIL500", "메일 전송에 실패했습니다."),
+    MAIL_VERIFY_FAIL(HttpStatus.BAD_REQUEST, "MAIL400", "인증 코드가 없거나, 일치하지 않습니다."),
+
     // Auth
     DUPLICATE_EMAIL(HttpStatus.CONFLICT,"AUTH409", "이미 사용 중인 이메일입니다."),
     INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "AUTH401", "이메일 또는 비밀번호가 올바르지 않습니다."),

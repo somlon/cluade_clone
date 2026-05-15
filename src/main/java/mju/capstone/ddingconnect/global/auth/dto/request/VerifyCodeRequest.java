@@ -1,16 +1,15 @@
 package mju.capstone.ddingconnect.global.auth.dto.request;
 
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
-import mju.capstone.ddingconnect.domain.member.domain.MemberRole;
 
-public record SignupRequest(
+public record VerifyCodeRequest(
         @Pattern(
                 regexp = "^[a-zA-Z0-9._%+\\-]+@mju\\.ac\\.kr$",
                 message = "명지대학교 이메일(@mju.ac.kr)만 사용 가능합니다."
         )
         String email,
-        String password,
-        String nickname,
-        MemberRole role
-        //TODO 재학증명서 or 졸업증명서
-) {}
+        @NotNull
+        String code
+) {
+}
