@@ -1,4 +1,4 @@
-package mju.capstone.ddingconnect.domain.alarm.util;
+package mju.capstone.ddingconnect.global.sse;
 
 import java.time.Duration;
 import java.time.LocalDateTime;

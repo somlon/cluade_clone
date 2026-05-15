@@ -1,9 +1,6 @@
-package mju.capstone.ddingconnect.domain.alarm.controller;
+package mju.capstone.ddingconnect.global.sse;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import mju.capstone.ddingconnect.domain.alarm.domain.AlarmType;
-import mju.capstone.ddingconnect.domain.alarm.dto.response.AlarmResponse;
-import mju.capstone.ddingconnect.domain.alarm.service.AlarmService;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMemberArgumentResolver;
 import mju.capstone.ddingconnect.global.config.WebMvcConfig;
 import mju.capstone.ddingconnect.support.WithMockLoginMember;

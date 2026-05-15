@@ -1,10 +1,7 @@
-package mju.capstone.ddingconnect.domain.alarm.controller;
+package mju.capstone.ddingconnect.global.sse;
 
 import io.swagger.v3.oas.annotations.Parameter;
 import lombok.RequiredArgsConstructor;
-import mju.capstone.ddingconnect.domain.alarm.domain.AlarmType;
-import mju.capstone.ddingconnect.domain.alarm.dto.response.AlarmResponse;
-import mju.capstone.ddingconnect.domain.alarm.service.AlarmService;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMember;
 import mju.capstone.ddingconnect.global.response.exception.handler.ApiResponse;

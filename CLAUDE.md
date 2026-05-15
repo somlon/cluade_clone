@@ -24,7 +24,6 @@
 mju.capstone.ddingconnect
 ├── DdingconnectApplication.java
 ├── domain/
-│   ├── alarm/           # 4종 알람 통합
 │   ├── coffeechat/      # 커피챗 매칭
 │   ├── interested_job/  # TargetJob (관심 직군)
 │   ├── job_post/        # PostContents + GraduateJobPost
@@ -36,9 +35,11 @@ mju.capstone.ddingconnect
 └── global/
     ├── auth/            # 회원가입/로그인, JWT 필터, @LoginMember
     ├── common/          # BaseEntity (createdAt/updatedAt)
-    ├── config/          # Security, Swagger, JpaAuditing, WebMvc
+    ├── config/          # Security, Swagger, JpaAuditing, WebMvc, Mail, Sse
     ├── jwt/             # JwtUtil(Impl)
-    └── response/        # ApiResponse, ErrorStatus, ExceptionAdvice
+    ├── redis/           # RedisUtil (StringRedisTemplate 래퍼)
+    ├── response/        # ApiResponse, ErrorStatus, ExceptionAdvice
+    └── sse/             # 통합 알람(4종 조회/상세/읽음) + SSE 실시간 푸시
 ```
 
 각 도메인은 `controller / service / domain(entity+repository) / dto` 4계층으로 일관됨.
@@ -92,8 +93,10 @@ mju.capstone.ddingconnect
 - 삭제(취소)는 요청자만 가능
 - **삭제 캐스케이드 (서비스 레벨)**: `CoffeeChatServiceImpl.delete` 에서 `CoffeeChatAlarm` 먼저 `deleteByCoffeeChatId` 로 정리 → `CoffeeChat` 삭제. `CoffeeChatAlarm.coffeeChat` 가 `nullable = false` FK 라 정리 없이는 MySQL FK constraint 위반.
 
-### 통합 알람 (alarm)
-- 4종(`AnswerAlarm`, `JobAlarm`, `RoadmapAlarm`, `CoffeeChatAlarm`)을 합쳐 단일 `AlarmResponse` 리스트로 반환
+### 통합 알람 (global/sse)
+- **패키지**: 통합 알람 조회 계층(`AlarmController` / `AlarmService(Impl)` / `AlarmResponse` / `AlarmType` / `RelativeTimeFormatter`)은 `global/sse/` 에 SSE 실시간 푸시(`SseController` / `SseService(Impl)` / `SseEmitterRepository` / `SseTestController` / `SseSwagger`)와 함께 배치. 별도 `domain/alarm/` 도메인은 없음 — 알람은 자체 엔티티 없이 4개 도메인의 알람 엔티티를 집계하는 cross-cutting 관심사라 `global` 에 둔다. 알람 엔티티(`AnswerAlarm` / `JobAlarm` / `RoadmapAlarm` / `CoffeeChatAlarm`) 자체는 각 도메인 패키지에 그대로 존속.
+- `AlarmType` enum(`global/sse/AlarmType`)은 통합 알람 조회와 SSE 푸시 이벤트가 **공유** (단일 정의).
+- 4종(`AnswerAlarm`, `JobAlarm`, `RoadmapAlarm`, `CoffeeChatAlarm`)을 합쳐 단일 `AlarmResponse` 리스트로 반환 (`GET /api/v1/alarms`)
 - 정렬: `createdAt DESC`, null은 뒤로
 - 읽음 처리는 Builder 패턴으로 새 인스턴스 만들어 저장 (불변 스타일)
 - 각 타입별 소유자 검증 헬퍼 분리 (`verify*AlarmOwner`)
@@ -103,6 +106,7 @@ mju.capstone.ddingconnect
   - `JobAlarm` — `JobPostServiceImpl.create()`, `PostContents.jobType` 과 `TargetJob.interestedJob` 이 같은 학생들에게 N건 발행. **등록한 졸업생 본인 제외**, 같은 멤버가 동일 카테고리 중복 보유 시 1건만. enum 매칭은 `TargetJobCategory.valueOf(jobType.name())` 으로 (CLAUDE.md `interested_job` 의 값 매칭 방침과 정합).
   - `CoffeeChatAlarm` — `CoffeeChatServiceImpl.create()` / `updateStatus()`, PENDING 1건(수신자, content 는 요청자 학과·닉네임 포함 동적 생성), ACCEPTED 2건(요청자+수신자, 카카오링크), REJECTED 1건(요청자).
 - **상대 시간 표시 (`AlarmResponse.relativeTime`)**: 응답 변환 시점에 `RelativeTimeFormatter.format(createdAt)` 으로 계산 ("방금 전 / N분 전 / N시간 전 / N일 전 / N개월 전 / N년 전"). 매 조회마다 재계산되어 시간 흐름에 따라 자연스럽게 업데이트됨. `createdAt` 도 함께 응답에 포함 (프론트 자체 포맷팅 여지 보존).
+- **SSE 실시간 푸시**: `GET /api/v1/notifications/subscribe` 로 SSE 연결, `SseService.send(receiver, AlarmType, content)` 로 `notification` 이벤트 전송, 10초 주기 `ping` heartbeat. 단, **현재 도메인 알람 발행 지점(`*ServiceImpl`)에서 `send()` 호출은 미연결** — `SseTestController`(`POST /api/v1/notifications/test`) 수동 발송만 동작. 도메인 4곳(`AnswerServiceImpl`/`JobPostServiceImpl`/`RoadmapServiceImpl`/`CoffeeChatServiceImpl`)의 알람 `save` 직후 `send()` 연결은 후속 작업.
 
 ### Q&A
 - `Question` 1:N `Answer`
@@ -141,7 +145,7 @@ mju.capstone.ddingconnect
 | 화면 섹션 | 백엔드 도메인 |
 |---|---|
 | 인증/온보딩 | `global/auth` + `member` |
-| 홈/알람 패널 | `alarm` (4종 통합) |
+| 홈/알람 패널 | `global/sse` (4종 통합 조회 + SSE 실시간 푸시) |
 | 폼 입력 (보라/초록) | `roadmap` / `techstack` / `interested_job` 등록·수정 |
 | Q&A 스레드 (핑크) | `qna/question` + `qna/answer` |
 | 구직 공고 (파랑) | `job_post` |
@@ -168,6 +172,7 @@ mju.capstone.ddingconnect
 
 ## 작업 시 주의
 
+- **하드코딩 절대 금지**: 문자열·숫자 리터럴은 `private static final` 상수 또는 enum/설정값으로 분리한다. 매직 넘버와 반복 문자열(이벤트명·URL·경로·메시지·TTL 등)을 코드에 직접 박지 말 것. 테스트 코드도 동일하게 적용하며, 공유 값은 `*TestConstants` 등 상수 클래스로 참조한다.
 - 새 엔티티는 반드시 `BaseEntity` 상속
 - 새 에러는 `ErrorStatus`에 정의 후 도메인 `*Handler`에서 throw
 - 컨트롤러 응답은 `ApiResponse.onSuccess(...)` 통일
