@@ -2,4 +2,4 @@ spring:
   application:
     name: channeling-be
   profiles:
-    active: ${SPRING_PROFILES_ACTIVE:db,s3,oauth,jwt}
+    active: ${SPRING_PROFILES_ACTIVE:db,s3,oauth,jwt,mail}
