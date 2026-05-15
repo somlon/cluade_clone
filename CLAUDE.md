@@ -327,6 +327,22 @@ _(아래 TODO A · B 는 마이페이지 수정 화면의 "수정 완료" 흐름
 
 **출처**: PR #22.
 
+### TODO E: SSE 실시간 푸시가 도메인 알람 발행에 미연결 (PR #22 후속, global/sse)
+
+**문제**: `SseService.send(receiver, AlarmType, content)` 는 구현돼 있으나 호출처가 `SseTestController`(`POST /api/v1/notifications/test`) 수동 발송뿐. 도메인 4곳의 알람 엔티티 `save` 직후 `send()` 호출이 없어, 실제 답변/구직/로드맵/커피챗 알람이 발생해도 SSE 실시간 푸시가 나가지 않음 (구독자는 `GET /api/v1/alarms` 폴링으로만 회수).
+
+**디폴트 결정**: 각 `*ServiceImpl` 에 `SseService` 주입 후, 알람 엔티티 `save` 직후 같은 `@Transactional` 안에서 `sseService.send(...)` 호출. 연결 지점:
+- `AnswerServiceImpl.create` — `AnswerAlarm` 저장 직후 (`AnswerServiceImpl.java:57`)
+- `JobPostServiceImpl.create` / `update` — `JobAlarm` 저장 직후 (`JobPostServiceImpl.java:83` / `:189` / `:199`), N건 발행은 수신자별로 `send` 호출
+- `RoadmapServiceImpl.create` — `RoadmapAlarm` 저장 직후 (`RoadmapServiceImpl.java:42`)
+- `CoffeeChatServiceImpl.create` / `updateStatus` — `CoffeeChatAlarm` 저장 직후 (`CoffeeChatServiceImpl.java:73` / `:127` / `:134` / `:143`)
+
+수신자·content 는 알람 엔티티 저장에 쓰는 값과 동일하게 사용. 본체 `@Transactional` 안에서 발행하므로 저장 실패 시 푸시도 함께 롤백 (알람 발행 위치 방침과 정합).
+
+**미확정 (사용자 결정 필요)**: SSE 페이로드. 현재 `send()` 는 `Map.of("type", "content")` 2필드만 전송 — 통합 `AlarmResponse`(`id`·`refId`·`isRead`·`createdAt`·`relativeTime` 포함)와 불일치해 프론트가 푸시 알람을 읽음 처리/상세 진입할 키가 없음. 연결 작업 시 `send()` 시그니처를 `AlarmResponse` 기반으로 확장할지 함께 결정 (확장은 본 TODO 와 묶거나 분리 가능).
+
+**출처**: PR #22 (`ddd4004`) 가 SSE 인프라만 추가하고 도메인 연결을 누락.
+
 ### 공통 진행 정책
 
 | 항목 | 결정 |
