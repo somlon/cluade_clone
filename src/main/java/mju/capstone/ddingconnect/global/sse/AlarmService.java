@@ -1,7 +1,5 @@
-package mju.capstone.ddingconnect.domain.alarm.service;
+package mju.capstone.ddingconnect.global.sse;
 
-import mju.capstone.ddingconnect.domain.alarm.domain.AlarmType;
-import mju.capstone.ddingconnect.domain.alarm.dto.response.AlarmResponse;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 
 import java.util.List;

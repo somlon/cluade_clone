@@ -1,6 +1,4 @@
-package mju.capstone.ddingconnect.domain.alarm.dto.response;
-
-import mju.capstone.ddingconnect.domain.alarm.domain.AlarmType;
+package mju.capstone.ddingconnect.global.sse;
 
 import java.time.LocalDateTime;
 

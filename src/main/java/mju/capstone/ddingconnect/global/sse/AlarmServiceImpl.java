@@ -1,9 +1,6 @@
-package mju.capstone.ddingconnect.domain.alarm.service;
+package mju.capstone.ddingconnect.global.sse;
 
 import lombok.RequiredArgsConstructor;
-import mju.capstone.ddingconnect.domain.alarm.domain.AlarmType;
-import mju.capstone.ddingconnect.domain.alarm.dto.response.AlarmResponse;
-import mju.capstone.ddingconnect.domain.alarm.util.RelativeTimeFormatter;
 import mju.capstone.ddingconnect.domain.coffeechat.domain.CoffeeChatAlarm;
 import mju.capstone.ddingconnect.domain.coffeechat.domain.repository.CoffeeChatAlarmRepository;
 import mju.capstone.ddingconnect.domain.job_post.domain.JobAlarm;
