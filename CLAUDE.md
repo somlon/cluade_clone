@@ -94,19 +94,20 @@ mju.capstone.ddingconnect
 - **삭제 캐스케이드 (서비스 레벨)**: `CoffeeChatServiceImpl.delete` 에서 `CoffeeChatAlarm` 먼저 `deleteByCoffeeChatId` 로 정리 → `CoffeeChat` 삭제. `CoffeeChatAlarm.coffeeChat` 가 `nullable = false` FK 라 정리 없이는 MySQL FK constraint 위반.
 
 ### 통합 알람 (global/sse)
-- **패키지**: 통합 알람 조회 계층(`AlarmController` / `AlarmService(Impl)` / `AlarmResponse` / `AlarmType` / `RelativeTimeFormatter`)은 `global/sse/` 에 SSE 실시간 푸시(`SseController` / `SseService(Impl)` / `SseEmitterRepository` / `SseTestController` / `SseSwagger`)와 함께 배치. 별도 `domain/alarm/` 도메인은 없음 — 알람은 자체 엔티티 없이 4개 도메인의 알람 엔티티를 집계하는 cross-cutting 관심사라 `global` 에 둔다. 알람 엔티티(`AnswerAlarm` / `JobAlarm` / `RoadmapAlarm` / `CoffeeChatAlarm`) 자체는 각 도메인 패키지에 그대로 존속.
+- **패키지**: 통합 알람 조회 계층(`AlarmController` / `AlarmService(Impl)` / `AlarmResponse` / `AlarmType` / `RelativeTimeFormatter`)은 `global/sse/` 에 SSE 실시간 푸시(`SseController` / `SseService(Impl)` / `SseEmitterRepository` / `SseTestController` / `SseSwagger`)·도메인 알람의 커밋 후 SSE 발행(`AlarmNotificationEvent` / `AlarmNotificationListener`)과 함께 배치. 별도 `domain/alarm/` 도메인은 없음 — 알람은 자체 엔티티 없이 4개 도메인의 알람 엔티티를 집계하는 cross-cutting 관심사라 `global` 에 둔다. 알람 엔티티(`AnswerAlarm` / `JobAlarm` / `RoadmapAlarm` / `CoffeeChatAlarm`) 자체는 각 도메인 패키지에 그대로 존속.
 - `AlarmType` enum(`global/sse/AlarmType`)은 통합 알람 조회와 SSE 푸시 이벤트가 **공유** (단일 정의).
 - 4종(`AnswerAlarm`, `JobAlarm`, `RoadmapAlarm`, `CoffeeChatAlarm`)을 합쳐 단일 `AlarmResponse` 리스트로 반환 (`GET /api/v1/alarms`)
 - 정렬: `createdAt DESC`, null은 뒤로
 - 읽음 처리는 Builder 패턴으로 새 인스턴스 만들어 저장 (불변 스타일)
 - 각 타입별 소유자 검증 헬퍼 분리 (`verify*AlarmOwner`)
-- **알람 발행 위치 = 각 도메인 `*ServiceImpl` 의 본체 save 직후, 같은 `@Transactional` 안** (이벤트/AOP 미사용). 본체 저장 실패 시 알람도 롤백되어 원자성 보장.
+- **알람 row 저장 위치 = 각 도메인 `*ServiceImpl` 의 본체 save 직후, 같은 `@Transactional` 안**. 본체 저장 실패 시 알람 row 도 롤백되어 원자성 보장. SSE 실시간 푸시는 이벤트로 분리해 커밋 후 발행 (아래 "알람 SSE 발행" 참조).
   - `AnswerAlarm` — `AnswerServiceImpl.create()`, 질문 작성자에게 발행. 단, **본인이 본인 질문에 답변한 경우는 미발행** (자기 자신 알람 방지).
   - `RoadmapAlarm` — `RoadmapServiceImpl.create()`, **본인(생성자)** 에게 발행.
   - `JobAlarm` — `JobPostServiceImpl.create()`, `PostContents.jobType` 과 `TargetJob.interestedJob` 이 같은 학생들에게 N건 발행. **등록한 졸업생 본인 제외**, 같은 멤버가 동일 카테고리 중복 보유 시 1건만. enum 매칭은 `TargetJobCategory.valueOf(jobType.name())` 으로 (CLAUDE.md `interested_job` 의 값 매칭 방침과 정합).
   - `CoffeeChatAlarm` — `CoffeeChatServiceImpl.create()` / `updateStatus()`, PENDING 1건(수신자, content 는 요청자 학과·닉네임 포함 동적 생성), ACCEPTED 2건(요청자+수신자, 카카오링크), REJECTED 1건(요청자).
 - **상대 시간 표시 (`AlarmResponse.relativeTime`)**: 응답 변환 시점에 `RelativeTimeFormatter.format(createdAt)` 으로 계산 ("방금 전 / N분 전 / N시간 전 / N일 전 / N개월 전 / N년 전"). 매 조회마다 재계산되어 시간 흐름에 따라 자연스럽게 업데이트됨. `createdAt` 도 함께 응답에 포함 (프론트 자체 포맷팅 여지 보존).
-- **SSE 실시간 푸시**: `GET /api/v1/notifications/subscribe` 로 SSE 연결, `SseService.send(receiver, AlarmType, content)` 로 `notification` 이벤트 전송, 10초 주기 `ping` heartbeat. 단, **현재 도메인 알람 발행 지점(`*ServiceImpl`)에서 `send()` 호출은 미연결** — `SseTestController`(`POST /api/v1/notifications/test`) 수동 발송만 동작. 도메인 4곳(`AnswerServiceImpl`/`JobPostServiceImpl`/`RoadmapServiceImpl`/`CoffeeChatServiceImpl`)의 알람 `save` 직후 `send()` 연결은 후속 작업.
+- **SSE 실시간 푸시**: `GET /api/v1/notifications/subscribe` 로 SSE 연결, `SseService.send(receiver, AlarmType, content)` 로 `notification` 이벤트 전송, 10초 주기 `ping` heartbeat. `SseTestController`(`POST /api/v1/notifications/test`) 수동 발송도 계속 동작.
+- **알람 SSE 발행 (커밋 후)**: 도메인 4개 `*ServiceImpl`(`AnswerServiceImpl`/`JobPostServiceImpl`/`RoadmapServiceImpl`/`CoffeeChatServiceImpl`)이 알람 row `save` 직후 같은 `@Transactional` 안에서 `ApplicationEventPublisher.publishEvent(new AlarmNotificationEvent(receiver, type, content))` 발행 → `global/sse/AlarmNotificationListener` 가 `@TransactionalEventListener(AFTER_COMMIT)` 로 수신해 `SseService.send()` 호출. **본체 커밋 성공 후에만** 푸시되므로, 인라인 `send()` 와 달리 본체 롤백 시 DB 에 없는 알람을 클라이언트가 받는 "유령 알림"이 생기지 않음 (push 유실은 `GET /api/v1/alarms` 재조회로 self-heal — 실패 비대칭상 커밋 후 발행만 "DB = source of truth" 와 정합). 기존 SSE 코드(`SseService`/`SseServiceImpl`/`SseEmitterRepository`/`SseController`/`SseSwagger`/`SseTestController`)와 `AlarmType` 은 동결, 신규 파일은 `AlarmNotificationEvent`(record)·`AlarmNotificationListener` 2개뿐. 알람 content 리터럴은 각 서비스 `private static final` 상수로 추출(알람 row 빌더와 이벤트가 같은 상수 공유).
 
 ### Q&A
 - `Question` 1:N `Answer`
@@ -353,13 +354,13 @@ _(아래 TODO A · B 는 마이페이지 수정 화면의 "수정 완료" 흐름
 - **`AlarmType` enum 완전 동결** — frozen `SseService.send()` 시그니처·`SseServiceImpl`(`type.name()`)·`SseTestController`(`defaultValue="ANSWER"`) 가 의존하므로 동결 대상에 포함. 기존 4상수·이름·위치·타입은 물론 **상수 추가·필드/메서드 추가까지 포함해 TODO E 범위 내 일절 수정 금지.** 새 알람 타입이 필요하면 별도 TODO.
 - 그 외 기존 알람 코드(도메인 4곳 발행 로직, 알람 엔티티/레포, `global/sse` 의 `Alarm*` 조회 계층 — 단 `AlarmType` 제외)는 자유롭게 변경 가능.
 
-**미확정 — 다음 작업 (TODO E 착수 전 반드시 확정)**: 아래 2건이 모두 확정돼야 TODO E 코드 착수 가능. **세션 재개 시 ① → ② 순으로 결정하는 것이 다음 할 일.**
-- ① 트랜잭션 경계 — `send()` 는 네트워크 전송이라 롤백 불가. 본체 `@Transactional` 인라인 발행 vs commit 이후 발행.
-- ② 재구성 구체안 — SSE 코드 동결 제약 하에서 알람 발행 코드를 어떻게 SSE 에 정합시킬지 (발행 지점 공통화, `send()` 호출 표준화 등). ① 확정 후 결정.
+**확정 완료 (① · ②) — 본 PR 에서 TODO E 구현**: 두 항목 모두 확정(아래 `확정 결정 로그`). 코드 구현은 이 PR 에 포함되며, 머지 후 이 TODO E 항목을 삭제하고 규칙은 `### 통합 알람 (global/sse)` 도메인 섹션에 통합한다.
 
 **확정 결정 로그**:
 - `AlarmType` 변경 범위 → **완전 동결** (frozen SSE 코드 의존, 상수 추가 포함 일절 수정 금지).
 - 영속화 유지 여부 → **유지** — DB = source of truth. SSE 는 전송 수단이라 저장을 대체 못 함 (이력·읽음·상세는 저장 필요 기능). DB 영속화 + SSE 실시간 전송 병행이 효율적 정답이며, 영속화 제거는 효율 개선이 아니라 기능 상실.
+- ① 트랜잭션 경계 → **커밋 이후 발행** (`@TransactionalEventListener(phase = AFTER_COMMIT)`). 알람 row `*AlarmRepository.save()` 는 본체 `@Transactional` 안에 그대로 둬 본체와 원자적으로 커밋, SSE `send()` 만 커밋 성공 후 실행. 이유: `send()` 는 롤백 불가한 네트워크 전송이라 인라인 발행 시 커밋이 실패하면 DB 에 없는 알람을 클라이언트가 수신하는 "유령 알림"이 발생. 커밋 후 발행은 push 유실 시 `GET /api/v1/alarms` 재조회로 self-heal 되지만 그 반대(유령 알림)는 불가 — 실패 비대칭상 커밋 후 발행만 "DB = source of truth" 와 정합. 부수 효과: 네트워크 I/O 가 트랜잭션 밖으로 빠져 DB 커넥션 점유 시간 단축, 발행 지점이 `SseService` 와 디커플링.
+- ② 재구성 구체안 → **이벤트 발행 + 단일 AFTER_COMMIT 리스너**. 도메인 4개 `*ServiceImpl` 이 알람 row save 직후 `ApplicationEventPublisher.publishEvent(new AlarmNotificationEvent(receiver, type, content))` 발행, `global/sse/AlarmNotificationListener` 가 `@TransactionalEventListener(AFTER_COMMIT)` 로 수신해 `SseService.send()` 호출. 신규 파일은 `AlarmNotificationEvent`(record)·`AlarmNotificationListener` 2개뿐 — `global/sse` 의 기존 SSE 코드·`AlarmType` 0줄 수정. 디스패처/헬퍼 클래스 없이 발행 지점마다 `publishEvent` 인라인(불필요한 간접화 회피). 알람 content 리터럴은 각 서비스 `private static final` 상수로 추출(알람 row 빌더와 이벤트가 같은 상수 공유, 하드코딩 제거). `@Async` 미적용(커밋 후 동기 발행) — 비동기화는 별도 작업.
 
 **출처**: PR #22 (`ddd4004`) 가 SSE 인프라만 추가하고 도메인 연결을 누락. 본 대화에서 "SSE 1차 채널 + 기존 알람 코드 재구성, SSE 코드 동결" 로 방향 재확정 (구 TODO E 재작성).
 

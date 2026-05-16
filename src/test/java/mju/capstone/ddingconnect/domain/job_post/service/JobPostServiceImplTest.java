@@ -16,6 +16,8 @@ import mju.capstone.ddingconnect.domain.member.domain.MemberRole;
 import mju.capstone.ddingconnect.domain.member.domain.repository.GraduateRepository;
 import mju.capstone.ddingconnect.global.response.code.status.ErrorStatus;
 import mju.capstone.ddingconnect.global.response.exception.handler.JobPostHandler;
+import mju.capstone.ddingconnect.global.sse.AlarmNotificationEvent;
+import mju.capstone.ddingconnect.global.sse.AlarmType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -25,6 +27,7 @@ import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -46,6 +49,7 @@ class JobPostServiceImplTest {
     @Mock JobAlarmRepository jobAlarmRepository;
     @Mock GraduateRepository graduateRepository;
     @Mock TargetJobRepository targetJobRepository;
+    @Mock ApplicationEventPublisher eventPublisher;
 
     @InjectMocks JobPostServiceImpl jobPostService;
 
@@ -88,6 +92,7 @@ class JobPostServiceImplTest {
         verify(postContentsRepository).save(any(PostContents.class));
         verify(graduateJobPostRepository).save(any(GraduateJobPost.class));
         verify(jobAlarmRepository, never()).save(any(JobAlarm.class));
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test
@@ -115,6 +120,14 @@ class JobPostServiceImplTest {
 
         // A, B 각각 1건씩 = 총 2건. self 와 duplicate 는 제외
         verify(jobAlarmRepository, times(2)).save(any(JobAlarm.class));
+
+        // SSE 푸시 이벤트도 동일하게 A, B 대상 2건 발행 (본인/중복 제외)
+        ArgumentCaptor<AlarmNotificationEvent> eventCaptor = ArgumentCaptor.forClass(AlarmNotificationEvent.class);
+        verify(eventPublisher, times(2)).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getAllValues()).extracting(e -> e.receiver().getId())
+                .containsExactlyInAnyOrder(11L, 12L);
+        assertThat(eventCaptor.getAllValues()).allSatisfy(e ->
+                assertThat(e.type()).isEqualTo(AlarmType.JOB));
     }
 
     @Test
@@ -196,6 +209,7 @@ class JobPostServiceImplTest {
         verify(jobAlarmRepository, never()).save(any(JobAlarm.class));
         verify(jobAlarmRepository, never()).findByPostContentsId(any());
         verify(targetJobRepository, never()).findByInterestedJob(any());
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test
@@ -224,6 +238,12 @@ class JobPostServiceImplTest {
         assertThat(dispatched.getMember().getId()).isEqualTo(11L);
         assertThat(dispatched.getContent()).contains("벗어난");
         assertThat(dispatched.getIsRead()).isFalse();
+
+        // SSE 푸시 이벤트도 'Removed' 대상(A) 1건 발행
+        ArgumentCaptor<AlarmNotificationEvent> eventCaptor = ArgumentCaptor.forClass(AlarmNotificationEvent.class);
+        verify(eventPublisher, times(1)).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().receiver().getId()).isEqualTo(11L);
+        assertThat(eventCaptor.getValue().content()).contains("벗어난");
     }
 
     @Test

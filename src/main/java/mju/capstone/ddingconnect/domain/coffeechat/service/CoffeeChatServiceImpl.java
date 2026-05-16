@@ -15,6 +15,9 @@ import mju.capstone.ddingconnect.domain.member.domain.repository.MemberRepositor
 import mju.capstone.ddingconnect.global.response.code.status.ErrorStatus;
 import mju.capstone.ddingconnect.global.response.exception.handler.CoffeeChatHandler;
 import mju.capstone.ddingconnect.global.response.exception.handler.MemberHandler;
+import mju.capstone.ddingconnect.global.sse.AlarmNotificationEvent;
+import mju.capstone.ddingconnect.global.sse.AlarmType;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,9 +36,14 @@ import java.util.List;
 @RequiredArgsConstructor
 public class CoffeeChatServiceImpl implements CoffeeChatService {
 
+    private static final String PENDING_CONTENT_FORMAT = "%s %s님이 커피챗을 요청했어요!";
+    private static final String ACCEPTED_CONTENT_PREFIX = "커피챗 요청이 수락되었습니다. 카카오톡 오픈채팅 링크: ";
+    private static final String REJECTED_CONTENT = "커피챗 요청이 거절되었습니다.";
+
     private final CoffeeChatRepository coffeeChatRepository;
     private final CoffeeChatAlarmRepository coffeeChatAlarmRepository;
     private final MemberRepository memberRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional
@@ -68,7 +76,7 @@ public class CoffeeChatServiceImpl implements CoffeeChatService {
 
         // [알람 발행] 수신자에게 "요청 도착" 알람 1건
         // content 에 요청자 학과/닉네임을 포함해 알림 화면에서 식별 가능하게 함
-        String pendingContent = String.format("%s %s님이 커피챗을 요청했어요!",
+        String pendingContent = String.format(PENDING_CONTENT_FORMAT,
                 member.getDepartment(), member.getNickname());
         coffeeChatAlarmRepository.save(CoffeeChatAlarm.builder()
                 .coffeeChat(saved)
@@ -76,6 +84,8 @@ public class CoffeeChatServiceImpl implements CoffeeChatService {
                 .content(pendingContent)
                 .isRead(false)
                 .build());
+        eventPublisher.publishEvent(new AlarmNotificationEvent(
+                receiver, AlarmType.COFFEE_CHAT, pendingContent));
 
         return CoffeeChatResponse.from(saved);
     }
@@ -121,8 +131,7 @@ public class CoffeeChatServiceImpl implements CoffeeChatService {
         // [알람 발행] 상태별 분기
         if (request.status() == CoffeeChatStatus.ACCEPTED) {
             // 수락: 요청자/수신자 양쪽에 카카오 오픈채팅 링크 포함 알람 2건
-            String acceptedContent =
-                    "커피챗 요청이 수락되었습니다. 카카오톡 오픈채팅 링크: " + saved.getKakaoOpenChatLink();
+            String acceptedContent = ACCEPTED_CONTENT_PREFIX + saved.getKakaoOpenChatLink();
 
             coffeeChatAlarmRepository.save(CoffeeChatAlarm.builder()
                     .coffeeChat(saved)
@@ -138,14 +147,21 @@ public class CoffeeChatServiceImpl implements CoffeeChatService {
                     .isRead(false)
                     .build());
 
+            eventPublisher.publishEvent(new AlarmNotificationEvent(
+                    saved.getRequester(), AlarmType.COFFEE_CHAT, acceptedContent));
+            eventPublisher.publishEvent(new AlarmNotificationEvent(
+                    saved.getReceiver(), AlarmType.COFFEE_CHAT, acceptedContent));
+
         } else if (request.status() == CoffeeChatStatus.REJECTED) {
             // 거절: 요청자에게만 거절 알람 1건
             coffeeChatAlarmRepository.save(CoffeeChatAlarm.builder()
                     .coffeeChat(saved)
                     .member(saved.getRequester())
-                    .content("커피챗 요청이 거절되었습니다.")
+                    .content(REJECTED_CONTENT)
                     .isRead(false)
                     .build());
+            eventPublisher.publishEvent(new AlarmNotificationEvent(
+                    saved.getRequester(), AlarmType.COFFEE_CHAT, REJECTED_CONTENT));
         }
 
         return CoffeeChatResponse.from(saved);

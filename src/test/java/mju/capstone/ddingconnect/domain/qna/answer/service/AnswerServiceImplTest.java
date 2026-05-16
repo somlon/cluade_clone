@@ -18,14 +18,18 @@ import mju.capstone.ddingconnect.domain.qna.question.domain.repository.QuestionR
 import mju.capstone.ddingconnect.domain.qna.question.dto.response.LikeToggleResponse;
 import mju.capstone.ddingconnect.global.response.exception.handler.AnswerHandler;
 import mju.capstone.ddingconnect.global.response.exception.handler.QuestionHandler;
+import mju.capstone.ddingconnect.global.sse.AlarmNotificationEvent;
+import mju.capstone.ddingconnect.global.sse.AlarmType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.List;
 import java.util.Optional;
@@ -44,6 +48,7 @@ class AnswerServiceImplTest {
     @Mock AnswerLikeRepository answerLikeRepository;
     @Mock AnswerAlarmRepository answerAlarmRepository;
     @Mock QuestionRepository questionRepository;
+    @Mock ApplicationEventPublisher eventPublisher;
     @InjectMocks AnswerServiceImpl answerService;
 
     private Member questioner;
@@ -78,6 +83,14 @@ class AnswerServiceImplTest {
         assertThat(response.likeCount()).isZero();
         assertThat(response.likedByMe()).isFalse();
         verify(answerAlarmRepository).save(any(AnswerAlarm.class));
+
+        // 커밋 후 SSE 푸시용 이벤트가 질문 작성자 대상으로 발행된다
+        ArgumentCaptor<AlarmNotificationEvent> eventCaptor = ArgumentCaptor.forClass(AlarmNotificationEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        AlarmNotificationEvent event = eventCaptor.getValue();
+        assertThat(event.receiver().getId()).isEqualTo(questioner.getId());
+        assertThat(event.type()).isEqualTo(AlarmType.ANSWER);
+        assertThat(event.content()).isEqualTo("내 질문에 새로운 답변이 달렸습니다.");
     }
 
     @Test
@@ -95,6 +108,7 @@ class AnswerServiceImplTest {
         answerService.create(graduateAuthor, 11L, req);
 
         verify(answerAlarmRepository, never()).save(any(AnswerAlarm.class));
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test
@@ -127,6 +141,7 @@ class AnswerServiceImplTest {
         assertThatThrownBy(() -> answerService.create(answerer, 999L, req))
                 .isInstanceOf(QuestionHandler.class);
         verify(answerAlarmRepository, never()).save(any(AnswerAlarm.class));
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test

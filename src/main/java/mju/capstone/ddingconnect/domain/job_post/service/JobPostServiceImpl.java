@@ -19,6 +19,9 @@ import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.domain.member.domain.repository.GraduateRepository;
 import mju.capstone.ddingconnect.global.response.code.status.ErrorStatus;
 import mju.capstone.ddingconnect.global.response.exception.handler.JobPostHandler;
+import mju.capstone.ddingconnect.global.sse.AlarmNotificationEvent;
+import mju.capstone.ddingconnect.global.sse.AlarmType;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,11 +35,15 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class JobPostServiceImpl implements JobPostService {
 
+    private static final String JOB_ALARM_NEW_CONTENT = "관심 직무에 새로운 공고가 등록되었습니다.";
+    private static final String JOB_ALARM_REMOVED_CONTENT = "관심 직군에서 벗어난 공고로 변경되었습니다.";
+
     private final PostContentsRepository postContentsRepository;
     private final GraduateJobPostRepository graduateJobPostRepository;
     private final JobAlarmRepository jobAlarmRepository;
     private final GraduateRepository graduateRepository;
     private final TargetJobRepository targetJobRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional
@@ -83,9 +90,11 @@ public class JobPostServiceImpl implements JobPostService {
             jobAlarmRepository.save(JobAlarm.builder()
                     .member(tj.getMember())
                     .postContents(saved)
-                    .content("관심 직무에 새로운 공고가 등록되었습니다.")
+                    .content(JOB_ALARM_NEW_CONTENT)
                     .isRead(false)
                     .build());
+            eventPublisher.publishEvent(new AlarmNotificationEvent(
+                    tj.getMember(), AlarmType.JOB, JOB_ALARM_NEW_CONTENT));
         }
 
         return JobPostResponse.from(saved);
@@ -186,22 +195,28 @@ public class JobPostServiceImpl implements JobPostService {
         for (Long mid : prevIds) {
             if (currIds.contains(mid)) continue;
             if (mid.equals(creatorId)) continue;
+            Member receiver = prevMemberById.get(mid);
             jobAlarmRepository.save(JobAlarm.builder()
-                    .member(prevMemberById.get(mid))
+                    .member(receiver)
                     .postContents(post)
-                    .content("관심 직군에서 벗어난 공고로 변경되었습니다.")
+                    .content(JOB_ALARM_REMOVED_CONTENT)
                     .isRead(false)
                     .build());
+            eventPublisher.publishEvent(new AlarmNotificationEvent(
+                    receiver, AlarmType.JOB, JOB_ALARM_REMOVED_CONTENT));
         }
 
         for (Long mid : currIds) {
             if (prevIds.contains(mid)) continue;
+            Member receiver = currMemberById.get(mid);
             jobAlarmRepository.save(JobAlarm.builder()
-                    .member(currMemberById.get(mid))
+                    .member(receiver)
                     .postContents(post)
-                    .content("관심 직무에 새로운 공고가 등록되었습니다.")
+                    .content(JOB_ALARM_NEW_CONTENT)
                     .isRead(false)
                     .build());
+            eventPublisher.publishEvent(new AlarmNotificationEvent(
+                    receiver, AlarmType.JOB, JOB_ALARM_NEW_CONTENT));
         }
     }
 
