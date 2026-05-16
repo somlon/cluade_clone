@@ -60,7 +60,7 @@ public enum ErrorStatus implements BaseErrorCode {
     // Roadmap
     ROADMAP_NOT_FOUND(HttpStatus.NOT_FOUND, "ROADMAP404", "존재하지 않는 로드맵입니다."),
     ROADMAP_UNAUTHORIZED(HttpStatus.FORBIDDEN, "ROADMAP403", "로드맵을 수정/삭제할 권한이 없습니다."),
-    ROADMAP_INVALID_CONTENT(HttpStatus.BAD_REQUEST, "ROADMAP400", "로드맵 content는 JSON object 또는 array 형식이어야 합니다."),
+    ROADMAP_INVALID_CONTENT(HttpStatus.BAD_REQUEST, "ROADMAP400", "로드맵 content는 비어 있을 수 없습니다."),
 
     // Alarm
     ALARM_NOT_FOUND(HttpStatus.NOT_FOUND, "ALARM404", "존재하지 않는 알람입니다."),
