@@ -5,6 +5,7 @@ import lombok.*;
 import mju.capstone.ddingconnect.global.common.BaseEntity;
 
 import java.time.LocalDate;
+import java.util.List;
 
 /**
  * [구직 공고 엔티티]
@@ -19,7 +20,7 @@ import java.time.LocalDate;
  * - 주소3                  → fullLocation (varchar(255), column: full_location)
  * - 마감일(Date)           → deadline
  * - 상세URL                → detailUrl (varchar(255))
- * - 선호언어               → preferredLanguage (varchar(255))
+ * - 선호언어               → preferredLanguages (List, 컬렉션테이블 post_contents_preferred_language)
  * - 회사명                 → companyName (varchar(255))
  *
  * 연결 관계:
@@ -67,8 +68,12 @@ public class PostContents extends BaseEntity {
     @Column(length = 255)
     private String detailUrl;         // 상세URL
 
-    @Column(length = 255)
-    private String preferredLanguage; // 선호언어
+    @ElementCollection
+    @CollectionTable(
+            name = "post_contents_preferred_language",
+            joinColumns = @JoinColumn(name = "post_contents_id"))
+    @Column(name = "preferred_language")
+    private List<String> preferredLanguages; // 선호언어 (다중 입력)
 
     @Column(length = 255)
     private String companyName;       // 회사명
