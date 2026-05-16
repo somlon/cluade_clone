@@ -233,6 +233,43 @@ mju.capstone.ddingconnect
 
 **출처**: PR #22.
 
+### TODO E: 본인 질문글에 한해 학생도 답변 허용 (사용자 요청, qna 도메인)
+
+**요청**: 현재 답변 등록은 졸업생만 가능 (`AnswerServiceImpl.create` `AnswerServiceImpl.java:46-49` — `MemberRole.GRADUATE` 가 아니면 403 `ANSWER_NOT_GRADUATE`). 멘토(졸업생)가 학생 질문에 답하는 기본 흐름은 유지하되, **본인이 작성한 질문글에 한해** 예외적으로 학생(STUDENT)도 답변을 달 수 있게 허용한다.
+
+**디폴트 결정**:
+- `AnswerServiceImpl.create` 에서 `Question` 조회를 역할 검증보다 **먼저** 수행하도록 순서 변경 (현재: 역할 체크 → question 조회). 이에 따라 없는 questionId 는 403 대신 404 `QUESTION_NOT_FOUND` 가 먼저 난다.
+- 역할 검증을 "GRADUATE 이거나 호출자가 질문 작성자이면 통과"로 완화 — `member.getRole() != MemberRole.GRADUATE && !question.getMember().getId().equals(member.getId())` 일 때만 403 `ANSWER_NOT_GRADUATE`.
+- 자기 질문 자기 답변 시 알람 미발행 분기(`AnswerServiceImpl.java:62-71`)는 이미 작성자 == 호출자를 거르므로 그대로 동작 — 추가 변경 불필요.
+- `AnswerSwagger.createAnswer` 설명(`AnswerSwagger.java:22`, "졸업생만 ... STUDENT/UNKNOWN → 403")과 CLAUDE.md `### Q&A` 의 답변 등록 규칙 문구를 "졸업생 + 질문 작성자 본인"으로 갱신.
+
+**출처**: 사용자 요청 (2026-05-16).
+
+### TODO F: 로드맵 content 를 일반 문자열 입력으로 변경 (사용자 요청, roadmap 도메인)
+
+**요청**: 로드맵 등록(`POST /api/v1/roadmaps`)이 `content` 를 JSON object/array 문자열로만 받는 현재 방식(`{ "content": "{\"steps\":[...]}" }`)을, 일반 문자열(`{ "content": "string" }`)을 그대로 받도록 바꾼다. content 내부 형식 강제를 제거한다.
+
+**디폴트 결정**:
+- `Roadmap.content` (`Roadmap.java:37-39`): `@JdbcTypeCode(SqlTypes.JSON)` 제거, `@Column(name = "content", columnDefinition = "TEXT")` 로 변경 (로드맵 본문이 255자 초과 가능 → TEXT). 미사용 import(`JdbcTypeCode`, `SqlTypes`) 정리.
+- `RoadmapServiceImpl.validateJsonContent` (`RoadmapServiceImpl.java:59-71`): JSON 파싱/구조 검증 삭제, **null·blank 검증만 유지**(빈 값은 계속 400 `ROADMAP_INVALID_CONTENT`). `ObjectMapper`/`JsonNode`/`JsonProcessingException` import 와 `OBJECT_MAPPER` 상수 제거, 메서드명 `validateContent` 로 정리.
+- `RoadmapSwagger.createRoadmap` (`RoadmapSwagger.java:21-46`): `@ExampleObject` value 를 `{ "content": "string" }` 로 교체, "JSON object 또는 array" 문구를 일반 문자열 설명으로 수정. `CreateRoadmapRequest` 필드 주석도 수정.
+- DB: `roadmap.content` JSON 컬럼 → TEXT (개발 `ddl-auto` 자동 반영). CLAUDE.md `### 로드맵` 섹션의 JSON 컬럼·`validateJsonContent` 규칙 갱신.
+
+**출처**: 사용자 요청 (2026-05-16).
+
+### TODO G: 구직 공고 선호 언어 다중 입력(리스트화) (사용자 요청, job_post 도메인)
+
+**요청**: 구직 공고의 선호 언어(`preferredLanguage`)가 현재 단일 문자열이라 한 개만 입력 가능하다. 한 번에 여러 개의 선호 언어를 입력받을 수 있도록 **리스트 형태**(`List<String>`)로 변경한다.
+
+**디폴트 결정**:
+- `PostContents` (`PostContents.java:70-71`): `String preferredLanguage` → `List<String> preferredLanguages` 로 변경하고 `@ElementCollection` + `@CollectionTable(name = "post_contents_preferred_language", joinColumns = @JoinColumn(name = "post_contents_id"))` + `@Column(name = "preferred_language")` 적용. 클래스 상단 컬럼 매핑 javadoc 갱신.
+- `CreateJobPostRequest` / `UpdateJobPostRequest` / `JobPostResponse`: `String preferredLanguage` → `List<String> preferredLanguages`, `JobPostResponse.from` 매핑 수정.
+- `JobPostServiceImpl` `create`/`update`: 빌더 `.preferredLanguage(...)` → `.preferredLanguages(...)`. `update` 의 null-coalescing 패턴(`request.preferredLanguages() != null ? ... : postContents.getPreferredLanguages()`) 유지.
+- 삭제 캐스케이드: `@ElementCollection` 컬렉션 테이블은 `postContentsRepository.delete()` 시 Hibernate 가 자동 정리하므로 `JobPostServiceImpl.delete` 의 수동 캐스케이드에 추가 작업 불필요.
+- `JobPostSwagger` 예시·설명에 리스트 형태 반영. DB: `post_contents.preferred_language` 컬럼 제거 + `post_contents_preferred_language` 컬렉션 테이블 신규 생성 (개발 `ddl-auto` 반영). CLAUDE.md `### 구직 공고` 섹션 갱신.
+
+**출처**: 사용자 요청 (2026-05-16).
+
 ### 11개 작업자 노트 (TODO #1~#11 머지 완료 후 보존되는 일반 가이드)
 
 - **브랜치 정책**: 각 TODO 를 **개별 브랜치 + 개별 PR** 로 처리하는 것을 기본으로 한다. 영향 범위가 큰 TODO 는 단독 PR 필수. 같은 도메인 내 작은 변경은 묶어서 1개 PR 도 허용 (작업자 판단). 사용자가 "TODO N 작업" 으로 단일 항목 지목 시 그 항목만 단독 PR.
