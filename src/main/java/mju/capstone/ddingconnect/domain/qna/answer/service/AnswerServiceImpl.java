@@ -43,13 +43,15 @@ public class AnswerServiceImpl implements AnswerService {
     @Override
     @Transactional
     public AnswerResponse create(Member member, Long questionId, CreateAnswerRequest request) {
-        // 답변은 졸업생만 등록 가능 (도메인 정책)
-        if (member.getRole() != MemberRole.GRADUATE) {
-            throw new AnswerHandler(ErrorStatus.ANSWER_NOT_GRADUATE);
-        }
-
         Question question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new QuestionHandler(ErrorStatus.QUESTION_NOT_FOUND));
+
+        // 답변은 졸업생만 등록 가능. 단, 본인이 작성한 질문글에 한해 학생도 답변 허용 (도메인 정책)
+        boolean isGraduate = member.getRole() == MemberRole.GRADUATE;
+        boolean isQuestionAuthor = question.getMember().getId().equals(member.getId());
+        if (!isGraduate && !isQuestionAuthor) {
+            throw new AnswerHandler(ErrorStatus.ANSWER_NOT_GRADUATE);
+        }
 
         Answer answer = Answer.builder()
                 .question(question)

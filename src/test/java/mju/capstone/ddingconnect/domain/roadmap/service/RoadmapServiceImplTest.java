@@ -46,19 +46,19 @@ class RoadmapServiceImplTest {
     void setUp() {
         author = Member.builder().id(1L).email("a@mju.ac.kr").nickname("작성자").build();
         other = Member.builder().id(2L).email("o@mju.ac.kr").nickname("타인").build();
-        roadmap = Roadmap.builder().id(10L).member(author).content("{\"step\":\"1\"}").build();
+        roadmap = Roadmap.builder().id(10L).member(author).content("백엔드 개발자 로드맵 본문").build();
     }
 
     @Test
     @DisplayName("create - 로드맵을 정상 등록하고 본인에게 RoadmapAlarm 1건 발행한다")
     void create_정상등록_알람발행() {
-        CreateRoadmapRequest req = new CreateRoadmapRequest("{\"step\":\"1\"}");
+        CreateRoadmapRequest req = new CreateRoadmapRequest("백엔드 개발자 로드맵 본문");
         when(roadmapRepository.save(any(Roadmap.class))).thenReturn(roadmap);
 
         RoadmapResponse response = roadmapService.create(author, req);
 
         assertThat(response.id()).isEqualTo(10L);
-        assertThat(response.content()).contains("step");
+        assertThat(response.content()).isEqualTo("백엔드 개발자 로드맵 본문");
         verify(roadmapAlarmRepository).save(any(RoadmapAlarm.class));
 
         // 커밋 후 SSE 푸시용 이벤트가 로드맵 생성자 본인 대상으로 발행된다
@@ -71,9 +71,10 @@ class RoadmapServiceImplTest {
     }
 
     @Test
-    @DisplayName("create - JSON array도 정상 등록된다")
-    void create_jsonArray_정상등록() {
-        CreateRoadmapRequest req = new CreateRoadmapRequest("[{\"step\":1},{\"step\":2}]");
+    @DisplayName("create - JSON 형식이 아닌 일반 문자열도 형식 제한 없이 정상 등록된다")
+    void create_일반문자열_정상등록() {
+        // 이전에는 JSON object/array만 허용했으나, 이제는 일반 문자열도 그대로 통과해야 한다
+        CreateRoadmapRequest req = new CreateRoadmapRequest("Java 부터 차근차근 학습하세요");
         when(roadmapRepository.save(any(Roadmap.class))).thenReturn(roadmap);
 
         roadmapService.create(author, req);
@@ -82,35 +83,11 @@ class RoadmapServiceImplTest {
     }
 
     @Test
-    @DisplayName("create - content가 invalid JSON이면 INVALID_CONTENT 예외")
-    void create_invalidJson_예외() {
-        CreateRoadmapRequest req = new CreateRoadmapRequest("JAVA");
-
-        assertThatThrownBy(() -> roadmapService.create(author, req))
-                .isInstanceOf(RoadmapHandler.class);
-        verify(roadmapRepository, never()).save(any(Roadmap.class));
-    }
-
-    @Test
     @DisplayName("create - content가 null 또는 공백이면 INVALID_CONTENT 예외")
     void create_blankContent_예외() {
         assertThatThrownBy(() -> roadmapService.create(author, new CreateRoadmapRequest(null)))
                 .isInstanceOf(RoadmapHandler.class);
         assertThatThrownBy(() -> roadmapService.create(author, new CreateRoadmapRequest("   ")))
-                .isInstanceOf(RoadmapHandler.class);
-        verify(roadmapRepository, never()).save(any(Roadmap.class));
-    }
-
-    @Test
-    @DisplayName("create - JSON primitive(문자열/숫자/불리언/null)은 거부된다")
-    void create_jsonPrimitive_예외() {
-        assertThatThrownBy(() -> roadmapService.create(author, new CreateRoadmapRequest("\"JAVA\"")))
-                .isInstanceOf(RoadmapHandler.class);
-        assertThatThrownBy(() -> roadmapService.create(author, new CreateRoadmapRequest("123")))
-                .isInstanceOf(RoadmapHandler.class);
-        assertThatThrownBy(() -> roadmapService.create(author, new CreateRoadmapRequest("true")))
-                .isInstanceOf(RoadmapHandler.class);
-        assertThatThrownBy(() -> roadmapService.create(author, new CreateRoadmapRequest("null")))
                 .isInstanceOf(RoadmapHandler.class);
         verify(roadmapRepository, never()).save(any(Roadmap.class));
     }

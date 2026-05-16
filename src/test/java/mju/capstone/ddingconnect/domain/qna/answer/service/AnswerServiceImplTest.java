@@ -112,24 +112,46 @@ class AnswerServiceImplTest {
     }
 
     @Test
-    @DisplayName("create - 학생이 답변 시도 시 ANSWER_NOT_GRADUATE 예외")
-    void create_학생답변_예외() {
-        CreateAnswerRequest req = new CreateAnswerRequest("답변");
+    @DisplayName("create - 학생이 본인이 작성한 질문에 답변하면 정상 등록되고 알람은 미발행")
+    void create_학생이_본인질문_답변_허용() {
+        // questioner(STUDENT)가 본인이 작성한 question(10L)에 자답
+        CreateAnswerRequest req = new CreateAnswerRequest("내 질문에 대한 내 답변");
+        Answer selfAnswer = Answer.builder()
+                .id(22L).question(question).member(questioner).content("내 질문에 대한 내 답변").build();
+        when(questionRepository.findById(10L)).thenReturn(Optional.of(question));
+        when(answerRepository.save(any(Answer.class))).thenReturn(selfAnswer);
 
-        assertThatThrownBy(() -> answerService.create(questioner, 10L, req))
+        AnswerResponse response = answerService.create(questioner, 10L, req);
+
+        assertThat(response.id()).isEqualTo(22L);
+        // 본인 질문 본인 답변이므로 알람/이벤트 미발행
+        verify(answerAlarmRepository, never()).save(any(AnswerAlarm.class));
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    @DisplayName("create - 학생이 타인 질문에 답변 시도 시 ANSWER_NOT_GRADUATE 예외")
+    void create_학생이_타인질문_답변시도_예외() {
+        // otherStudent 는 question(10L) 작성자가 아닌 STUDENT
+        Member otherStudent = Member.builder().id(5L).nickname("다른학생").role(MemberRole.STUDENT).build();
+        CreateAnswerRequest req = new CreateAnswerRequest("답변");
+        when(questionRepository.findById(10L)).thenReturn(Optional.of(question));
+
+        assertThatThrownBy(() -> answerService.create(otherStudent, 10L, req))
                 .isInstanceOf(AnswerHandler.class);
-        verify(questionRepository, never()).findById(any());
         verify(answerRepository, never()).save(any());
     }
 
     @Test
-    @DisplayName("create - UNKNOWN 역할은 답변 불가")
+    @DisplayName("create - UNKNOWN 역할이 타인 질문에 답변 시도 시 ANSWER_NOT_GRADUATE 예외")
     void create_UNKNOWN답변_예외() {
         Member unknown = Member.builder().id(99L).role(MemberRole.UNKNOWN).build();
         CreateAnswerRequest req = new CreateAnswerRequest("답변");
+        when(questionRepository.findById(10L)).thenReturn(Optional.of(question));
 
         assertThatThrownBy(() -> answerService.create(unknown, 10L, req))
                 .isInstanceOf(AnswerHandler.class);
+        verify(answerRepository, never()).save(any());
     }
 
     @Test

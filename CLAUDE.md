@@ -118,7 +118,7 @@ mju.capstone.ddingconnect
 
 ### Q&A
 - `Question` 1:N `Answer`
-- **답변 등록은 졸업생만** (`AnswerServiceImpl.create`): STUDENT/UNKNOWN 이 호출 시 403 (`ANSWER_NOT_GRADUATE`). 도메인 의도 = Q&A 답변은 멘토(졸업생) 가 학생 질문에 답하는 흐름. 수정/삭제는 기존 작성자 권한만 검증 (역할 제한 X).
+- **답변 등록은 졸업생 + 질문 작성자 본인** (`AnswerServiceImpl.create`): 기본은 졸업생만 답변 가능하나, **본인이 작성한 질문글에 한해 학생(STUDENT)도 답변 허용**. 검증식 = `member.getRole() != GRADUATE && !question.getMember().getId().equals(member.getId())` 일 때만 403 (`ANSWER_NOT_GRADUATE`). 도메인 의도 = Q&A 답변은 멘토(졸업생)가 학생 질문에 답하는 흐름이되, 질문자 본인의 자문자답은 예외 허용. `Question` 조회를 역할 검증보다 **먼저** 수행하므로 존재하지 않는 questionId 는 403 이 아닌 404 (`QUESTION_NOT_FOUND`)가 먼저 발생. 본인 질문 본인 답변 시 알람 미발행 분기는 그대로 동작. 수정/삭제는 기존 작성자 권한만 검증 (역할 제한 X).
 - 좋아요: `QuestionLike`, `AnswerLike` (복합키 `AnswerLikeId`), toggle 방식. **본인이 작성한 글에는 좋아요 불가** (`QuestionServiceImpl.toggleLike` / `AnswerServiceImpl.toggleLike` 진입부에서 작성자 == 호출자 체크. 위반 시 400 `QUESTION_SELF_LIKE` / `ANSWER_SELF_LIKE`).
 - **카운트·내 좋아요 여부**는 응답 DTO 에 포함 (`QuestionResponse.likeCount`/`likedByMe`/`answerCount`, `AnswerResponse.likeCount`/`likedByMe`). 매 GET 시 `countBy*` / `existsByMemberIdAnd*` 쿼리 호출 (캐시 컬럼 미도입). 모든 Q&A GET API (`getList`, `getOne`, `Answer.getList`) 가 `Member` 를 받아 `likedByMe` 채움.
 - 좋아요 토글 응답: `LikeToggleResponse(liked, likeCount)` — 토글 후 새 상태·카운트 즉시 반환. 프론트 추가 GET 불필요.
@@ -128,16 +128,15 @@ mju.capstone.ddingconnect
   - `Question` 삭제 (`QuestionServiceImpl.delete`): 손자(`AnswerAlarm`, `AnswerLike`) → `Answer` → `QuestionLike` → `Question` 순. 손자는 2-level 경로(`@Modifying @Query`) 로 일괄 삭제. `QuestionServiceImpl` 가 `AnswerRepository/AnswerAlarmRepository/AnswerLikeRepository` 를 직접 주입받는 도메인 간 약결합 허용 (각 답변별 소유자가 다를 수 있어 `AnswerService.delete` 위임은 부적합).
 
 ### 로드맵 (roadmap)
-- 흐름: 데이터 파트가 화면 폼(학년/학점/전공/관심 직무/보유 역량/목표 기업) 입력값으로 AI 호출 → 결과 JSON만 백엔드가 저장. **AI 호출 자체는 백엔드 미포함** (Spring 측에 OpenAI/HTTP 클라이언트 의존성 없음).
-- `Roadmap.content`: MySQL JSON 컬럼 (`@JdbcTypeCode(SqlTypes.JSON)`) — INSERT 시 `CAST(? AS JSON)` 수행되므로 valid JSON이 아니면 DB가 SQLException을 던짐.
-- 등록(`POST /api/v1/roadmaps`) 시 `RoadmapServiceImpl.validateJsonContent()`로 사전 검증:
-  - null / blank / JSON 파싱 실패 / JSON primitive(string·number·boolean·null) → `ROADMAP_INVALID_CONTENT` (HTTP 400)
-  - **JSON object 또는 array만 통과** (구조만 검증; content 내부 키 스키마는 미강제 — 데이터 파트와 별도 합의)
-  - DB SQLException으로 500이 떨어지지 않도록 컨트롤러→서비스 경계에서 막는 게 목적
+- 흐름: 데이터 파트가 화면 폼(학년/학점/전공/관심 직무/보유 역량/목표 기업) 입력값으로 AI 호출 → 결과 텍스트만 백엔드가 저장. **AI 호출 자체는 백엔드 미포함** (Spring 측에 OpenAI/HTTP 클라이언트 의존성 없음).
+- `Roadmap.content`: MySQL `TEXT` 컬럼 (`@Column(columnDefinition = "TEXT")`) — 일반 문자열을 그대로 저장. 내부 형식 강제 없음 (JSON·평문 무관). 본문이 255자를 넘을 수 있어 `VARCHAR` 가 아닌 `TEXT`.
+- 등록(`POST /api/v1/roadmaps`) 시 `RoadmapServiceImpl.validateContent()`로 사전 검증:
+  - null / blank → `ROADMAP_INVALID_CONTENT` (HTTP 400)
+  - 그 외 비어 있지 않은 모든 문자열 통과 (content 내부 형식 미강제)
 - update API 미지원 (재생성 = 새 create + 기존 delete)
 - 삭제는 소유자(member.id 일치)만 가능 (`ROADMAP_UNAUTHORIZED`)
 - **삭제 캐스케이드 (서비스 레벨)**: `RoadmapServiceImpl.delete` 에서 `RoadmapAlarm` 먼저 `deleteByRoadmapId` 로 정리 → `Roadmap` 삭제. `RoadmapAlarm.roadmap` 이 `nullable = false` FK 라 정리 없이는 MySQL FK constraint 위반.
-- Swagger 기본 예시값은 valid JSON object 문자열로 지정되어 있음 (`RoadmapSwagger.createRoadmap`의 `@ExampleObject`) — Try it out 즉시 200 통과
+- Swagger 기본 예시값은 일반 문자열(`{ "content": "string" }`)로 지정되어 있음 (`RoadmapSwagger.createRoadmap`의 `@ExampleObject`) — Try it out 즉시 200 통과
 
 ## 공통 패턴
 
@@ -232,30 +231,6 @@ mju.capstone.ddingconnect
 **미확정 (사용자 결정 필요)**: signup 이 인증 통과를 확인하는 방식. 후보 — (a) `verifyCode` 성공 시 `verified:{email}` 플래그를 Redis 에 단기 저장 → `signup` 진입부에서 존재 확인 후 소비, (b) `verifyCode` 가 단기 인증 토큰을 발급해 `signup` 요청에 포함. 방식 확정 전까지 코드 변경 보류.
 
 **출처**: PR #22.
-
-### TODO E: 본인 질문글에 한해 학생도 답변 허용 (사용자 요청, qna 도메인)
-
-**요청**: 현재 답변 등록은 졸업생만 가능 (`AnswerServiceImpl.create` `AnswerServiceImpl.java:46-49` — `MemberRole.GRADUATE` 가 아니면 403 `ANSWER_NOT_GRADUATE`). 멘토(졸업생)가 학생 질문에 답하는 기본 흐름은 유지하되, **본인이 작성한 질문글에 한해** 예외적으로 학생(STUDENT)도 답변을 달 수 있게 허용한다.
-
-**디폴트 결정**:
-- `AnswerServiceImpl.create` 에서 `Question` 조회를 역할 검증보다 **먼저** 수행하도록 순서 변경 (현재: 역할 체크 → question 조회). 이에 따라 없는 questionId 는 403 대신 404 `QUESTION_NOT_FOUND` 가 먼저 난다.
-- 역할 검증을 "GRADUATE 이거나 호출자가 질문 작성자이면 통과"로 완화 — `member.getRole() != MemberRole.GRADUATE && !question.getMember().getId().equals(member.getId())` 일 때만 403 `ANSWER_NOT_GRADUATE`.
-- 자기 질문 자기 답변 시 알람 미발행 분기(`AnswerServiceImpl.java:62-71`)는 이미 작성자 == 호출자를 거르므로 그대로 동작 — 추가 변경 불필요.
-- `AnswerSwagger.createAnswer` 설명(`AnswerSwagger.java:22`, "졸업생만 ... STUDENT/UNKNOWN → 403")과 CLAUDE.md `### Q&A` 의 답변 등록 규칙 문구를 "졸업생 + 질문 작성자 본인"으로 갱신.
-
-**출처**: 사용자 요청 (2026-05-16).
-
-### TODO F: 로드맵 content 를 일반 문자열 입력으로 변경 (사용자 요청, roadmap 도메인)
-
-**요청**: 로드맵 등록(`POST /api/v1/roadmaps`)이 `content` 를 JSON object/array 문자열로만 받는 현재 방식(`{ "content": "{\"steps\":[...]}" }`)을, 일반 문자열(`{ "content": "string" }`)을 그대로 받도록 바꾼다. content 내부 형식 강제를 제거한다.
-
-**디폴트 결정**:
-- `Roadmap.content` (`Roadmap.java:37-39`): `@JdbcTypeCode(SqlTypes.JSON)` 제거, `@Column(name = "content", columnDefinition = "TEXT")` 로 변경 (로드맵 본문이 255자 초과 가능 → TEXT). 미사용 import(`JdbcTypeCode`, `SqlTypes`) 정리.
-- `RoadmapServiceImpl.validateJsonContent` (`RoadmapServiceImpl.java:59-71`): JSON 파싱/구조 검증 삭제, **null·blank 검증만 유지**(빈 값은 계속 400 `ROADMAP_INVALID_CONTENT`). `ObjectMapper`/`JsonNode`/`JsonProcessingException` import 와 `OBJECT_MAPPER` 상수 제거, 메서드명 `validateContent` 로 정리.
-- `RoadmapSwagger.createRoadmap` (`RoadmapSwagger.java:21-46`): `@ExampleObject` value 를 `{ "content": "string" }` 로 교체, "JSON object 또는 array" 문구를 일반 문자열 설명으로 수정. `CreateRoadmapRequest` 필드 주석도 수정.
-- DB: `roadmap.content` JSON 컬럼 → TEXT (개발 `ddl-auto` 자동 반영). CLAUDE.md `### 로드맵` 섹션의 JSON 컬럼·`validateJsonContent` 규칙 갱신.
-
-**출처**: 사용자 요청 (2026-05-16).
 
 ### TODO G: 구직 공고 선호 언어 다중 입력(리스트화) (사용자 요청, job_post 도메인)
 

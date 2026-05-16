@@ -19,7 +19,7 @@ public interface AnswerSwagger {
 
     @Operation(
             summary = "답변 등록",
-            description = "특정 질문에 새로운 답변을 등록합니다. **졸업생만** 등록 가능합니다 (STUDENT/UNKNOWN → 403)."
+            description = "특정 질문에 새로운 답변을 등록합니다. **졸업생** 또는 **질문 작성자 본인**만 등록 가능합니다 (그 외 역할 → 403)."
     )
     @PostMapping
     ApiResponse<AnswerResponse> createAnswer(
