@@ -5,6 +5,7 @@ import mju.capstone.ddingconnect.domain.roadmap.dto.request.CreateRoadmapRequest
 import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapResponse;
 import mju.capstone.ddingconnect.domain.roadmap.service.RoadmapService;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMemberArgumentResolver;
+import mju.capstone.ddingconnect.global.common.SuccessMessage;
 import mju.capstone.ddingconnect.global.config.WebMvcConfig;
 import mju.capstone.ddingconnect.support.WithMockLoginMember;
 import org.junit.jupiter.api.AfterEach;
@@ -34,6 +35,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DisplayName("RoadmapController 슬라이스 테스트")
 class RoadmapControllerTest {
 
+    private static final String BASE_URL = "/api/v1/roadmaps";
+
     @Autowired MockMvc mockMvc;
     @Autowired ObjectMapper objectMapper;
     @MockitoBean RoadmapService roadmapService;
@@ -50,7 +53,7 @@ class RoadmapControllerTest {
         CreateRoadmapRequest req = new CreateRoadmapRequest("{}");
         given(roadmapService.create(any(), any())).willReturn(new RoadmapResponse(1L, 1L, "{}"));
 
-        mockMvc.perform(post("/api/v1/roadmaps")
+        mockMvc.perform(post(BASE_URL)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
@@ -62,7 +65,7 @@ class RoadmapControllerTest {
     void 로드맵_목록() throws Exception {
         given(roadmapService.getList()).willReturn(List.of());
 
-        mockMvc.perform(get("/api/v1/roadmaps"))
+        mockMvc.perform(get(BASE_URL))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result").isArray());
     }
@@ -72,7 +75,7 @@ class RoadmapControllerTest {
     void 로드맵_상세() throws Exception {
         given(roadmapService.getOne(1L)).willReturn(new RoadmapResponse(1L, 1L, "{}"));
 
-        mockMvc.perform(get("/api/v1/roadmaps/1"))
+        mockMvc.perform(get(BASE_URL + "/1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result.id").value(1L));
     }
@@ -80,9 +83,9 @@ class RoadmapControllerTest {
     @Test
     @DisplayName("DELETE /api/v1/roadmaps/{id} - 로드맵 삭제")
     void 로드맵_삭제() throws Exception {
-        mockMvc.perform(delete("/api/v1/roadmaps/1"))
+        mockMvc.perform(delete(BASE_URL + "/1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result").value("로드맵이 삭제되었습니다."));
+                .andExpect(jsonPath("$.result").value(SuccessMessage.ROADMAP_DELETED));
         verify(roadmapService).delete(any(), eq(1L));
     }
 }

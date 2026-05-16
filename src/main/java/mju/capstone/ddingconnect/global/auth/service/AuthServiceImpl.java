@@ -11,6 +11,7 @@ import mju.capstone.ddingconnect.domain.member.domain.Student;
 import mju.capstone.ddingconnect.domain.member.domain.repository.GraduateRepository;
 import mju.capstone.ddingconnect.domain.member.domain.repository.MemberRepository;
 import mju.capstone.ddingconnect.domain.member.domain.repository.StudentRepository;
+import mju.capstone.ddingconnect.global.common.SuccessMessage;
 import mju.capstone.ddingconnect.global.jwt.JwtUtil;
 import mju.capstone.ddingconnect.global.response.code.status.ErrorStatus;
 import mju.capstone.ddingconnect.global.response.exception.handler.AuthHandler;
@@ -58,7 +59,7 @@ public class AuthServiceImpl implements AuthService {
         memberRepository.save(member);
         //이어서 롤 기반의 재학생, 졸업생 생성
         createRoleRecord(member, request.role());
-        return "회원가입을 성공적으로 완료하였습니다";
+        return SuccessMessage.SIGNUP_SUCCESS;
     }
 
     @Override

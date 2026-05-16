@@ -21,7 +21,7 @@
 
 ## 빌드 특이사항
 
-- `build.gradle:12` — build 디렉토리를 `C:/gradle-builds/${rootProject.name}` 으로 설정 (OneDrive 동기화 잠금 회피 목적, **Windows 의존**). 리눅스/맥에서 빌드하려면 이 라인을 우회해야 함.
+- `build.gradle` — build 디렉터리는 `-PbuildDir=...` 또는 `gradle.properties` 의 `buildDir` 로 외부화한다. 미지정 시 Gradle 기본값(`build/`)을 사용하므로 리눅스/맥/CI 에서 그대로 빌드된다. OneDrive 동기화 잠금 회피가 필요한 Windows 환경만 `buildDir` 를 외부 경로(예: `C:/gradle-builds/...`)로 지정한다.
 - Spring profiles: `db, s3, oauth, jwt` (기본 활성)
 - 설정 분리: `application.yml`, `application-db.yml`, `application-jwt.yml`
 
@@ -42,7 +42,7 @@ mju.capstone.ddingconnect
 └── global/
     ├── alarm/           # 통합 알람 조회(4종 목록/상세/읽음) + 상대시간 포맷
     ├── auth/            # 회원가입/로그인, JWT 필터, @LoginMember
-    ├── common/          # BaseEntity (createdAt/updatedAt)
+    ├── common/          # BaseEntity (createdAt/updatedAt), SuccessMessage (성공 메시지 상수)
     ├── config/          # Security, Swagger, JpaAuditing, WebMvc, Mail, Sse
     ├── jwt/             # JwtUtil(Impl)
     ├── redis/           # RedisUtil (StringRedisTemplate 래퍼)
@@ -145,7 +145,8 @@ mju.capstone.ddingconnect
 - **부분 업데이트**: 엔티티를 Builder로 재구성, `null`인 필드는 기존 값 유지 (`request.x() != null ? request.x() : entity.getX()`)
 - **권한 검증**: 작성자 ID 비교 후 도메인별 `*Handler` 예외 throw
 - **응답 포맷**: 모든 컨트롤러는 `ApiResponse<T>` 래퍼 사용
-- **에러 코드**: `ErrorStatus` enum에 모두 정의 (`AUTH401`, `POST403`, `ALARM404` …)
+- **성공 메시지**: 삭제·탈퇴 등 컨트롤러가 `ApiResponse` result 로 반환하는 사용자 노출 성공 메시지는 `global/common/SuccessMessage` 상수로 관리 (컨트롤러·`*ControllerTest` 가 동일 심볼 참조)
+- **에러 코드**: `ErrorStatus` enum에 모두 정의. 코드 문자열은 `도메인 접두사 + httpStatus.value()` 로 파생 (`getCode()`, 예: `AUTH` + 400 → `"AUTH400"`) — 숫자 접미사를 직접 박지 않아 코드/HTTP 상태 드리프트가 차단된다
 - **감사**: `BaseEntity` 상속 → `createdAt`/`updatedAt` 자동 (`@JpaAuditingConfig`)
 - **Swagger 어노테이션**: 컨트롤러는 `*Swagger` 인터페이스 implements 패턴으로 분리
 
@@ -215,60 +216,7 @@ mju.capstone.ddingconnect
 >
 > 각 항목은 완료(머지) 후 이 섹션에서 삭제하고, 본문 도메인 섹션에 정식 규칙으로 통합 기록한다.
 
-### [최우선] 하드코딩 일괄 제거 — `main` 브랜치 전수 감사 (TODO H1~H5)
-
-> **2026-05-16 감사.** `main` 브랜치(`503275a`)의 전체 소스(Java 185개 + `build.gradle`/`application*.yml` 등 빌드·설정)를 전수 순회해 `## 작업 시 주의` 의 **"하드코딩 절대 금지"** 규칙 위반분을 수집했다. 아래 H1~H5 는 기존 TODO A~D 보다 **먼저** 수행한다.
->
-> **PR #22(`ddd4004` — DB 기초 설계 / SSE·메일·Redis 인프라)에서 추가·변경된 내용은 하드코딩이어도 감사 대상에서 제외**했다. 제외 파일(PR #22 신규): `global/auth` 의 `EmailService(Impl)`·`Code/VerifyCodeRequest`, `global/config` 의 `MailConfig`·`SseConfig`, `global/redis/RedisUtil`, `MailHandler`, `global/sse` 의 `Sse*`·`AlarmType`, `application-mail.yml`, `Sse*Test`. 제외 라인(PR #22 수정): `AuthController`/`AuthSwagger` 의 `sendCode`·`verifyCode`, `SignupRequest` 의 `@Pattern`, `ErrorStatus` 의 `MAIL_*`, `build.gradle` 의 mail·redis 의존성, `application.yml` 의 `mail` 프로파일.
->
-> 경로는 현재 작업 브랜치 기준(알람 조회 계층은 PR #29 반영으로 `global/alarm/`), 라인 번호는 `main` 기준이다(알람 패키지 이동은 라인 수에 영향 없음). 권장 수행 순서: H1·H2(HIGH) → H3·H4(MEDIUM) → H5(테스트). 도메인별로 PR 을 쪼개도 되고 H1·H2 를 묶어도 된다 — 작업자 판단.
-
-#### TODO H1: 비즈니스 로직 매직 넘버 상수화 (HIGH)
-
-동작을 좌우하는 수치 리터럴을 `private static final` 상수로 추출.
-
-- `global/alarm/RelativeTimeFormatter.java` — 시간 변환·임계값 매직 넘버 전부: `60`(L35 초→분 환산), `1`(L36 분 임계), `60`(L37·L39 분 임계/분→시 환산), `24`(L40·L42 시 임계/시→일 환산), `30`(L43·L44 일 임계/일→월 환산), `365`(L44·L46 연 임계/일→년 환산), 미래시각 클램프 하한 `0`(L33). → `SECONDS_PER_MINUTE`/`MINUTES_PER_HOUR`/`HOURS_PER_DAY`/`DAYS_PER_MONTH`/`DAYS_PER_YEAR` 등 명명 상수로. 클래스 Javadoc(L11~17)이 임계값을 이미 명시 — 코드/문서 단일 소스화.
-- `domain/member/service/MemberServiceImpl.java` — `sanitizeGrade` 의 학년 하한 `1`(L146), 상한 클램프 `4`(L147, `Math.min(raw, 4)`). → `MIN_GRADE`/`MAX_GRADE` 상수. `### 회원 (Member)` 의 grade 규칙과 직결.
-- `global/jwt/JwtUtilImpl.java:57` — `accessExpiration * 1000` 의 초→밀리초 환산 상수 `1000`. → `MILLIS_PER_SECOND` 상수 또는 `Duration.ofSeconds(...).toMillis()`.
-- `domain/qna/question/service/QuestionServiceImpl.java` — 조회수 초기값 `0`(L41), 조회 시 증가 스텝 `+1`(L67). → `INITIAL_VIEW_COUNT`/`VIEW_COUNT_INCREMENT` 상수 또는 `Question.increaseViewCount()` 도메인 메서드로 캡슐화.
-
-#### TODO H2: 환경 의존 빌드 경로 제거 (HIGH)
-
-- `build.gradle:12` — 빌드 디렉터리를 `file("C:/gradle-builds/${rootProject.name}")` Windows 절대경로로 하드코딩. 리눅스/맥/CI 에서 빌드 불가(현재 `## 빌드 특이사항` 에 "우회 필요"로만 명시). → Gradle property 또는 환경변수 + 기본값(`build`)으로 외부화(예: `providers.gradleProperty("buildDir").orElse(...)`). 머지 후 `## 빌드 특이사항` 항목 갱신.
-
-#### TODO H3: 컨트롤러 성공 메시지 상수화 (MEDIUM)
-
-9개 컨트롤러가 사용자 노출 한국어 성공 메시지를 메서드 본문에 직접 박음 — 각각 대응 `*ControllerTest` 에 같은 문자열이 재기재되어 파일 간 중복. 실패 메시지는 `ErrorStatus` enum 으로 가는데 성공 메시지는 분산. `SuccessStatus` enum 또는 공용 메시지 상수로 추출하고 컨트롤러·테스트가 동일 심볼 참조:
-
-- `domain/coffeechat/controller/CoffeeChatController.java:60` — `"커피챗이 취소되었습니다."`
-- `domain/member/controller/MemberController.java:48` — `"회원 탈퇴가 완료되었습니다."`
-- `domain/job_post/controller/JobPostController.java:58` — `"구직 공고가 삭제되었습니다."`
-- `domain/interested_job/controller/TargetJobController.java:57` — `"관심 직군이 삭제되었습니다."`
-- `domain/qna/answer/controller/AnswerController.java:58` — `"답변이 삭제되었습니다."`
-- `domain/qna/question/controller/QuestionController.java:62` — `"질문이 삭제되었습니다."`
-- `domain/roadmap/controller/RoadmapController.java:48` — `"로드맵이 삭제되었습니다."`
-- `domain/techstack/controller/TechStackController.java:52` — `"기술 스택이 삭제되었습니다."`
-- `global/alarm/AlarmController.java:46` — `"알람이 읽음 처리되었습니다."`
-- (LOW, 함께) `global/auth/service/AuthServiceImpl.java:61` — `"회원가입을 성공적으로 완료하였습니다"` 단건 메시지.
-
-#### TODO H4: 중복 로직·반복 리터럴 정리 (MEDIUM)
-
-- `domain/job_post/service/JobPostServiceImpl.java:82, 182` — `TargetJobCategory.valueOf(jobType.name())` enum 브리지 관용구가 `create`/`update` 양쪽에 verbatim 중복. 두 enum 의 name 동일성 가정에 의존(어긋나면 런타임 `IllegalArgumentException`). → 단일 private 헬퍼 `toCategory(JobType)` 로 추출. `### 통합 알람` 의 enum 매칭 방침과 연결.
-- `global/jwt/JwtUtilImpl.java:64, 104` — `Jwts.parser()...parseSignedClaims(token)` 파싱 체인이 `isTokenValid`/`parseClaims` 에 중복. → private 헬퍼로 단일화.
-- `domain/member/dto/request/UpdateMemberRequest.java:12, 16` — github/linkedin URL 검증 정규식과 메시지가 `@Pattern` 에 인라인. → `GITHUB_URL_REGEX`/`LINKEDIN_URL_REGEX` `static final` 상수 + 메시지 상수(어노테이션 값은 컴파일 상수여야 하므로 `static final` 로 가능).
-- `global/response/code/status/ErrorStatus.java` — 응답 코드 문자열의 숫자 접미사(`...400`/`401`/`403`/`404`/`409`/`500`)가 인접 `HttpStatus` 인자와 의미 중복. 드리프트 실재: `INVALID_ROLE`(L30)은 `HttpStatus.BAD_REQUEST` 인데 코드가 `"AUTH404"`. → 숫자부를 `httpStatus.value()` 에서 파생하거나, 최소한 각 코드 접미사 == `HttpStatus` 를 검증하는 단위 테스트 추가.
-
-#### TODO H5: 테스트 코드 하드코딩 + `*TestConstants` 도입 (MEDIUM)
-
-CLAUDE.md 규칙은 테스트 코드에도 동일 적용("공유 값은 `*TestConstants` 등 상수 클래스로 참조"). 현재 도메인 `*TestConstants` 클래스는 사실상 부재(PR #22 의 `SseTestConstants` 하나뿐이고 형제 테스트도 미사용). 도메인별 `*TestConstants` 도입 후 아래를 참조형으로 전환:
-
-- **엔드포인트 경로 중복**: `*ControllerTest` 들이 `/api/v1/...` 경로를 메서드마다 재기재(`CoffeeChatControllerTest`·`JobPostControllerTest` 각 5회, `MemberControllerTest`·`TargetJobControllerTest`·`RoadmapControllerTest` 각 4회, `TechStackControllerTest`·`AlarmControllerTest` 각 3회, `Question`/`AnswerControllerTest` 다수) — 프로덕션 `@RequestMapping` 과도 중복.
-- **메시지 재기재**: H3 의 성공 메시지들이 각 `*ControllerTest` 에 리터럴로 복제. 알람 메시지도 — `JobPostServiceImplTest`(`"관심 직무에 새로운 공고가 등록되었습니다."` 5회), `AnswerServiceImplTest:93`, `RoadmapServiceImplTest:70`, `CoffeeChatServiceImplTest`(전개된 PENDING 알람 메시지 2회) — 프로덕션 상수 미참조. → 프로덕션 상수를 공유 위치로 올려 테스트가 같은 심볼 참조.
-- `support/WithMockLoginMember.java` — `id(1L)` 가 `loginAsStudent`/`loginAsGraduate` 양쪽에 동일(두 헬퍼 동시 사용 시 회원 ID 충돌), 이메일 도메인 `@mju.ac.kr`·학과 `"컴퓨터공학과"`·학번 패턴이 3개 메서드에 반복. → 구분된 `STUDENT_ID`/`GRADUATE_ID` + 공유 상수.
-- `domain/EntityIntegrationTest.java` — 이메일 `"grd@mju.ac.kr"` 를 서로 다른 회원에 3개 테스트가 재사용(유니크 제약 필드), 학과·비밀번호·`point` 리터럴 반복, `"═".repeat(60)` 의 `60` 이 2회(기존 `LINE` 상수 미재사용), 커피챗 알람 문자열 verbatim 중복 + 카카오 링크 드리프트(`open.kakao.com/test` vs `/o/test`).
-- `domain/member/service/MemberServiceImplTest.java` — H1 의 `MIN_GRADE`/`MAX_GRADE` 를 테스트도 참조(현재 `4`·`99`·`-1`·`0` 매직 넘버 재기재).
-
-> **관찰(하드코딩과 별개, 의도 확인 필요)**: `ErrorStatus.getReason()`/`getReasonHttpStatus()` 가 실패 코드 enum 인데 `.isSuccess(true)` 로 고정(`SuccessStatus` 와 대비). 리터럴 하드코딩이자 잠재 버그 가능성 — H 작업 범위 밖이나 발견 사실로 기록.
+> **관찰 (의도 확인 필요)**: `ErrorStatus.getReason()`/`getReasonHttpStatus()` 가 실패 코드 enum 인데 `ErrorReasonDTO` 를 `.isSuccess(true)` 로 고정 생성한다(`SuccessStatus` 와 대비). 현재 `ApiResponse.onFailure` 가 `isSuccess=false` 를 따로 지정하므로 실제 응답엔 영향 없으나, 오해를 부르는 죽은 설정값이다 — 의도 확인 후 정리 여부 결정.
 
 _(아래 TODO A · B 는 마이페이지 수정 화면의 "수정 완료" 흐름을 위한 bulk REPLACE 엔드포인트 도입. Figma 검토 결과 마이페이지가 TechStack/TargetJob CRUD 의 유일한 진입점으로 확인되어, 단건 endpoint 는 모두 제거하는 정공법으로 결정.)_
 

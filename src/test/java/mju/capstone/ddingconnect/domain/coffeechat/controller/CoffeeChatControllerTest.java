@@ -7,6 +7,7 @@ import mju.capstone.ddingconnect.domain.coffeechat.dto.request.UpdateCoffeeChatS
 import mju.capstone.ddingconnect.domain.coffeechat.dto.response.CoffeeChatResponse;
 import mju.capstone.ddingconnect.domain.coffeechat.service.CoffeeChatService;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMemberArgumentResolver;
+import mju.capstone.ddingconnect.global.common.SuccessMessage;
 import mju.capstone.ddingconnect.global.config.WebMvcConfig;
 import mju.capstone.ddingconnect.support.WithMockLoginMember;
 import org.junit.jupiter.api.AfterEach;
@@ -36,6 +37,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DisplayName("CoffeeChatController 슬라이스 테스트")
 class CoffeeChatControllerTest {
 
+    private static final String BASE_URL = "/api/v1/coffeechat";
+
     @Autowired MockMvc mockMvc;
     @Autowired ObjectMapper objectMapper;
     @MockitoBean CoffeeChatService coffeeChatService;
@@ -53,7 +56,7 @@ class CoffeeChatControllerTest {
         given(coffeeChatService.create(any(), any()))
                 .willReturn(new CoffeeChatResponse(1L, 1L, 2L, CoffeeChatStatus.PENDING, "https://t"));
 
-        mockMvc.perform(post("/api/v1/coffeechat")
+        mockMvc.perform(post(BASE_URL)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
@@ -65,7 +68,7 @@ class CoffeeChatControllerTest {
     void 보낸_목록() throws Exception {
         given(coffeeChatService.getSentList(any())).willReturn(List.of());
 
-        mockMvc.perform(get("/api/v1/coffeechat/sent"))
+        mockMvc.perform(get(BASE_URL + "/sent"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result").isArray());
     }
@@ -75,7 +78,7 @@ class CoffeeChatControllerTest {
     void 받은_목록() throws Exception {
         given(coffeeChatService.getReceivedList(any())).willReturn(List.of());
 
-        mockMvc.perform(get("/api/v1/coffeechat/received"))
+        mockMvc.perform(get(BASE_URL + "/received"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result").isArray());
     }
@@ -87,7 +90,7 @@ class CoffeeChatControllerTest {
         given(coffeeChatService.updateStatus(any(), eq(1L), any()))
                 .willReturn(new CoffeeChatResponse(1L, 1L, 2L, CoffeeChatStatus.ACCEPTED, "https://t"));
 
-        mockMvc.perform(patch("/api/v1/coffeechat/1/status")
+        mockMvc.perform(patch(BASE_URL + "/1/status")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
@@ -97,9 +100,9 @@ class CoffeeChatControllerTest {
     @Test
     @DisplayName("DELETE /api/v1/coffeechat/{id} - 커피챗 취소")
     void 커피챗_취소() throws Exception {
-        mockMvc.perform(delete("/api/v1/coffeechat/1"))
+        mockMvc.perform(delete(BASE_URL + "/1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result").value("커피챗이 취소되었습니다."));
+                .andExpect(jsonPath("$.result").value(SuccessMessage.COFFEE_CHAT_CANCELED));
         verify(coffeeChatService).delete(any(), eq(1L));
     }
 }

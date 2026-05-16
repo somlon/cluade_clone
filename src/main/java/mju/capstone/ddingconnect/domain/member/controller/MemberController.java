@@ -8,6 +8,7 @@ import mju.capstone.ddingconnect.domain.member.dto.request.UpdateMemberRequest;
 import mju.capstone.ddingconnect.domain.member.dto.response.MemberResponse;
 import mju.capstone.ddingconnect.domain.member.service.MemberService;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMember;
+import mju.capstone.ddingconnect.global.common.SuccessMessage;
 import mju.capstone.ddingconnect.global.response.exception.handler.ApiResponse;
 import org.springframework.web.bind.annotation.*;
 
@@ -45,6 +46,6 @@ public class MemberController implements MemberSwagger {
     public ApiResponse<String> withdraw(
             @Parameter(hidden = true) @LoginMember Member member) {
         memberService.withdraw(member);
-        return ApiResponse.onSuccess("회원 탈퇴가 완료되었습니다.");
+        return ApiResponse.onSuccess(SuccessMessage.MEMBER_WITHDRAWN);
     }
 }

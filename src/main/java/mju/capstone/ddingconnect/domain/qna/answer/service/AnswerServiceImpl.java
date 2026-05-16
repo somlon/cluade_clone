@@ -31,7 +31,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AnswerServiceImpl implements AnswerService {
 
-    private static final String ANSWER_ALARM_CONTENT = "내 질문에 새로운 답변이 달렸습니다.";
+    // 테스트도 동일 상수를 참조하므로 package-private 노출
+    static final String ANSWER_ALARM_CONTENT = "내 질문에 새로운 답변이 달렸습니다.";
 
     private final AnswerRepository answerRepository;
     private final AnswerLikeRepository answerLikeRepository;

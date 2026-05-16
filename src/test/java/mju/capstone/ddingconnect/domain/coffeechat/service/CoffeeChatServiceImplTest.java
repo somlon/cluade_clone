@@ -70,6 +70,9 @@ class CoffeeChatServiceImplTest {
 
         CoffeeChatResponse response = coffeeChatService.create(studentRequester, req);
 
+        String expectedContent = String.format(CoffeeChatServiceImpl.PENDING_CONTENT_FORMAT,
+                studentRequester.getDepartment(), studentRequester.getNickname());
+
         assertThat(response.id()).isEqualTo(10L);
         assertThat(response.status()).isEqualTo(CoffeeChatStatus.PENDING);
 
@@ -78,7 +81,7 @@ class CoffeeChatServiceImplTest {
         CoffeeChatAlarm alarm = captor.getValue();
         assertThat(alarm.getMember().getId()).isEqualTo(graduateReceiver.getId());
         assertThat(alarm.getIsRead()).isFalse();
-        assertThat(alarm.getContent()).isEqualTo("응용소프트웨어학과 김후배님이 커피챗을 요청했어요!");
+        assertThat(alarm.getContent()).isEqualTo(expectedContent);
 
         // 커밋 후 SSE 푸시용 이벤트가 수신자 대상으로 1건 발행된다 (content 동적)
         ArgumentCaptor<AlarmNotificationEvent> eventCaptor = ArgumentCaptor.forClass(AlarmNotificationEvent.class);
@@ -86,7 +89,7 @@ class CoffeeChatServiceImplTest {
         AlarmNotificationEvent event = eventCaptor.getValue();
         assertThat(event.receiver().getId()).isEqualTo(graduateReceiver.getId());
         assertThat(event.type()).isEqualTo(AlarmType.COFFEE_CHAT);
-        assertThat(event.content()).isEqualTo("응용소프트웨어학과 김후배님이 커피챗을 요청했어요!");
+        assertThat(event.content()).isEqualTo(expectedContent);
     }
 
     @Test

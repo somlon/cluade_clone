@@ -9,6 +9,7 @@ import mju.capstone.ddingconnect.domain.qna.answer.dto.response.AnswerResponse;
 import mju.capstone.ddingconnect.domain.qna.answer.service.AnswerService;
 import mju.capstone.ddingconnect.domain.qna.question.dto.response.LikeToggleResponse;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMember;
+import mju.capstone.ddingconnect.global.common.SuccessMessage;
 import mju.capstone.ddingconnect.global.response.exception.handler.ApiResponse;
 import org.springframework.web.bind.annotation.*;
 
@@ -55,7 +56,7 @@ public class AnswerController implements AnswerSwagger {
             @PathVariable Long questionId,
             @PathVariable Long answerId) {
         answerService.delete(member, answerId);
-        return ApiResponse.onSuccess("답변이 삭제되었습니다.");
+        return ApiResponse.onSuccess(SuccessMessage.ANSWER_DELETED);
     }
 
     /** 답변 좋아요 토글 — 토글 후 새 상태와 카운트를 즉시 반환 */

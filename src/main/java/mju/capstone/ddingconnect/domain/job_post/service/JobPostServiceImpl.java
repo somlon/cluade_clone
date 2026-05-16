@@ -35,8 +35,9 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class JobPostServiceImpl implements JobPostService {
 
-    private static final String JOB_ALARM_NEW_CONTENT = "관심 직무에 새로운 공고가 등록되었습니다.";
-    private static final String JOB_ALARM_REMOVED_CONTENT = "관심 직군에서 벗어난 공고로 변경되었습니다.";
+    // 테스트도 동일 상수를 참조하므로 package-private 노출
+    static final String JOB_ALARM_NEW_CONTENT = "관심 직무에 새로운 공고가 등록되었습니다.";
+    static final String JOB_ALARM_REMOVED_CONTENT = "관심 직군에서 벗어난 공고로 변경되었습니다.";
 
     private final PostContentsRepository postContentsRepository;
     private final GraduateJobPostRepository graduateJobPostRepository;
@@ -79,7 +80,7 @@ public class JobPostServiceImpl implements JobPostService {
         // [알람 발행] PostContents.jobType 과 동일한 TargetJob.interestedJob 을 가진 학생에게 JobAlarm 발행.
         // JobType ↔ TargetJobCategory 는 같은 원티드 taxonomy 의 같은 11개 값으로 enum 만 분리돼 있어 name() 으로 매칭.
         // 본인(등록한 졸업생) 은 제외. 같은 멤버가 동일 카테고리를 중복 보유한 경우 1건만 발행.
-        TargetJobCategory matchedCategory = TargetJobCategory.valueOf(saved.getJobType().name());
+        TargetJobCategory matchedCategory = toCategory(saved.getJobType());
         Long creatorId = member.getId();
         Set<Long> notifiedMemberIds = new HashSet<>();
         List<TargetJob> matched = targetJobRepository.findByInterestedJob(matchedCategory);
@@ -179,7 +180,7 @@ public class JobPostServiceImpl implements JobPostService {
             }
         }
 
-        TargetJobCategory newCategory = TargetJobCategory.valueOf(post.getJobType().name());
+        TargetJobCategory newCategory = toCategory(post.getJobType());
         List<TargetJob> matched = targetJobRepository.findByInterestedJob(newCategory);
 
         Set<Long> currIds = new HashSet<>();
@@ -239,5 +240,14 @@ public class JobPostServiceImpl implements JobPostService {
         jobAlarmRepository.deleteByPostContentsId(jobPostId);
         graduateJobPostRepository.deleteAll(mappings);
         postContentsRepository.delete(postContents);
+    }
+
+    /**
+     * JobType → TargetJobCategory 브리지.
+     * 두 enum 은 같은 원티드 taxonomy 의 동일한 값을 공유하되 타입만 분리돼 있어 name() 으로 매칭한다.
+     * 값 정렬이 어긋나면 런타임 IllegalArgumentException 이 발생한다.
+     */
+    private static TargetJobCategory toCategory(JobType jobType) {
+        return TargetJobCategory.valueOf(jobType.name());
     }
 }

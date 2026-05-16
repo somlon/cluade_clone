@@ -7,6 +7,7 @@ import mju.capstone.ddingconnect.domain.roadmap.dto.request.CreateRoadmapRequest
 import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapResponse;
 import mju.capstone.ddingconnect.domain.roadmap.service.RoadmapService;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMember;
+import mju.capstone.ddingconnect.global.common.SuccessMessage;
 import mju.capstone.ddingconnect.global.response.exception.handler.ApiResponse;
 import org.springframework.web.bind.annotation.*;
 
@@ -45,6 +46,6 @@ public class RoadmapController implements RoadmapSwagger {
             @Parameter(hidden = true) @LoginMember Member member,
             @PathVariable Long roadmapId) {
         roadmapService.delete(member, roadmapId);
-        return ApiResponse.onSuccess("로드맵이 삭제되었습니다.");
+        return ApiResponse.onSuccess(SuccessMessage.ROADMAP_DELETED);
     }
 }

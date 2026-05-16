@@ -90,7 +90,7 @@ class AnswerServiceImplTest {
         AlarmNotificationEvent event = eventCaptor.getValue();
         assertThat(event.receiver().getId()).isEqualTo(questioner.getId());
         assertThat(event.type()).isEqualTo(AlarmType.ANSWER);
-        assertThat(event.content()).isEqualTo("내 질문에 새로운 답변이 달렸습니다.");
+        assertThat(event.content()).isEqualTo(AnswerServiceImpl.ANSWER_ALARM_CONTENT);
     }
 
     @Test

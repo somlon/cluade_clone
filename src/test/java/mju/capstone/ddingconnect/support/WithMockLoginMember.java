@@ -14,14 +14,25 @@ import org.springframework.security.core.context.SecurityContextHolder;
  */
 public final class WithMockLoginMember {
 
+    /** STUDENT/GRADUATE 헬퍼를 한 테스트에서 같이 써도 충돌하지 않도록 ID 를 분리한다. */
+    public static final Long STUDENT_ID = 1L;
+    public static final Long GRADUATE_ID = 2L;
+
+    private static final String EMAIL_DOMAIN = "@mju.ac.kr";
+    private static final String DEPARTMENT = "컴퓨터공학과";
+    private static final String STUDENT_NUMBER = "60200000";
+
+    public static final String STUDENT_EMAIL = "test" + EMAIL_DOMAIN;
+    public static final String GRADUATE_EMAIL = "grd" + EMAIL_DOMAIN;
+
     private WithMockLoginMember() {}
 
     /** 기본 STUDENT 회원으로 인증 세팅 */
     public static Member loginAsStudent() {
         Member member = Member.builder()
-                .id(1L).email("test@mju.ac.kr").nickname("테스터")
-                .role(MemberRole.STUDENT).studentNumber("60201234")
-                .department("컴퓨터공학과").point(0L).isDeleted(false).build();
+                .id(STUDENT_ID).email(STUDENT_EMAIL).nickname("테스터")
+                .role(MemberRole.STUDENT).studentNumber(STUDENT_NUMBER)
+                .department(DEPARTMENT).point(0L).isDeleted(false).build();
         register(member);
         return member;
     }
@@ -29,9 +40,9 @@ public final class WithMockLoginMember {
     /** GRADUATE 회원으로 인증 세팅 */
     public static Member loginAsGraduate() {
         Member member = Member.builder()
-                .id(1L).email("grd@mju.ac.kr").nickname("졸업생")
-                .role(MemberRole.GRADUATE).studentNumber("60150001")
-                .department("컴퓨터공학과").point(0L).isDeleted(false).build();
+                .id(GRADUATE_ID).email(GRADUATE_EMAIL).nickname("졸업생")
+                .role(MemberRole.GRADUATE).studentNumber(STUDENT_NUMBER)
+                .department(DEPARTMENT).point(0L).isDeleted(false).build();
         register(member);
         return member;
     }
@@ -39,9 +50,9 @@ public final class WithMockLoginMember {
     /** 임의 ID/Role의 회원으로 인증 세팅 */
     public static Member loginAs(Long id, MemberRole role) {
         Member member = Member.builder()
-                .id(id).email("u" + id + "@mju.ac.kr").nickname("u" + id)
-                .role(role).studentNumber("60200000")
-                .department("컴퓨터공학과").point(0L).isDeleted(false).build();
+                .id(id).email("u" + id + EMAIL_DOMAIN).nickname("u" + id)
+                .role(role).studentNumber(STUDENT_NUMBER)
+                .department(DEPARTMENT).point(0L).isDeleted(false).build();
         register(member);
         return member;
     }

@@ -59,9 +59,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 @ExtendWith(EntityIntegrationTest.ResultPrinter.class)
 class EntityIntegrationTest {
 
+    private static final String LINE = "═".repeat(60);
+    private static final String KAKAO_OPEN_CHAT_LINK = "https://open.kakao.com/o/test";
+    private static final String COFFEE_CHAT_ACCEPTED_CONTENT =
+            "커피챗 요청이 수락되었습니다. 카카오톡 오픈채팅 링크: " + KAKAO_OPEN_CHAT_LINK;
+
     // ─── 테스트 결과 출력기 ──────────────────────────────────────────────────
     static class ResultPrinter implements TestWatcher {
-        private static final String LINE = "═".repeat(60);
 
         @Override public void testSuccessful(ExtensionContext ctx) {
             System.out.println("  └─ ✅ PASS");
@@ -110,7 +114,7 @@ class EntityIntegrationTest {
 
     /** 테이블 이름 헤더 출력 */
     private static void printHeader(String tableName) {
-        System.out.println("\n" + "═".repeat(60));
+        System.out.println("\n" + LINE);
         System.out.println("  📋 " + tableName);
     }
 
@@ -353,7 +357,7 @@ class EntityIntegrationTest {
                 .requester(requester).receiver(receiver)
                 .jobScore(80).ability(90).goal(70)
                 .status(CoffeeChatStatus.PENDING)
-                .kakaoOpenChatLink("https://open.kakao.com/o/test").build());
+                .kakaoOpenChatLink(KAKAO_OPEN_CHAT_LINK).build());
 
         CoffeeChat found = coffeeChatRepository.findByRequesterId(requester.getId()).get(0);
         printSaved("id", found.getId(), "jobScore", found.getJobScore(), "ability", found.getAbility(), "goal", found.getGoal(), "status", found.getStatus());
@@ -379,11 +383,11 @@ class EntityIntegrationTest {
         // [수락 시 흐름] 양쪽 모두에게 카카오 링크 포함 알람 2건 발행
         coffeeChatAlarmRepository.save(CoffeeChatAlarm.builder()
                 .coffeeChat(chat).member(req)
-                .content("커피챗 요청이 수락되었습니다. 카카오톡 오픈채팅 링크: https://open.kakao.com/test")
+                .content(COFFEE_CHAT_ACCEPTED_CONTENT)
                 .isRead(false).build());
         coffeeChatAlarmRepository.save(CoffeeChatAlarm.builder()
                 .coffeeChat(chat).member(rec)
-                .content("커피챗 요청이 수락되었습니다. 카카오톡 오픈채팅 링크: https://open.kakao.com/test")
+                .content(COFFEE_CHAT_ACCEPTED_CONTENT)
                 .isRead(false).build());
 
         List<CoffeeChatAlarm> alarms = coffeeChatAlarmRepository.findByCoffeeChatId(chat.getId());
@@ -398,7 +402,7 @@ class EntityIntegrationTest {
         assertThat(alarms).allSatisfy(a -> {
             assertThat(a.getIsRead()).isFalse();
             assertThat(a.getCoffeeChat().getId()).isEqualTo(chat.getId());
-            assertThat(a.getContent()).contains("https://open.kakao.com/test");
+            assertThat(a.getContent()).contains(KAKAO_OPEN_CHAT_LINK);
         });
     }
 
@@ -408,7 +412,7 @@ class EntityIntegrationTest {
     void roadmap_저장() {
         printHeader("로드맵 (Roadmap)");
 
-        Member m = saveMember("grd@mju.ac.kr", "로드맵작성자");
+        Member m = saveMember("roadmap@mju.ac.kr", "로드맵작성자");
         roadmapRepository.save(Roadmap.builder()
                 .member(m).content("{\"steps\":[\"CS기초\",\"알고리즘\",\"프로젝트\"]}").build());
 

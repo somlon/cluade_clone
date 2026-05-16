@@ -7,6 +7,7 @@ import mju.capstone.ddingconnect.domain.qna.answer.dto.response.AnswerResponse;
 import mju.capstone.ddingconnect.domain.qna.answer.service.AnswerService;
 import mju.capstone.ddingconnect.domain.qna.question.dto.response.LikeToggleResponse;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMemberArgumentResolver;
+import mju.capstone.ddingconnect.global.common.SuccessMessage;
 import mju.capstone.ddingconnect.global.config.WebMvcConfig;
 import mju.capstone.ddingconnect.support.WithMockLoginMember;
 import org.junit.jupiter.api.AfterEach;
@@ -36,6 +37,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DisplayName("AnswerController 슬라이스 테스트")
 class AnswerControllerTest {
 
+    private static final String BASE_URL = "/api/v1/questions/10/answers";
+
     @Autowired MockMvc mockMvc;
     @Autowired ObjectMapper objectMapper;
     @MockitoBean AnswerService answerService;
@@ -53,7 +56,7 @@ class AnswerControllerTest {
         given(answerService.create(any(), eq(10L), any()))
                 .willReturn(new AnswerResponse(1L, 10L, 1L, "답변", 0L, false));
 
-        mockMvc.perform(post("/api/v1/questions/10/answers")
+        mockMvc.perform(post(BASE_URL)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
@@ -65,7 +68,7 @@ class AnswerControllerTest {
     void 답변_목록() throws Exception {
         given(answerService.getList(any(), eq(10L))).willReturn(List.of());
 
-        mockMvc.perform(get("/api/v1/questions/10/answers"))
+        mockMvc.perform(get(BASE_URL))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result").isArray());
     }
@@ -77,7 +80,7 @@ class AnswerControllerTest {
         given(answerService.update(any(), eq(20L), any()))
                 .willReturn(new AnswerResponse(20L, 10L, 1L, "수정된 답변", 0L, false));
 
-        mockMvc.perform(patch("/api/v1/questions/10/answers/20")
+        mockMvc.perform(patch(BASE_URL + "/20")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
@@ -87,9 +90,9 @@ class AnswerControllerTest {
     @Test
     @DisplayName("DELETE /api/v1/questions/{qid}/answers/{aid} - 답변 삭제")
     void 답변_삭제() throws Exception {
-        mockMvc.perform(delete("/api/v1/questions/10/answers/20"))
+        mockMvc.perform(delete(BASE_URL + "/20"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result").value("답변이 삭제되었습니다."));
+                .andExpect(jsonPath("$.result").value(SuccessMessage.ANSWER_DELETED));
         verify(answerService).delete(any(), eq(20L));
     }
 
@@ -99,7 +102,7 @@ class AnswerControllerTest {
         given(answerService.toggleLike(any(), eq(20L)))
                 .willReturn(new LikeToggleResponse(true, 3L));
 
-        mockMvc.perform(post("/api/v1/questions/10/answers/20/like"))
+        mockMvc.perform(post(BASE_URL + "/20/like"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result.liked").value(true))
                 .andExpect(jsonPath("$.result.likeCount").value(3));

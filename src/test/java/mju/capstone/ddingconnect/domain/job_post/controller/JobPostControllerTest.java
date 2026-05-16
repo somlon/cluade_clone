@@ -8,6 +8,7 @@ import mju.capstone.ddingconnect.domain.job_post.dto.request.UpdateJobPostReques
 import mju.capstone.ddingconnect.domain.job_post.dto.response.JobPostResponse;
 import mju.capstone.ddingconnect.domain.job_post.service.JobPostService;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMemberArgumentResolver;
+import mju.capstone.ddingconnect.global.common.SuccessMessage;
 import mju.capstone.ddingconnect.global.config.WebMvcConfig;
 import mju.capstone.ddingconnect.support.WithMockLoginMember;
 import org.junit.jupiter.api.AfterEach;
@@ -38,6 +39,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DisplayName("JobPostController 슬라이스 테스트")
 class JobPostControllerTest {
 
+    private static final String BASE_URL = "/api/v1/job-post";
+
     @Autowired MockMvc mockMvc;
     @Autowired ObjectMapper objectMapper;
     @MockitoBean JobPostService jobPostService;
@@ -59,7 +62,7 @@ class JobPostControllerTest {
                 LocalDate.of(2026, 6, 30), "https://t.com", "Java");
         given(jobPostService.create(any(), any())).willReturn(res);
 
-        mockMvc.perform(post("/api/v1/job-post")
+        mockMvc.perform(post(BASE_URL)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
@@ -73,7 +76,7 @@ class JobPostControllerTest {
     void 구직공고_목록조회() throws Exception {
         given(jobPostService.getList()).willReturn(List.of());
 
-        mockMvc.perform(get("/api/v1/job-post"))
+        mockMvc.perform(get(BASE_URL))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.isSuccess").value(true))
                 .andExpect(jsonPath("$.result").isArray());
@@ -85,7 +88,7 @@ class JobPostControllerTest {
         JobPostResponse res = new JobPostResponse(1L, "네이버", null, null, null, null, null, null, null, null);
         given(jobPostService.getOne(1L)).willReturn(res);
 
-        mockMvc.perform(get("/api/v1/job-post/1"))
+        mockMvc.perform(get(BASE_URL + "/1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result.id").value(1L));
     }
@@ -98,7 +101,7 @@ class JobPostControllerTest {
         JobPostResponse res = new JobPostResponse(1L, "카카오", null, null, null, null, null, null, null, null);
         given(jobPostService.update(any(), eq(1L), any())).willReturn(res);
 
-        mockMvc.perform(patch("/api/v1/job-post/1")
+        mockMvc.perform(patch(BASE_URL + "/1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
@@ -108,9 +111,9 @@ class JobPostControllerTest {
     @Test
     @DisplayName("DELETE /api/v1/job-post/{id} - 구직 공고 삭제")
     void 구직공고_삭제() throws Exception {
-        mockMvc.perform(delete("/api/v1/job-post/1"))
+        mockMvc.perform(delete(BASE_URL + "/1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result").value("구직 공고가 삭제되었습니다."));
+                .andExpect(jsonPath("$.result").value(SuccessMessage.JOB_POST_DELETED));
         verify(jobPostService).delete(any(), eq(1L));
     }
 }

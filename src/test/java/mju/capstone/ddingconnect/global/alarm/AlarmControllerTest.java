@@ -2,6 +2,7 @@ package mju.capstone.ddingconnect.global.alarm;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMemberArgumentResolver;
+import mju.capstone.ddingconnect.global.common.SuccessMessage;
 import mju.capstone.ddingconnect.global.config.WebMvcConfig;
 import mju.capstone.ddingconnect.support.WithMockLoginMember;
 import org.junit.jupiter.api.AfterEach;
@@ -31,6 +32,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DisplayName("AlarmController 슬라이스 테스트")
 class AlarmControllerTest {
 
+    private static final String BASE_URL = "/api/v1/alarms";
+
     @Autowired MockMvc mockMvc;
     @Autowired ObjectMapper objectMapper;
     @MockitoBean AlarmService alarmService;
@@ -48,7 +51,7 @@ class AlarmControllerTest {
                 "답변 알람", false, LocalDateTime.now(), "방금 전");
         given(alarmService.getMyAlarms(any())).willReturn(List.of(alarm));
 
-        mockMvc.perform(get("/api/v1/alarms"))
+        mockMvc.perform(get(BASE_URL))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result[0].type").value("ANSWER"));
     }
@@ -60,7 +63,7 @@ class AlarmControllerTest {
                 "구직 알람", false, LocalDateTime.now(), "방금 전");
         given(alarmService.getAlarmDetail(any(), eq(AlarmType.JOB), eq(1L))).willReturn(alarm);
 
-        mockMvc.perform(get("/api/v1/alarms/JOB/1"))
+        mockMvc.perform(get(BASE_URL + "/JOB/1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result.type").value("JOB"));
     }
@@ -68,9 +71,9 @@ class AlarmControllerTest {
     @Test
     @DisplayName("PATCH /api/v1/alarms/{type}/{id}/read - 알람 읽음 처리")
     void 알람_읽음() throws Exception {
-        mockMvc.perform(patch("/api/v1/alarms/ROADMAP/5/read"))
+        mockMvc.perform(patch(BASE_URL + "/ROADMAP/5/read"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result").value("알람이 읽음 처리되었습니다."));
+                .andExpect(jsonPath("$.result").value(SuccessMessage.ALARM_MARKED_AS_READ));
         verify(alarmService).markAsRead(any(), eq(AlarmType.ROADMAP), eq(5L));
     }
 }
