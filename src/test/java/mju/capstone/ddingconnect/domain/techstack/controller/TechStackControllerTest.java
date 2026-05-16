@@ -6,6 +6,7 @@ import mju.capstone.ddingconnect.domain.techstack.dto.request.CreateTechStackReq
 import mju.capstone.ddingconnect.domain.techstack.dto.response.TechStackResponse;
 import mju.capstone.ddingconnect.domain.techstack.service.TechStackService;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMemberArgumentResolver;
+import mju.capstone.ddingconnect.global.common.SuccessMessage;
 import mju.capstone.ddingconnect.global.config.WebMvcConfig;
 import mju.capstone.ddingconnect.support.WithMockLoginMember;
 import org.junit.jupiter.api.AfterEach;
@@ -35,6 +36,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DisplayName("TechStackController 슬라이스 테스트")
 class TechStackControllerTest {
 
+    private static final String BASE_URL = "/api/v1/tech-stacks";
+
     @Autowired MockMvc mockMvc;
     @Autowired ObjectMapper objectMapper;
     @MockitoBean TechStackService techStackService;
@@ -52,7 +55,7 @@ class TechStackControllerTest {
         given(techStackService.add(any(), any()))
                 .willReturn(new TechStackResponse(1L, TechStackName.JAVA));
 
-        mockMvc.perform(post("/api/v1/tech-stacks")
+        mockMvc.perform(post(BASE_URL)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
@@ -64,7 +67,7 @@ class TechStackControllerTest {
     void 기술스택_목록() throws Exception {
         given(techStackService.getMyTechStacks(any())).willReturn(List.of());
 
-        mockMvc.perform(get("/api/v1/tech-stacks"))
+        mockMvc.perform(get(BASE_URL))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result").isArray());
     }
@@ -72,9 +75,9 @@ class TechStackControllerTest {
     @Test
     @DisplayName("DELETE /api/v1/tech-stacks/{id} - 기술 스택 삭제")
     void 기술스택_삭제() throws Exception {
-        mockMvc.perform(delete("/api/v1/tech-stacks/1"))
+        mockMvc.perform(delete(BASE_URL + "/1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result").value("기술 스택이 삭제되었습니다."));
+                .andExpect(jsonPath("$.result").value(SuccessMessage.TECH_STACK_DELETED));
         verify(techStackService).delete(any(), eq(1L));
     }
 }

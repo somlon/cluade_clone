@@ -67,7 +67,7 @@ class RoadmapServiceImplTest {
         AlarmNotificationEvent event = eventCaptor.getValue();
         assertThat(event.receiver().getId()).isEqualTo(author.getId());
         assertThat(event.type()).isEqualTo(AlarmType.ROADMAP);
-        assertThat(event.content()).isEqualTo("로드맵 생성이 완료되었습니다.");
+        assertThat(event.content()).isEqualTo(RoadmapServiceImpl.ROADMAP_ALARM_CONTENT);
     }
 
     @Test

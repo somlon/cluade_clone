@@ -8,6 +8,7 @@ import mju.capstone.ddingconnect.domain.qna.question.dto.response.LikeToggleResp
 import mju.capstone.ddingconnect.domain.qna.question.dto.response.QuestionResponse;
 import mju.capstone.ddingconnect.domain.qna.question.service.QuestionService;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMemberArgumentResolver;
+import mju.capstone.ddingconnect.global.common.SuccessMessage;
 import mju.capstone.ddingconnect.global.config.WebMvcConfig;
 import mju.capstone.ddingconnect.support.WithMockLoginMember;
 import org.junit.jupiter.api.AfterEach;
@@ -37,6 +38,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DisplayName("QuestionController 슬라이스 테스트")
 class QuestionControllerTest {
 
+    private static final String BASE_URL = "/api/v1/questions";
+
     @Autowired MockMvc mockMvc;
     @Autowired ObjectMapper objectMapper;
     @MockitoBean QuestionService questionService;
@@ -54,7 +57,7 @@ class QuestionControllerTest {
         QuestionResponse res = new QuestionResponse(1L, 1L, QuestionCategory.TECHNICAL, "제목", "내용", 0, 0L, 0L, false);
         given(questionService.create(any(), any())).willReturn(res);
 
-        mockMvc.perform(post("/api/v1/questions")
+        mockMvc.perform(post(BASE_URL)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
@@ -66,7 +69,7 @@ class QuestionControllerTest {
     void 질문_목록() throws Exception {
         given(questionService.getList(any())).willReturn(List.of());
 
-        mockMvc.perform(get("/api/v1/questions"))
+        mockMvc.perform(get(BASE_URL))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result").isArray());
     }
@@ -77,7 +80,7 @@ class QuestionControllerTest {
         QuestionResponse res = new QuestionResponse(1L, 1L, QuestionCategory.STUDY, "t", "c", 1, 2L, 3L, true);
         given(questionService.getOne(any(), eq(1L))).willReturn(res);
 
-        mockMvc.perform(get("/api/v1/questions/1"))
+        mockMvc.perform(get(BASE_URL + "/1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result.viewCount").value(1))
                 .andExpect(jsonPath("$.result.likeCount").value(2))
@@ -92,7 +95,7 @@ class QuestionControllerTest {
         QuestionResponse res = new QuestionResponse(1L, 1L, QuestionCategory.STUDY, "수정", "c", 0, 0L, 0L, false);
         given(questionService.update(any(), eq(1L), any())).willReturn(res);
 
-        mockMvc.perform(patch("/api/v1/questions/1")
+        mockMvc.perform(patch(BASE_URL + "/1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
@@ -102,9 +105,9 @@ class QuestionControllerTest {
     @Test
     @DisplayName("DELETE /api/v1/questions/{id} - 질문 삭제")
     void 질문_삭제() throws Exception {
-        mockMvc.perform(delete("/api/v1/questions/1"))
+        mockMvc.perform(delete(BASE_URL + "/1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result").value("질문이 삭제되었습니다."));
+                .andExpect(jsonPath("$.result").value(SuccessMessage.QUESTION_DELETED));
         verify(questionService).delete(any(), eq(1L));
     }
 
@@ -114,7 +117,7 @@ class QuestionControllerTest {
         given(questionService.toggleLike(any(), eq(1L)))
                 .willReturn(new LikeToggleResponse(true, 5L));
 
-        mockMvc.perform(post("/api/v1/questions/1/like"))
+        mockMvc.perform(post(BASE_URL + "/1/like"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result.liked").value(true))
                 .andExpect(jsonPath("$.result.likeCount").value(5));

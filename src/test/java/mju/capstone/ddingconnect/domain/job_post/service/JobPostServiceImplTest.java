@@ -219,7 +219,7 @@ class JobPostServiceImplTest {
         GraduateJobPost gjp = GraduateJobPost.builder().graduate(graduate).postContents(postContents).build();
         // 기존 알람 = A 가 BACKEND 매칭으로 받았던 알람 1건
         JobAlarm aPrev = JobAlarm.builder().id(500L).member(studentA).postContents(postContents)
-                .content("관심 직무에 새로운 공고가 등록되었습니다.").isRead(false).build();
+                .content(JobPostServiceImpl.JOB_ALARM_NEW_CONTENT).isRead(false).build();
 
         when(postContentsRepository.findById(100L)).thenReturn(Optional.of(postContents));
         when(graduateJobPostRepository.findByPostContentsId(100L)).thenReturn(List.of(gjp));
@@ -285,13 +285,13 @@ class JobPostServiceImplTest {
 
         // prev = {A, B, C} 가 BACKEND 시절 받았던 알람들 (B 는 중복 등록으로 알람 2건 들고 있다고 가정)
         JobAlarm aPrev = JobAlarm.builder().id(501L).member(studentA).postContents(postContents)
-                .content("관심 직무에 새로운 공고가 등록되었습니다.").isRead(false).build();
+                .content(JobPostServiceImpl.JOB_ALARM_NEW_CONTENT).isRead(false).build();
         JobAlarm bPrev1 = JobAlarm.builder().id(502L).member(studentB).postContents(postContents)
-                .content("관심 직무에 새로운 공고가 등록되었습니다.").isRead(false).build();
+                .content(JobPostServiceImpl.JOB_ALARM_NEW_CONTENT).isRead(false).build();
         JobAlarm bPrev2 = JobAlarm.builder().id(503L).member(studentB).postContents(postContents)
-                .content("관심 직무에 새로운 공고가 등록되었습니다.").isRead(false).build();
+                .content(JobPostServiceImpl.JOB_ALARM_NEW_CONTENT).isRead(false).build();
         JobAlarm cPrev = JobAlarm.builder().id(504L).member(studentC).postContents(postContents)
-                .content("관심 직무에 새로운 공고가 등록되었습니다.").isRead(false).build();
+                .content(JobPostServiceImpl.JOB_ALARM_NEW_CONTENT).isRead(false).build();
 
         // curr = {B, C, D} (자신 등록 졸업생도 FRONTEND 관심으로 등록되어 있다고 가정 → 제외돼야 함)
         TargetJob bCurr = TargetJob.builder().id(20L).member(studentB)

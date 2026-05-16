@@ -8,6 +8,7 @@ import mju.capstone.ddingconnect.domain.interested_job.dto.response.TargetJobRes
 import mju.capstone.ddingconnect.domain.interested_job.service.TargetJobService;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMember;
+import mju.capstone.ddingconnect.global.common.SuccessMessage;
 import mju.capstone.ddingconnect.global.response.exception.handler.ApiResponse;
 import org.springframework.web.bind.annotation.*;
 
@@ -54,6 +55,6 @@ public class TargetJobController implements TargetJobSwagger {
             @Parameter(hidden = true) @LoginMember Member member,
             @PathVariable Long targetJobId) {
         targetJobService.delete(member, targetJobId);
-        return ApiResponse.onSuccess("관심 직군이 삭제되었습니다.");
+        return ApiResponse.onSuccess(SuccessMessage.TARGET_JOB_DELETED);
     }
 }

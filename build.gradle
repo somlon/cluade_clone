@@ -8,8 +8,13 @@ group = 'mju.capstone'
 version = '0.0.1-SNAPSHOT'
 description = 'ddingconnect'
 
-// OneDrive 동기화 잠금 방지: build 폴더를 OneDrive 외부에 생성
-layout.buildDirectory = file("C:/gradle-builds/${rootProject.name}")
+// 빌드 디렉터리는 -PbuildDir=... 또는 gradle.properties 의 buildDir 로 외부화한다.
+// OneDrive 동기화 잠금 방지가 필요한 환경(Windows)만 외부 경로를 지정하고,
+// 미지정 시 Gradle 기본값(build/)을 사용해 리눅스/맥/CI 에서도 그대로 빌드된다.
+def externalBuildDir = providers.gradleProperty("buildDir").getOrNull()
+if (externalBuildDir != null) {
+    layout.buildDirectory = file(externalBuildDir)
+}
 
 java {
     toolchain {

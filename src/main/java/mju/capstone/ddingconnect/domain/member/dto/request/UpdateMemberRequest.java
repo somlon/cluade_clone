@@ -9,12 +9,10 @@ public record UpdateMemberRequest(
         String studentNumber,
         String department,
 
-        @Pattern(regexp = "^https?://(www\\.)?github\\.com/.+",
-                message = "github.com URL 만 허용됩니다.")
+        @Pattern(regexp = GITHUB_URL_REGEX, message = GITHUB_URL_MESSAGE)
         String githubLink,
 
-        @Pattern(regexp = "^https?://(www\\.)?linkedin\\.com/.+",
-                message = "linkedin.com URL 만 허용됩니다.")
+        @Pattern(regexp = LINKEDIN_URL_REGEX, message = LINKEDIN_URL_MESSAGE)
         String linkedinLink,
 
         String portfolio,
@@ -27,4 +25,9 @@ public record UpdateMemberRequest(
         String businessCardImage,   // 명함이미지
         String company,             // 회사명
         Integer careerYear          // 경력
-) {}
+) {
+    private static final String GITHUB_URL_REGEX = "^https?://(www\\.)?github\\.com/.+";
+    private static final String GITHUB_URL_MESSAGE = "github.com URL 만 허용됩니다.";
+    private static final String LINKEDIN_URL_REGEX = "^https?://(www\\.)?linkedin\\.com/.+";
+    private static final String LINKEDIN_URL_MESSAGE = "linkedin.com URL 만 허용됩니다.";
+}

@@ -36,7 +36,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class CoffeeChatServiceImpl implements CoffeeChatService {
 
-    private static final String PENDING_CONTENT_FORMAT = "%s %s님이 커피챗을 요청했어요!";
+    // 테스트도 동일 상수를 참조하므로 package-private 노출
+    static final String PENDING_CONTENT_FORMAT = "%s %s님이 커피챗을 요청했어요!";
     private static final String ACCEPTED_CONTENT_PREFIX = "커피챗 요청이 수락되었습니다. 카카오톡 오픈채팅 링크: ";
     private static final String REJECTED_CONTENT = "커피챗 요청이 거절되었습니다.";
 

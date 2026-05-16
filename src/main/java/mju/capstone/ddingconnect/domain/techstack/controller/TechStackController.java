@@ -7,6 +7,7 @@ import mju.capstone.ddingconnect.domain.techstack.dto.request.CreateTechStackReq
 import mju.capstone.ddingconnect.domain.techstack.dto.response.TechStackResponse;
 import mju.capstone.ddingconnect.domain.techstack.service.TechStackService;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMember;
+import mju.capstone.ddingconnect.global.common.SuccessMessage;
 import mju.capstone.ddingconnect.global.response.exception.handler.ApiResponse;
 import org.springframework.web.bind.annotation.*;
 
@@ -49,6 +50,6 @@ public class TechStackController implements TechStackSwagger {
             @Parameter(hidden = true) @LoginMember Member member,
             @PathVariable Long techStackId) {
         techStackService.delete(member, techStackId);
-        return ApiResponse.onSuccess("기술 스택이 삭제되었습니다.");
+        return ApiResponse.onSuccess(SuccessMessage.TECH_STACK_DELETED);
     }
 }

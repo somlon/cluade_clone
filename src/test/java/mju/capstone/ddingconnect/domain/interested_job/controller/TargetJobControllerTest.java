@@ -7,6 +7,7 @@ import mju.capstone.ddingconnect.domain.interested_job.dto.request.UpdateTargetJ
 import mju.capstone.ddingconnect.domain.interested_job.dto.response.TargetJobResponse;
 import mju.capstone.ddingconnect.domain.interested_job.service.TargetJobService;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMemberArgumentResolver;
+import mju.capstone.ddingconnect.global.common.SuccessMessage;
 import mju.capstone.ddingconnect.global.config.WebMvcConfig;
 import mju.capstone.ddingconnect.support.WithMockLoginMember;
 import org.junit.jupiter.api.AfterEach;
@@ -36,6 +37,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DisplayName("TargetJobController 슬라이스 테스트")
 class TargetJobControllerTest {
 
+    private static final String BASE_URL = "/api/v1/target-jobs";
+
     @Autowired MockMvc mockMvc;
     @Autowired ObjectMapper objectMapper;
     @MockitoBean TargetJobService targetJobService;
@@ -53,7 +56,7 @@ class TargetJobControllerTest {
         given(targetJobService.create(any(), any()))
                 .willReturn(new TargetJobResponse(1L, TargetJobCategory.BACKEND, "k"));
 
-        mockMvc.perform(post("/api/v1/target-jobs")
+        mockMvc.perform(post(BASE_URL)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
@@ -65,7 +68,7 @@ class TargetJobControllerTest {
     void 관심직군_목록() throws Exception {
         given(targetJobService.getMyTargetJobs(any())).willReturn(List.of());
 
-        mockMvc.perform(get("/api/v1/target-jobs"))
+        mockMvc.perform(get(BASE_URL))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result").isArray());
     }
@@ -77,7 +80,7 @@ class TargetJobControllerTest {
         given(targetJobService.update(any(), eq(1L), any()))
                 .willReturn(new TargetJobResponse(1L, TargetJobCategory.FRONTEND, "k"));
 
-        mockMvc.perform(patch("/api/v1/target-jobs/1")
+        mockMvc.perform(patch(BASE_URL + "/1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
@@ -87,9 +90,9 @@ class TargetJobControllerTest {
     @Test
     @DisplayName("DELETE /api/v1/target-jobs/{id} - 관심 직군 삭제")
     void 관심직군_삭제() throws Exception {
-        mockMvc.perform(delete("/api/v1/target-jobs/1"))
+        mockMvc.perform(delete(BASE_URL + "/1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result").value("관심 직군이 삭제되었습니다."));
+                .andExpect(jsonPath("$.result").value(SuccessMessage.TARGET_JOB_DELETED));
         verify(targetJobService).delete(any(), eq(1L));
     }
 }

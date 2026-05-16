@@ -46,6 +46,10 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class MemberServiceImpl implements MemberService {
 
+    // 학년 허용 범위 (sanitizeGrade) — 테스트도 동일 상수를 참조한다
+    static final int MIN_GRADE = 1;
+    static final int MAX_GRADE = 4;
+
     private final MemberRepository memberRepository;
     private final StudentRepository studentRepository;
     private final GraduateRepository graduateRepository;
@@ -143,8 +147,8 @@ public class MemberServiceImpl implements MemberService {
      */
     private Integer sanitizeGrade(Integer raw, Integer fallback) {
         if (raw == null) return fallback;
-        if (raw < 1) throw new MemberHandler(ErrorStatus.MEMBER_INVALID_GRADE);
-        return Math.min(raw, 4);
+        if (raw < MIN_GRADE) throw new MemberHandler(ErrorStatus.MEMBER_INVALID_GRADE);
+        return Math.min(raw, MAX_GRADE);
     }
 
     /**

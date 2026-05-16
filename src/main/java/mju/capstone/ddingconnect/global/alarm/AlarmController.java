@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import lombok.RequiredArgsConstructor;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMember;
+import mju.capstone.ddingconnect.global.common.SuccessMessage;
 import mju.capstone.ddingconnect.global.response.exception.handler.ApiResponse;
 import org.springframework.web.bind.annotation.*;
 
@@ -43,6 +44,6 @@ public class AlarmController implements AlarmSwagger {
             @PathVariable AlarmType type,
             @PathVariable Long alarmId) {
         alarmService.markAsRead(member, type, alarmId);
-        return ApiResponse.onSuccess("알람이 읽음 처리되었습니다.");
+        return ApiResponse.onSuccess(SuccessMessage.ALARM_MARKED_AS_READ);
     }
 }

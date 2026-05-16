@@ -9,6 +9,7 @@ import mju.capstone.ddingconnect.domain.qna.question.dto.response.LikeToggleResp
 import mju.capstone.ddingconnect.domain.qna.question.dto.response.QuestionResponse;
 import mju.capstone.ddingconnect.domain.qna.question.service.QuestionService;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMember;
+import mju.capstone.ddingconnect.global.common.SuccessMessage;
 import mju.capstone.ddingconnect.global.response.exception.handler.ApiResponse;
 import org.springframework.web.bind.annotation.*;
 
@@ -59,7 +60,7 @@ public class QuestionController implements QuestionSwagger {
             @Parameter(hidden = true) @LoginMember Member member,
             @PathVariable Long questionId) {
         questionService.delete(member, questionId);
-        return ApiResponse.onSuccess("질문이 삭제되었습니다.");
+        return ApiResponse.onSuccess(SuccessMessage.QUESTION_DELETED);
     }
 
     /** 질문 좋아요 토글 — 토글 후 새 상태와 카운트를 즉시 반환 */

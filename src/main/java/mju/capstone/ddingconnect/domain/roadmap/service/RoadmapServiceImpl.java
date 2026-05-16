@@ -26,7 +26,8 @@ import java.util.List;
 public class RoadmapServiceImpl implements RoadmapService {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-    private static final String ROADMAP_ALARM_CONTENT = "로드맵 생성이 완료되었습니다.";
+    // 테스트도 동일 상수를 참조하므로 package-private 노출
+    static final String ROADMAP_ALARM_CONTENT = "로드맵 생성이 완료되었습니다.";
 
     private final RoadmapRepository roadmapRepository;
     private final RoadmapAlarmRepository roadmapAlarmRepository;

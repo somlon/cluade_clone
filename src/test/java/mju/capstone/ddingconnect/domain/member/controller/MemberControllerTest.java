@@ -6,6 +6,7 @@ import mju.capstone.ddingconnect.domain.member.dto.request.UpdateMemberRequest;
 import mju.capstone.ddingconnect.domain.member.dto.response.MemberResponse;
 import mju.capstone.ddingconnect.domain.member.service.MemberService;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMemberArgumentResolver;
+import mju.capstone.ddingconnect.global.common.SuccessMessage;
 import mju.capstone.ddingconnect.global.config.WebMvcConfig;
 import mju.capstone.ddingconnect.support.WithMockLoginMember;
 import org.junit.jupiter.api.AfterEach;
@@ -32,6 +33,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DisplayName("MemberController 슬라이스 테스트")
 class MemberControllerTest {
 
+    private static final String BASE_URL = "/api/v1/members";
+
     @Autowired MockMvc mockMvc;
     @Autowired ObjectMapper objectMapper;
     @MockitoBean MemberService memberService;
@@ -45,7 +48,7 @@ class MemberControllerTest {
     @Test
     @DisplayName("GET /api/v1/members/test - JWT 인증 테스트")
     void JWT_테스트() throws Exception {
-        mockMvc.perform(get("/api/v1/members/test"))
+        mockMvc.perform(get(BASE_URL + "/test"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result").value("test@mju.ac.kr"));
     }
@@ -58,7 +61,7 @@ class MemberControllerTest {
                 MemberRole.STUDENT, 3, null, null, null);
         given(memberService.getMyProfile(any())).willReturn(res);
 
-        mockMvc.perform(get("/api/v1/members/me"))
+        mockMvc.perform(get(BASE_URL + "/me"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result.email").value("test@mju.ac.kr"))
                 .andExpect(jsonPath("$.result.grade").value(3));
@@ -74,7 +77,7 @@ class MemberControllerTest {
                 MemberRole.STUDENT, 3, null, null, null);
         given(memberService.updateMyProfile(any(), any())).willReturn(res);
 
-        mockMvc.perform(patch("/api/v1/members/me")
+        mockMvc.perform(patch(BASE_URL + "/me")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
@@ -84,9 +87,9 @@ class MemberControllerTest {
     @Test
     @DisplayName("DELETE /api/v1/members/me - 회원 탈퇴")
     void 회원_탈퇴() throws Exception {
-        mockMvc.perform(delete("/api/v1/members/me"))
+        mockMvc.perform(delete(BASE_URL + "/me"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result").value("회원 탈퇴가 완료되었습니다."));
+                .andExpect(jsonPath("$.result").value(SuccessMessage.MEMBER_WITHDRAWN));
         verify(memberService).withdraw(any());
     }
 }

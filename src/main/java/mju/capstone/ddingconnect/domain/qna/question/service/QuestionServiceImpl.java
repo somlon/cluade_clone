@@ -24,6 +24,9 @@ import java.util.List;
 @RequiredArgsConstructor
 public class QuestionServiceImpl implements QuestionService {
 
+    private static final int INITIAL_VIEW_COUNT = 0;
+    private static final int VIEW_COUNT_INCREMENT = 1;
+
     private final QuestionRepository questionRepository;
     private final QuestionLikeRepository questionLikeRepository;
     private final AnswerRepository answerRepository;
@@ -38,7 +41,7 @@ public class QuestionServiceImpl implements QuestionService {
                 .category(request.category())
                 .title(request.title())
                 .content(request.content())
-                .viewCount(0)
+                .viewCount(INITIAL_VIEW_COUNT)
                 .build();
         Question saved = questionRepository.save(question);
         return toResponse(saved, member);
@@ -64,7 +67,7 @@ public class QuestionServiceImpl implements QuestionService {
                 .category(question.getCategory())
                 .title(question.getTitle())
                 .content(question.getContent())
-                .viewCount(question.getViewCount() + 1)
+                .viewCount(question.getViewCount() + VIEW_COUNT_INCREMENT)
                 .build();
 
         Question saved = questionRepository.save(updated);

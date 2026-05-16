@@ -8,6 +8,7 @@ import mju.capstone.ddingconnect.domain.coffeechat.dto.response.CoffeeChatRespon
 import mju.capstone.ddingconnect.domain.coffeechat.service.CoffeeChatService;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMember;
+import mju.capstone.ddingconnect.global.common.SuccessMessage;
 import mju.capstone.ddingconnect.global.response.exception.handler.ApiResponse;
 import org.springframework.web.bind.annotation.*;
 
@@ -57,6 +58,6 @@ public class CoffeeChatController implements CoffeeChatSwagger {
             @Parameter(hidden = true) @LoginMember Member member,
             @PathVariable Long coffeeChatId) {
         coffeeChatService.delete(member, coffeeChatId);
-        return ApiResponse.onSuccess("커피챗이 취소되었습니다.");
+        return ApiResponse.onSuccess(SuccessMessage.COFFEE_CHAT_CANCELED);
     }
 }

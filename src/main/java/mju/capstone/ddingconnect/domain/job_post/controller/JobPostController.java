@@ -8,6 +8,7 @@ import mju.capstone.ddingconnect.domain.job_post.dto.response.JobPostResponse;
 import mju.capstone.ddingconnect.domain.job_post.service.JobPostService;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMember;
+import mju.capstone.ddingconnect.global.common.SuccessMessage;
 import mju.capstone.ddingconnect.global.response.exception.handler.ApiResponse;
 import org.springframework.web.bind.annotation.*;
 
@@ -55,6 +56,6 @@ public class JobPostController implements JobPostSwagger {
             @Parameter(hidden = true) @LoginMember Member member,
             @PathVariable Long jobPostId) {
         jobPostService.delete(member, jobPostId);
-        return ApiResponse.onSuccess("구직 공고가 삭제되었습니다.");
+        return ApiResponse.onSuccess(SuccessMessage.JOB_POST_DELETED);
     }
 }

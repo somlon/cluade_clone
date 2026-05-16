@@ -135,7 +135,7 @@ class MemberServiceImplTest {
         Member member = buildStudentMember();
         Student student = Student.builder().id(11L).member(member).grade(3).build();
         UpdateMemberRequest request = new UpdateMemberRequest("새닉네임", null, null,
-                null, null, null, null, 4, null, null, null);
+                null, null, null, null, MemberServiceImpl.MAX_GRADE, null, null, null);
 
         when(studentRepository.findByMemberId(1L)).thenReturn(Optional.of(student));
         when(studentRepository.save(any(Student.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -148,7 +148,7 @@ class MemberServiceImplTest {
 
         ArgumentCaptor<Student> studentCaptor = ArgumentCaptor.forClass(Student.class);
         verify(studentRepository).save(studentCaptor.capture());
-        assertThat(studentCaptor.getValue().getGrade()).isEqualTo(4);
+        assertThat(studentCaptor.getValue().getGrade()).isEqualTo(MemberServiceImpl.MAX_GRADE);
 
         assertThat(response.nickname()).isEqualTo("새닉네임");
     }
@@ -181,7 +181,7 @@ class MemberServiceImplTest {
         Member member = buildStudentMember();
         Student student = Student.builder().id(11L).member(member).grade(1).build();
         UpdateMemberRequest request = new UpdateMemberRequest(null, null, null,
-                null, null, null, null, 99, null, null, null);
+                null, null, null, null, MemberServiceImpl.MAX_GRADE + 1, null, null, null);
 
         when(studentRepository.findByMemberId(1L)).thenReturn(Optional.of(student));
         when(studentRepository.save(any(Student.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -190,7 +190,7 @@ class MemberServiceImplTest {
 
         ArgumentCaptor<Student> captor = ArgumentCaptor.forClass(Student.class);
         verify(studentRepository).save(captor.capture());
-        assertThat(captor.getValue().getGrade()).isEqualTo(4);
+        assertThat(captor.getValue().getGrade()).isEqualTo(MemberServiceImpl.MAX_GRADE);
     }
 
     @Test
@@ -199,7 +199,7 @@ class MemberServiceImplTest {
         Member member = buildStudentMember();
         Student student = Student.builder().id(11L).member(member).grade(2).build();
         UpdateMemberRequest request = new UpdateMemberRequest(null, null, null,
-                null, null, null, null, -1, null, null, null);
+                null, null, null, null, MemberServiceImpl.MIN_GRADE - 2, null, null, null);
 
         when(studentRepository.findByMemberId(1L)).thenReturn(Optional.of(student));
 
@@ -213,7 +213,7 @@ class MemberServiceImplTest {
         Member member = buildStudentMember();
         Student student = Student.builder().id(11L).member(member).grade(2).build();
         UpdateMemberRequest request = new UpdateMemberRequest(null, null, null,
-                null, null, null, null, 0, null, null, null);
+                null, null, null, null, MemberServiceImpl.MIN_GRADE - 1, null, null, null);
 
         when(studentRepository.findByMemberId(1L)).thenReturn(Optional.of(student));
 
