@@ -62,16 +62,6 @@ public enum ErrorStatus implements BaseErrorCode {
     ROADMAP_UNAUTHORIZED(HttpStatus.FORBIDDEN, "ROADMAP403", "로드맵을 수정/삭제할 권한이 없습니다."),
     ROADMAP_INVALID_CONTENT(HttpStatus.BAD_REQUEST, "ROADMAP400", "로드맵 content는 JSON object 또는 array 형식이어야 합니다."),
 
-    // TechStack
-    TECH_STACK_NOT_FOUND(HttpStatus.NOT_FOUND, "TECHSTACK404", "존재하지 않는 기술 스택입니다."),
-    TECH_STACK_UNAUTHORIZED(HttpStatus.FORBIDDEN, "TECHSTACK403", "기술 스택을 삭제할 권한이 없습니다."),
-    TECH_STACK_DUPLICATE(HttpStatus.CONFLICT, "TECHSTACK409", "이미 등록된 기술 스택입니다."),
-
-    // TargetJob
-    TARGET_JOB_NOT_FOUND(HttpStatus.NOT_FOUND, "TARGETJOB404", "존재하지 않는 관심 직군입니다."),
-    TARGET_JOB_UNAUTHORIZED(HttpStatus.FORBIDDEN, "TARGETJOB403", "관심 직군을 수정/삭제할 권한이 없습니다."),
-    TARGET_JOB_DUPLICATE(HttpStatus.CONFLICT, "TARGETJOB409", "이미 등록된 관심 직군입니다."),
-
     // Alarm
     ALARM_NOT_FOUND(HttpStatus.NOT_FOUND, "ALARM404", "존재하지 않는 알람입니다."),
     ALARM_UNAUTHORIZED(HttpStatus.FORBIDDEN, "ALARM403", "알람을 조회/수정할 권한이 없습니다.");

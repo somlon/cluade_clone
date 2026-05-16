@@ -12,10 +12,8 @@ public final class SuccessMessage {
     public static final String MEMBER_WITHDRAWN = "회원 탈퇴가 완료되었습니다.";
     public static final String COFFEE_CHAT_CANCELED = "커피챗이 취소되었습니다.";
     public static final String JOB_POST_DELETED = "구직 공고가 삭제되었습니다.";
-    public static final String TARGET_JOB_DELETED = "관심 직군이 삭제되었습니다.";
     public static final String ANSWER_DELETED = "답변이 삭제되었습니다.";
     public static final String QUESTION_DELETED = "질문이 삭제되었습니다.";
     public static final String ROADMAP_DELETED = "로드맵이 삭제되었습니다.";
-    public static final String TECH_STACK_DELETED = "기술 스택이 삭제되었습니다.";
     public static final String ALARM_MARKED_AS_READ = "알람이 읽음 처리되었습니다.";
 }

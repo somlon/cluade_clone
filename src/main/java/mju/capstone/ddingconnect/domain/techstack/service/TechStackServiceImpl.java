@@ -4,7 +4,7 @@ import lombok.RequiredArgsConstructor;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.domain.techstack.domain.TechStack;
 import mju.capstone.ddingconnect.domain.techstack.domain.repository.TechStackRepository;
-import mju.capstone.ddingconnect.domain.techstack.dto.request.CreateTechStackRequest;
+import mju.capstone.ddingconnect.domain.techstack.dto.request.ReplaceTechStackRequest;
 import mju.capstone.ddingconnect.domain.techstack.dto.response.TechStackResponse;
 import mju.capstone.ddingconnect.global.response.code.status.ErrorStatus;
 import mju.capstone.ddingconnect.global.response.exception.handler.TechStackHandler;
@@ -19,17 +19,27 @@ public class TechStackServiceImpl implements TechStackService {
 
     private final TechStackRepository techStackRepository;
 
+    /**
+     * 본인 기술 스택 전체를 요청 리스트로 교체한다.
+     * deleteByMemberId 후 입력 리스트(중복 제거)만큼 save 하는 단일 트랜잭션.
+     */
     @Override
     @Transactional
-    public TechStackResponse add(Member member, CreateTechStackRequest request) {
-        if (techStackRepository.existsByMemberIdAndName(member.getId(), request.name())) {
-            throw new TechStackHandler(ErrorStatus.TECH_STACK_DUPLICATE);
+    public List<TechStackResponse> replace(Member member, ReplaceTechStackRequest request) {
+        if (request.names() == null) {
+            throw new TechStackHandler(ErrorStatus._BAD_REQUEST);
         }
-        TechStack techStack = TechStack.builder()
-                .member(member)
-                .name(request.name())
-                .build();
-        return TechStackResponse.from(techStackRepository.save(techStack));
+
+        techStackRepository.deleteByMemberId(member.getId());
+
+        return request.names().stream()
+                .distinct()
+                .map(name -> techStackRepository.save(TechStack.builder()
+                        .member(member)
+                        .name(name)
+                        .build()))
+                .map(TechStackResponse::from)
+                .toList();
     }
 
     @Override
@@ -37,18 +47,5 @@ public class TechStackServiceImpl implements TechStackService {
     public List<TechStackResponse> getMyTechStacks(Member member) {
         return techStackRepository.findByMemberId(member.getId())
                 .stream().map(TechStackResponse::from).toList();
-    }
-
-    @Override
-    @Transactional
-    public void delete(Member member, Long techStackId) {
-        TechStack techStack = techStackRepository.findById(techStackId)
-                .orElseThrow(() -> new TechStackHandler(ErrorStatus.TECH_STACK_NOT_FOUND));
-
-        if (!techStack.getMember().getId().equals(member.getId())) {
-            throw new TechStackHandler(ErrorStatus.TECH_STACK_UNAUTHORIZED);
-        }
-
-        techStackRepository.delete(techStack);
     }
 }
