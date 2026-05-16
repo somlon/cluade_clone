@@ -16,7 +16,7 @@ import mju.capstone.ddingconnect.global.response.code.status.ErrorStatus;
 import mju.capstone.ddingconnect.global.response.exception.handler.CoffeeChatHandler;
 import mju.capstone.ddingconnect.global.response.exception.handler.MemberHandler;
 import mju.capstone.ddingconnect.global.sse.AlarmNotificationEvent;
-import mju.capstone.ddingconnect.global.sse.AlarmType;
+import mju.capstone.ddingconnect.global.alarm.AlarmType;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

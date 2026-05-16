@@ -3,6 +3,7 @@ package mju.capstone.ddingconnect.global.sse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
+import mju.capstone.ddingconnect.global.alarm.AlarmType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 

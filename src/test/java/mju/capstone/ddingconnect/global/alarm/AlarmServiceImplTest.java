@@ -1,4 +1,4 @@
-package mju.capstone.ddingconnect.global.sse;
+package mju.capstone.ddingconnect.global.alarm;
 
 import mju.capstone.ddingconnect.domain.coffeechat.domain.CoffeeChat;
 import mju.capstone.ddingconnect.domain.coffeechat.domain.CoffeeChatAlarm;

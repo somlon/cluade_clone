@@ -1,6 +1,7 @@
 package mju.capstone.ddingconnect.global.sse;
 
 import mju.capstone.ddingconnect.domain.member.domain.Member;
+import mju.capstone.ddingconnect.global.alarm.AlarmType;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 public interface SseService {

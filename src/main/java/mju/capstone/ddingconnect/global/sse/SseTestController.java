@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
+import mju.capstone.ddingconnect.global.alarm.AlarmType;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMember;
 import mju.capstone.ddingconnect.global.response.exception.handler.ApiResponse;
 import org.springframework.web.bind.annotation.PostMapping;

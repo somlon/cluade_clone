@@ -9,7 +9,7 @@ import mju.capstone.ddingconnect.domain.roadmap.dto.request.CreateRoadmapRequest
 import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapResponse;
 import mju.capstone.ddingconnect.global.response.exception.handler.RoadmapHandler;
 import mju.capstone.ddingconnect.global.sse.AlarmNotificationEvent;
-import mju.capstone.ddingconnect.global.sse.AlarmType;
+import mju.capstone.ddingconnect.global.alarm.AlarmType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
