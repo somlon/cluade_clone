@@ -328,42 +328,6 @@ _(아래 TODO A · B 는 마이페이지 수정 화면의 "수정 완료" 흐름
 
 **출처**: PR #22.
 
-### TODO E: 알람 발송을 SSE 푸시 중심으로 재구성 (기존 알람 코드 ↔ SSE 정합, global/sse)
-
-**확정 아키텍처**: 알람은 SSE 로 실시간 전송한다. 단 영속화와 SSE 는 경쟁이 아니라 **보완 관계** — 다음 구조로 확정:
-- **영속화(DB) = 원천 데이터(source of truth)** — `*AlarmRepository.save()` 로 알람 row 저장 유지. 이력·읽음 상태(`isRead`)·상세 조회·정렬의 근거.
-- **SSE = 실시간 전송 채널** — 발송 시 수신자에게 즉시 push, 반복 폴링 제거.
-- 알람 발생 시 **DB 저장 + SSE 전송 양쪽 모두 수행**. `GET /api/v1/alarms` 조회 API 는 유지 — 초기 로드·재접속·이력 회수용 (SSE 는 폴링을 없앨 뿐 조회 API 를 대체하지 않음).
-- 작업 범위 = 이 구조에 맞춰 기존 알람 발행 코드(6개 발송 지점)를 재구성. 단순 `send()` 한 줄 추가가 아니라 발행 지점을 SSE 에 정합하게 정리하는 것 (구체안은 미확정 참조).
-
-**배경 — 현재 알람 발송 방식 (pull 모델, SSE 와 전달 방향 반대)**:
-- 전용 알람 도메인 없음. 알람 엔티티 4종(`AnswerAlarm`/`JobAlarm`/`RoadmapAlarm`/`CoffeeChatAlarm`)은 각 도메인 패키지에 존재.
-- "발송" = 본체 `save()` 직후 같은 `@Transactional` 안에서 `*AlarmRepository.save()` 로 알람 row INSERT. 이벤트·AOP·push 전혀 없음.
-- 발송 지점 6곳:
-  - `AnswerServiceImpl.create` (`:57`) — `AnswerAlarm` 1건, 질문 작성자 (self-답변 시 생략)
-  - `JobPostServiceImpl.create` (`:83`) — `JobAlarm` N건, jobType 매칭 학생
-  - `JobPostServiceImpl.update` → `dispatchJobTypeChangeAlarms` (`:189`/`:199`) — `JobAlarm`, jobType 변경 영향 학생
-  - `RoadmapServiceImpl.create` (`:42`) — `RoadmapAlarm` 1건, 생성자 본인
-  - `CoffeeChatServiceImpl.create` (`:73`) — `CoffeeChatAlarm` 1건, 수신자
-  - `CoffeeChatServiceImpl.updateStatus` (`:127`/`:134`/`:143`) — ACCEPTED 2건 / REJECTED 1건
-- 수신자는 `GET /api/v1/alarms` 폴링으로 회수 (`AlarmServiceImpl.getMyAlarms` 가 4개 알람 테이블 집계).
-- `SseService.send(Member, AlarmType, String)` 은 구현돼 있으나 실 호출처가 `SseTestController` 수동 발송뿐 — 도메인 알람과 미연결.
-
-**제약 (절대 준수)**:
-- **기존 SSE 푸시 코드는 수정 금지** — `global/sse` 의 `SseController`/`SseService`/`SseServiceImpl`/`SseEmitterRepository`/`SseSwagger`/`SseTestController`. `SseService.send()` 시그니처·동작을 그대로 둔 채 알람 코드가 거기에 맞춘다.
-- **`AlarmType` enum 완전 동결** — frozen `SseService.send()` 시그니처·`SseServiceImpl`(`type.name()`)·`SseTestController`(`defaultValue="ANSWER"`) 가 의존하므로 동결 대상에 포함. 기존 4상수·이름·위치·타입은 물론 **상수 추가·필드/메서드 추가까지 포함해 TODO E 범위 내 일절 수정 금지.** 새 알람 타입이 필요하면 별도 TODO.
-- 그 외 기존 알람 코드(도메인 4곳 발행 로직, 알람 엔티티/레포, `global/sse` 의 `Alarm*` 조회 계층 — 단 `AlarmType` 제외)는 자유롭게 변경 가능.
-
-**확정 완료 (① · ②) — 본 PR 에서 TODO E 구현**: 두 항목 모두 확정(아래 `확정 결정 로그`). 코드 구현은 이 PR 에 포함되며, 머지 후 이 TODO E 항목을 삭제하고 규칙은 `### 통합 알람 (global/sse)` 도메인 섹션에 통합한다.
-
-**확정 결정 로그**:
-- `AlarmType` 변경 범위 → **완전 동결** (frozen SSE 코드 의존, 상수 추가 포함 일절 수정 금지).
-- 영속화 유지 여부 → **유지** — DB = source of truth. SSE 는 전송 수단이라 저장을 대체 못 함 (이력·읽음·상세는 저장 필요 기능). DB 영속화 + SSE 실시간 전송 병행이 효율적 정답이며, 영속화 제거는 효율 개선이 아니라 기능 상실.
-- ① 트랜잭션 경계 → **커밋 이후 발행** (`@TransactionalEventListener(phase = AFTER_COMMIT)`). 알람 row `*AlarmRepository.save()` 는 본체 `@Transactional` 안에 그대로 둬 본체와 원자적으로 커밋, SSE `send()` 만 커밋 성공 후 실행. 이유: `send()` 는 롤백 불가한 네트워크 전송이라 인라인 발행 시 커밋이 실패하면 DB 에 없는 알람을 클라이언트가 수신하는 "유령 알림"이 발생. 커밋 후 발행은 push 유실 시 `GET /api/v1/alarms` 재조회로 self-heal 되지만 그 반대(유령 알림)는 불가 — 실패 비대칭상 커밋 후 발행만 "DB = source of truth" 와 정합. 부수 효과: 네트워크 I/O 가 트랜잭션 밖으로 빠져 DB 커넥션 점유 시간 단축, 발행 지점이 `SseService` 와 디커플링.
-- ② 재구성 구체안 → **이벤트 발행 + 단일 AFTER_COMMIT 리스너**. 도메인 4개 `*ServiceImpl` 이 알람 row save 직후 `ApplicationEventPublisher.publishEvent(new AlarmNotificationEvent(receiver, type, content))` 발행, `global/sse/AlarmNotificationListener` 가 `@TransactionalEventListener(AFTER_COMMIT)` 로 수신해 `SseService.send()` 호출. 신규 파일은 `AlarmNotificationEvent`(record)·`AlarmNotificationListener` 2개뿐 — `global/sse` 의 기존 SSE 코드·`AlarmType` 0줄 수정. 디스패처/헬퍼 클래스 없이 발행 지점마다 `publishEvent` 인라인(불필요한 간접화 회피). 알람 content 리터럴은 각 서비스 `private static final` 상수로 추출(알람 row 빌더와 이벤트가 같은 상수 공유, 하드코딩 제거). `@Async` 미적용(커밋 후 동기 발행) — 비동기화는 별도 작업.
-
-**출처**: PR #22 (`ddd4004`) 가 SSE 인프라만 추가하고 도메인 연결을 누락. 본 대화에서 "SSE 1차 채널 + 기존 알람 코드 재구성, SSE 코드 동결" 로 방향 재확정 (구 TODO E 재작성).
-
 ### 공통 진행 정책
 
 | 항목 | 결정 |
