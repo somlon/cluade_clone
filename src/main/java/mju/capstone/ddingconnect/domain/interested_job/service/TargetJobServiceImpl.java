@@ -3,8 +3,7 @@ package mju.capstone.ddingconnect.domain.interested_job.service;
 import lombok.RequiredArgsConstructor;
 import mju.capstone.ddingconnect.domain.interested_job.domain.TargetJob;
 import mju.capstone.ddingconnect.domain.interested_job.domain.repository.TargetJobRepository;
-import mju.capstone.ddingconnect.domain.interested_job.dto.request.CreateTargetJobRequest;
-import mju.capstone.ddingconnect.domain.interested_job.dto.request.UpdateTargetJobRequest;
+import mju.capstone.ddingconnect.domain.interested_job.dto.request.ReplaceTargetJobRequest;
 import mju.capstone.ddingconnect.domain.interested_job.dto.response.TargetJobResponse;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.global.response.code.status.ErrorStatus;
@@ -20,19 +19,27 @@ public class TargetJobServiceImpl implements TargetJobService {
 
     private final TargetJobRepository targetJobRepository;
 
+    /**
+     * 본인 관심 직군 전체를 요청 리스트로 교체한다.
+     * deleteByMemberId 후 입력 리스트(중복 제거)만큼 save 하는 단일 트랜잭션.
+     */
     @Override
     @Transactional
-    public TargetJobResponse create(Member member, CreateTargetJobRequest request) {
-        if (targetJobRepository.existsByMemberIdAndInterestedJob(member.getId(), request.interestedJob())) {
-            throw new TargetJobHandler(ErrorStatus.TARGET_JOB_DUPLICATE);
+    public List<TargetJobResponse> replace(Member member, ReplaceTargetJobRequest request) {
+        if (request.categories() == null) {
+            throw new TargetJobHandler(ErrorStatus._BAD_REQUEST);
         }
 
-        TargetJob targetJob = TargetJob.builder()
-                .member(member)
-                .interestedJob(request.interestedJob())
-                .build();
+        targetJobRepository.deleteByMemberId(member.getId());
 
-        return TargetJobResponse.from(targetJobRepository.save(targetJob));
+        return request.categories().stream()
+                .distinct()
+                .map(category -> targetJobRepository.save(TargetJob.builder()
+                        .member(member)
+                        .interestedJob(category)
+                        .build()))
+                .map(TargetJobResponse::from)
+                .toList();
     }
 
     @Override
@@ -42,45 +49,5 @@ public class TargetJobServiceImpl implements TargetJobService {
                 .stream()
                 .map(TargetJobResponse::from)
                 .toList();
-    }
-
-    @Override
-    @Transactional
-    public TargetJobResponse update(Member member, Long targetJobId, UpdateTargetJobRequest request) {
-        TargetJob targetJob = targetJobRepository.findById(targetJobId)
-                .orElseThrow(() -> new TargetJobHandler(ErrorStatus.TARGET_JOB_NOT_FOUND));
-
-        // 본인 소유 확인
-        if (!targetJob.getMember().getId().equals(member.getId())) {
-            throw new TargetJobHandler(ErrorStatus.TARGET_JOB_UNAUTHORIZED);
-        }
-
-        boolean unchanged = targetJob.getInterestedJob() == request.interestedJob();
-        if (!unchanged && targetJobRepository.existsByMemberIdAndInterestedJob(member.getId(), request.interestedJob())) {
-            throw new TargetJobHandler(ErrorStatus.TARGET_JOB_DUPLICATE);
-        }
-
-        TargetJob updated = TargetJob.builder()
-                .id(targetJob.getId())
-                .member(targetJob.getMember())
-                .interestedJob(request.interestedJob())
-                .key2(targetJob.getKey2())
-                .build();
-
-        return TargetJobResponse.from(targetJobRepository.save(updated));
-    }
-
-    @Override
-    @Transactional
-    public void delete(Member member, Long targetJobId) {
-        TargetJob targetJob = targetJobRepository.findById(targetJobId)
-                .orElseThrow(() -> new TargetJobHandler(ErrorStatus.TARGET_JOB_NOT_FOUND));
-
-        // 본인 소유 확인
-        if (!targetJob.getMember().getId().equals(member.getId())) {
-            throw new TargetJobHandler(ErrorStatus.TARGET_JOB_UNAUTHORIZED);
-        }
-
-        targetJobRepository.delete(targetJob);
     }
 }

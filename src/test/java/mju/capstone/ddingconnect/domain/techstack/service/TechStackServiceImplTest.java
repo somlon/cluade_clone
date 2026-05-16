@@ -4,7 +4,7 @@ import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.domain.techstack.domain.TechStack;
 import mju.capstone.ddingconnect.domain.techstack.domain.TechStackName;
 import mju.capstone.ddingconnect.domain.techstack.domain.repository.TechStackRepository;
-import mju.capstone.ddingconnect.domain.techstack.dto.request.CreateTechStackRequest;
+import mju.capstone.ddingconnect.domain.techstack.dto.request.ReplaceTechStackRequest;
 import mju.capstone.ddingconnect.domain.techstack.dto.response.TechStackResponse;
 import mju.capstone.ddingconnect.global.response.exception.handler.TechStackHandler;
 import org.junit.jupiter.api.BeforeEach;
@@ -12,11 +12,11 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -32,88 +32,91 @@ class TechStackServiceImplTest {
 
     private Member owner;
     private Member other;
-    private TechStack stack;
 
     @BeforeEach
     void setUp() {
         owner = Member.builder().id(1L).email("o@mju.ac.kr").nickname("주인").build();
         other = Member.builder().id(2L).email("e@mju.ac.kr").nickname("타인").build();
-        stack = TechStack.builder().id(10L).member(owner).name(TechStackName.JAVA).build();
     }
 
     @Test
-    @DisplayName("add - 기술 스택을 정상 추가한다")
-    void add_정상추가() {
-        CreateTechStackRequest req = new CreateTechStackRequest(TechStackName.JAVA);
-        when(techStackRepository.existsByMemberIdAndName(owner.getId(), TechStackName.JAVA)).thenReturn(false);
-        when(techStackRepository.save(any(TechStack.class))).thenReturn(stack);
+    @DisplayName("replace - deleteByMemberId 호출 후 입력 개수만큼 save 한다")
+    void replace_정상교체() {
+        ReplaceTechStackRequest req = new ReplaceTechStackRequest(
+                List.of(TechStackName.JAVA, TechStackName.SPRING));
+        when(techStackRepository.save(any(TechStack.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
 
-        TechStackResponse response = techStackService.add(owner, req);
+        List<TechStackResponse> result = techStackService.replace(owner, req);
 
-        assertThat(response.id()).isEqualTo(10L);
-        assertThat(response.name()).isEqualTo(TechStackName.JAVA);
+        assertThat(result).hasSize(2);
+        assertThat(result).extracting(TechStackResponse::name)
+                .containsExactly(TechStackName.JAVA, TechStackName.SPRING);
+
+        InOrder inOrder = inOrder(techStackRepository);
+        inOrder.verify(techStackRepository).deleteByMemberId(owner.getId());
+        inOrder.verify(techStackRepository, times(2)).save(any(TechStack.class));
     }
 
     @Test
-    @DisplayName("add - 같은 회원이 같은 이름으로 중복 추가하면 TECH_STACK_DUPLICATE 예외")
-    void add_중복_예외() {
-        CreateTechStackRequest req = new CreateTechStackRequest(TechStackName.JAVA);
-        when(techStackRepository.existsByMemberIdAndName(owner.getId(), TechStackName.JAVA)).thenReturn(true);
+    @DisplayName("replace - 빈 리스트면 본인 row 전부 삭제하고 save 는 호출하지 않는다")
+    void replace_빈리스트() {
+        ReplaceTechStackRequest req = new ReplaceTechStackRequest(List.of());
 
-        assertThatThrownBy(() -> techStackService.add(owner, req))
-                .isInstanceOf(TechStackHandler.class);
+        List<TechStackResponse> result = techStackService.replace(owner, req);
+
+        assertThat(result).isEmpty();
+        verify(techStackRepository).deleteByMemberId(owner.getId());
         verify(techStackRepository, never()).save(any());
     }
 
     @Test
-    @DisplayName("add - 다른 회원이 같은 이름 등록하는 건 허용")
-    void add_다른회원_같은이름_허용() {
-        CreateTechStackRequest req = new CreateTechStackRequest(TechStackName.JAVA);
-        when(techStackRepository.existsByMemberIdAndName(other.getId(), TechStackName.JAVA)).thenReturn(false);
-        when(techStackRepository.save(any(TechStack.class))).thenReturn(stack);
+    @DisplayName("replace - 입력에 중복 enum 이 섞이면 dedup 후 1건만 저장한다")
+    void replace_중복_dedup() {
+        ReplaceTechStackRequest req = new ReplaceTechStackRequest(
+                List.of(TechStackName.JAVA, TechStackName.JAVA));
+        when(techStackRepository.save(any(TechStack.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
 
-        TechStackResponse response = techStackService.add(other, req);
+        List<TechStackResponse> result = techStackService.replace(owner, req);
 
-        assertThat(response.id()).isEqualTo(10L);
+        assertThat(result).hasSize(1);
+        verify(techStackRepository, times(1)).save(any(TechStack.class));
+    }
+
+    @Test
+    @DisplayName("replace - names 가 null 이면 _BAD_REQUEST 예외, 삭제·저장 미수행")
+    void replace_null_예외() {
+        ReplaceTechStackRequest req = new ReplaceTechStackRequest(null);
+
+        assertThatThrownBy(() -> techStackService.replace(owner, req))
+                .isInstanceOf(TechStackHandler.class);
+        verify(techStackRepository, never()).deleteByMemberId(any());
+        verify(techStackRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("replace - 다른 회원이 호출하면 그 회원 id 로만 deleteByMemberId 한다")
+    void replace_다른회원_격리() {
+        ReplaceTechStackRequest req = new ReplaceTechStackRequest(List.of(TechStackName.PYTHON));
+        when(techStackRepository.save(any(TechStack.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        techStackService.replace(other, req);
+
+        verify(techStackRepository).deleteByMemberId(other.getId());
+        verify(techStackRepository, never()).deleteByMemberId(owner.getId());
     }
 
     @Test
     @DisplayName("getMyTechStacks - 본인의 기술 스택 목록을 반환한다")
     void getMyTechStacks_정상반환() {
+        TechStack stack = TechStack.builder().id(10L).member(owner).name(TechStackName.JAVA).build();
         when(techStackRepository.findByMemberId(owner.getId())).thenReturn(List.of(stack));
 
         List<TechStackResponse> result = techStackService.getMyTechStacks(owner);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).name()).isEqualTo(TechStackName.JAVA);
-    }
-
-    @Test
-    @DisplayName("delete - 본인의 기술 스택을 정상 삭제한다")
-    void delete_정상삭제() {
-        when(techStackRepository.findById(10L)).thenReturn(Optional.of(stack));
-
-        techStackService.delete(owner, 10L);
-
-        verify(techStackRepository).delete(stack);
-    }
-
-    @Test
-    @DisplayName("delete - 본인이 아니면 UNAUTHORIZED 예외")
-    void delete_권한없음_예외() {
-        when(techStackRepository.findById(10L)).thenReturn(Optional.of(stack));
-
-        assertThatThrownBy(() -> techStackService.delete(other, 10L))
-                .isInstanceOf(TechStackHandler.class);
-        verify(techStackRepository, never()).delete(any());
-    }
-
-    @Test
-    @DisplayName("delete - 존재하지 않으면 NOT_FOUND 예외")
-    void delete_없음_예외() {
-        when(techStackRepository.findById(999L)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> techStackService.delete(owner, 999L))
-                .isInstanceOf(TechStackHandler.class);
     }
 }

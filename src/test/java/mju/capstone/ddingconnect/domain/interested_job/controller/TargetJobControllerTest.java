@@ -2,12 +2,10 @@ package mju.capstone.ddingconnect.domain.interested_job.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import mju.capstone.ddingconnect.domain.interested_job.domain.TargetJobCategory;
-import mju.capstone.ddingconnect.domain.interested_job.dto.request.CreateTargetJobRequest;
-import mju.capstone.ddingconnect.domain.interested_job.dto.request.UpdateTargetJobRequest;
+import mju.capstone.ddingconnect.domain.interested_job.dto.request.ReplaceTargetJobRequest;
 import mju.capstone.ddingconnect.domain.interested_job.dto.response.TargetJobResponse;
 import mju.capstone.ddingconnect.domain.interested_job.service.TargetJobService;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMemberArgumentResolver;
-import mju.capstone.ddingconnect.global.common.SuccessMessage;
 import mju.capstone.ddingconnect.global.config.WebMvcConfig;
 import mju.capstone.ddingconnect.support.WithMockLoginMember;
 import org.junit.jupiter.api.AfterEach;
@@ -25,9 +23,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -50,17 +46,23 @@ class TargetJobControllerTest {
     void tearDown() { WithMockLoginMember.clear(); }
 
     @Test
-    @DisplayName("POST /api/v1/target-jobs - 관심 직군 추가")
-    void 관심직군_추가() throws Exception {
-        CreateTargetJobRequest req = new CreateTargetJobRequest(TargetJobCategory.BACKEND);
-        given(targetJobService.create(any(), any()))
-                .willReturn(new TargetJobResponse(1L, TargetJobCategory.BACKEND, "k"));
+    @DisplayName("PATCH /api/v1/target-jobs - 관심 직군 일괄 교체")
+    void 관심직군_교체() throws Exception {
+        ReplaceTargetJobRequest req = new ReplaceTargetJobRequest(
+                List.of(TargetJobCategory.BACKEND, TargetJobCategory.FRONTEND));
+        given(targetJobService.replace(any(), any()))
+                .willReturn(List.of(
+                        new TargetJobResponse(1L, TargetJobCategory.BACKEND, null),
+                        new TargetJobResponse(2L, TargetJobCategory.FRONTEND, null)));
 
-        mockMvc.perform(post(BASE_URL)
+        mockMvc.perform(patch(BASE_URL)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result.id").value(1L));
+                .andExpect(jsonPath("$.result").isArray())
+                .andExpect(jsonPath("$.result.length()").value(2))
+                .andExpect(jsonPath("$.result[0].interestedJob").value("BACKEND"))
+                .andExpect(jsonPath("$.result[1].interestedJob").value("FRONTEND"));
     }
 
     @Test
@@ -71,28 +73,5 @@ class TargetJobControllerTest {
         mockMvc.perform(get(BASE_URL))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result").isArray());
-    }
-
-    @Test
-    @DisplayName("PATCH /api/v1/target-jobs/{id} - 관심 직군 수정")
-    void 관심직군_수정() throws Exception {
-        UpdateTargetJobRequest req = new UpdateTargetJobRequest(TargetJobCategory.FRONTEND);
-        given(targetJobService.update(any(), eq(1L), any()))
-                .willReturn(new TargetJobResponse(1L, TargetJobCategory.FRONTEND, "k"));
-
-        mockMvc.perform(patch(BASE_URL + "/1")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(req)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result.interestedJob").value("FRONTEND"));
-    }
-
-    @Test
-    @DisplayName("DELETE /api/v1/target-jobs/{id} - 관심 직군 삭제")
-    void 관심직군_삭제() throws Exception {
-        mockMvc.perform(delete(BASE_URL + "/1"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result").value(SuccessMessage.TARGET_JOB_DELETED));
-        verify(targetJobService).delete(any(), eq(1L));
     }
 }

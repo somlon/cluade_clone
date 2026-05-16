@@ -1,7 +1,6 @@
 package mju.capstone.ddingconnect.domain.techstack.domain.repository;
 
 import mju.capstone.ddingconnect.domain.techstack.domain.TechStack;
-import mju.capstone.ddingconnect.domain.techstack.domain.TechStackName;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -13,8 +12,6 @@ import java.util.List;
 public interface TechStackRepository extends JpaRepository<TechStack, Long> {
 
     List<TechStack> findByMemberId(Long memberId);
-
-    boolean existsByMemberIdAndName(Long memberId, TechStackName name);
 
     void deleteByMemberId(Long memberId);
 }

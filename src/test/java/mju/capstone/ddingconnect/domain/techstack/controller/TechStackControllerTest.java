@@ -2,11 +2,10 @@ package mju.capstone.ddingconnect.domain.techstack.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import mju.capstone.ddingconnect.domain.techstack.domain.TechStackName;
-import mju.capstone.ddingconnect.domain.techstack.dto.request.CreateTechStackRequest;
+import mju.capstone.ddingconnect.domain.techstack.dto.request.ReplaceTechStackRequest;
 import mju.capstone.ddingconnect.domain.techstack.dto.response.TechStackResponse;
 import mju.capstone.ddingconnect.domain.techstack.service.TechStackService;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMemberArgumentResolver;
-import mju.capstone.ddingconnect.global.common.SuccessMessage;
 import mju.capstone.ddingconnect.global.config.WebMvcConfig;
 import mju.capstone.ddingconnect.support.WithMockLoginMember;
 import org.junit.jupiter.api.AfterEach;
@@ -24,9 +23,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -49,17 +46,23 @@ class TechStackControllerTest {
     void tearDown() { WithMockLoginMember.clear(); }
 
     @Test
-    @DisplayName("POST /api/v1/tech-stacks - 기술 스택 추가")
-    void 기술스택_추가() throws Exception {
-        CreateTechStackRequest req = new CreateTechStackRequest(TechStackName.JAVA);
-        given(techStackService.add(any(), any()))
-                .willReturn(new TechStackResponse(1L, TechStackName.JAVA));
+    @DisplayName("PATCH /api/v1/tech-stacks - 기술 스택 일괄 교체")
+    void 기술스택_교체() throws Exception {
+        ReplaceTechStackRequest req = new ReplaceTechStackRequest(
+                List.of(TechStackName.JAVA, TechStackName.SPRING));
+        given(techStackService.replace(any(), any()))
+                .willReturn(List.of(
+                        new TechStackResponse(1L, TechStackName.JAVA),
+                        new TechStackResponse(2L, TechStackName.SPRING)));
 
-        mockMvc.perform(post(BASE_URL)
+        mockMvc.perform(patch(BASE_URL)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result.name").value("JAVA"));
+                .andExpect(jsonPath("$.result").isArray())
+                .andExpect(jsonPath("$.result.length()").value(2))
+                .andExpect(jsonPath("$.result[0].name").value("JAVA"))
+                .andExpect(jsonPath("$.result[1].name").value("SPRING"));
     }
 
     @Test
@@ -70,14 +73,5 @@ class TechStackControllerTest {
         mockMvc.perform(get(BASE_URL))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result").isArray());
-    }
-
-    @Test
-    @DisplayName("DELETE /api/v1/tech-stacks/{id} - 기술 스택 삭제")
-    void 기술스택_삭제() throws Exception {
-        mockMvc.perform(delete(BASE_URL + "/1"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result").value(SuccessMessage.TECH_STACK_DELETED));
-        verify(techStackService).delete(any(), eq(1L));
     }
 }
