@@ -3,6 +3,13 @@
 명지대 캡스톤 디자인 — 졸업생/재학생 커뮤니티 플랫폼 백엔드.
 원본: `ddingconnect-backend` PR #15 스냅샷 (Merge PR #1, 2026-05-11).
 
+## 작업 레포 범위 규칙 (필수)
+
+- **기본 작업 레포는 이 레포(`somlon/cluade_clone`) 단 하나다.** 사용자의 별도 지시가 없는 한 모든 코드 변경·브랜치 생성·커밋·푸시·PR 은 `cluade_clone` 에서만 수행한다.
+- **`mju-capstone-4/ddingconnect-backend` 레포는 사용자가 해당 요청에서 "ddingconnect-backend 에서 작업하라" 고 명시적으로 지시한 경우에만** 쓰기 작업(파일 수정·브랜치 생성·커밋·푸시·PR)을 한다. 명시적 지시가 없으면 `ddingconnect-backend` 에 어떤 변경도 가하지 않는다.
+- 비교·참고 목적의 **읽기 조회**(파일 내용 확인 등)는 `ddingconnect-backend` 에 대해서도 허용된다 — 금지 대상은 쓰기 작업뿐이다.
+- 작업 대상 레포가 불확실하면 `ddingconnect-backend` 를 건드리지 말고 사용자에게 먼저 확인한다.
+
 ## 기술 스택
 
 - Spring Boot 3.5.13 / Java 17 (toolchain)
@@ -344,4 +351,3 @@ _(아래 TODO A · B 는 마이페이지 수정 화면의 "수정 완료" 흐름
 - **공통 커밋 메시지 컨벤션**: `feat(<도메인>): ...` / `fix(<도메인>): ...` / `refactor(<도메인>): ...` / `docs(CLAUDE.md): ...` prefix. 마지막 줄에 항상 `https://claude.ai/code/session_...` 포함.
 - **Swagger 검증**: 가능하면 PR 본문 Test plan 에 Swagger 시나리오 체크박스 포함.
 - **테스트 실패 시**: `--no-verify` 등으로 우회 금지. 원인 분석 후 수정.
-
