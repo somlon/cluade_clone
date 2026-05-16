@@ -17,7 +17,7 @@ import mju.capstone.ddingconnect.domain.member.domain.repository.GraduateReposit
 import mju.capstone.ddingconnect.global.response.code.status.ErrorStatus;
 import mju.capstone.ddingconnect.global.response.exception.handler.JobPostHandler;
 import mju.capstone.ddingconnect.global.sse.AlarmNotificationEvent;
-import mju.capstone.ddingconnect.global.sse.AlarmType;
+import mju.capstone.ddingconnect.global.alarm.AlarmType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

@@ -14,7 +14,7 @@ import mju.capstone.ddingconnect.domain.member.domain.repository.MemberRepositor
 import mju.capstone.ddingconnect.global.response.exception.handler.CoffeeChatHandler;
 import mju.capstone.ddingconnect.global.response.exception.handler.MemberHandler;
 import mju.capstone.ddingconnect.global.sse.AlarmNotificationEvent;
-import mju.capstone.ddingconnect.global.sse.AlarmType;
+import mju.capstone.ddingconnect.global.alarm.AlarmType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

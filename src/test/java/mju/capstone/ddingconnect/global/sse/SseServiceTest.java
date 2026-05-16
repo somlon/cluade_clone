@@ -2,6 +2,7 @@ package mju.capstone.ddingconnect.global.sse;
 
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.domain.member.domain.MemberRole;
+import mju.capstone.ddingconnect.global.alarm.AlarmType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

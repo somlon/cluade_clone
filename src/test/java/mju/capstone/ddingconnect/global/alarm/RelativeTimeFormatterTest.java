@@ -1,4 +1,4 @@
-package mju.capstone.ddingconnect.global.sse;
+package mju.capstone.ddingconnect.global.alarm;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

@@ -19,7 +19,7 @@ import mju.capstone.ddingconnect.domain.qna.question.dto.response.LikeToggleResp
 import mju.capstone.ddingconnect.global.response.exception.handler.AnswerHandler;
 import mju.capstone.ddingconnect.global.response.exception.handler.QuestionHandler;
 import mju.capstone.ddingconnect.global.sse.AlarmNotificationEvent;
-import mju.capstone.ddingconnect.global.sse.AlarmType;
+import mju.capstone.ddingconnect.global.alarm.AlarmType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

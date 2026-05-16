@@ -1,4 +1,4 @@
-package mju.capstone.ddingconnect.global.sse;
+package mju.capstone.ddingconnect.global.alarm;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMemberArgumentResolver;
