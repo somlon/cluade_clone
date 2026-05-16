@@ -215,13 +215,13 @@ mju.capstone.ddingconnect
 >
 > 각 항목은 완료(머지) 후 이 섹션에서 삭제하고, 본문 도메인 섹션에 정식 규칙으로 통합 기록한다.
 
-### [최우선] 하드코딩 일괄 제거 — `main` 브랜치 전수 감사 (TODO H1~H7)
+### [최우선] 하드코딩 일괄 제거 — `main` 브랜치 전수 감사 (TODO H1~H5)
 
-> **2026-05-16 감사.** `main` 브랜치(`503275a`)의 전체 소스(Java 185개 + `build.gradle`/`application*.yml` 등 빌드·설정)를 전수 순회해 `## 작업 시 주의` 의 **"하드코딩 절대 금지"** 규칙 위반분을 수집했다. 총 약 88건(HIGH 17 · MEDIUM 53 · LOW 18). 아래 H1~H7 은 기존 TODO A~D 보다 **먼저** 수행한다.
+> **2026-05-16 감사.** `main` 브랜치(`503275a`)의 전체 소스(Java 185개 + `build.gradle`/`application*.yml` 등 빌드·설정)를 전수 순회해 `## 작업 시 주의` 의 **"하드코딩 절대 금지"** 규칙 위반분을 수집했다. 아래 H1~H5 는 기존 TODO A~D 보다 **먼저** 수행한다.
 >
 > **PR #22(`ddd4004` — DB 기초 설계 / SSE·메일·Redis 인프라)에서 추가·변경된 내용은 하드코딩이어도 감사 대상에서 제외**했다. 제외 파일(PR #22 신규): `global/auth` 의 `EmailService(Impl)`·`Code/VerifyCodeRequest`, `global/config` 의 `MailConfig`·`SseConfig`, `global/redis/RedisUtil`, `MailHandler`, `global/sse` 의 `Sse*`·`AlarmType`, `application-mail.yml`, `Sse*Test`. 제외 라인(PR #22 수정): `AuthController`/`AuthSwagger` 의 `sendCode`·`verifyCode`, `SignupRequest` 의 `@Pattern`, `ErrorStatus` 의 `MAIL_*`, `build.gradle` 의 mail·redis 의존성, `application.yml` 의 `mail` 프로파일.
 >
-> 경로는 현재 작업 브랜치 기준(알람 조회 계층은 PR #29 반영으로 `global/alarm/`), 라인 번호는 `main` 기준이다(알람 패키지 이동은 라인 수에 영향 없음). 권장 수행 순서: H1·H2·H3(HIGH) → H4·H5·H6(MEDIUM) → H7(테스트). 도메인별로 PR 을 쪼개도 되고 H1~H3 을 묶어도 된다 — 작업자 판단.
+> 경로는 현재 작업 브랜치 기준(알람 조회 계층은 PR #29 반영으로 `global/alarm/`), 라인 번호는 `main` 기준이다(알람 패키지 이동은 라인 수에 영향 없음). 권장 수행 순서: H1·H2(HIGH) → H3·H4(MEDIUM) → H5(테스트). 도메인별로 PR 을 쪼개도 되고 H1·H2 를 묶어도 된다 — 작업자 판단.
 
 #### TODO H1: 비즈니스 로직 매직 넘버 상수화 (HIGH)
 
@@ -236,15 +236,7 @@ mju.capstone.ddingconnect
 
 - `build.gradle:12` — 빌드 디렉터리를 `file("C:/gradle-builds/${rootProject.name}")` Windows 절대경로로 하드코딩. 리눅스/맥/CI 에서 빌드 불가(현재 `## 빌드 특이사항` 에 "우회 필요"로만 명시). → Gradle property 또는 환경변수 + 기본값(`build`)으로 외부화(예: `providers.gradleProperty("buildDir").orElse(...)`). 머지 후 `## 빌드 특이사항` 항목 갱신.
 
-#### TODO H3: 보안 관련 하드코딩 정리 (HIGH)
-
-- **보안 화이트리스트 이중 정의·불일치**: `global/config/SecurityConfig.java:27-32`(`SPRING_FILTER_WHITELIST`)와 `global/auth/filter/JwtAuthenticationFilter.java:31-37`(`JWT_WHITELIST`)가 경로 패턴 배열을 각각 하드코딩 — 게다가 **두 배열이 불일치**(필터 쪽만 `/swagger-ui.html` 보유). 단일 공유 상수(`SecurityPaths` 등)로 통합해 양쪽이 참조. `### 인증/JWT` 의 "화이트리스트 수정 시 두 곳 동기화" 주의는 애초에 단일 소스면 불필요. ※ `SecurityConfig` 쪽 배열은 현재 L40 이 주석 처리되어 미사용(dead) — 통합 시 정리.
-- `global/auth/filter/AuthenticationEntryPointImpl.java` — 401 응답 본문을 `HashMap` 으로 수기 조립하며 JSON 키(`"isSuccess"`/`"code"`/`"message"`, L31~)와 에러 코드 `"AUTH401"`(L32)을 리터럴로 박음 — `ErrorStatus` enum 정식 코드와 드리프트 위험. content-type `"application/json;charset=UTF-8"`(L26)도 `MediaType` 상수로. → 기존 `ApiResponse`/`ErrorStatus` 기구 재사용.
-- `global/auth/domain/CustomUserDetails.java:22` — Spring Security 권한 접두사 `"ROLE_"` 인라인 리터럴. → `ROLE_PREFIX` 상수.
-- `global/auth/annotation/LoginMemberArgumentResolver.java:29` — 익명 사용자 판별을 `"anonymousUser"` 문자열 비교로. → 상수화 또는 `AnonymousAuthenticationToken` 타입 검사로 대체.
-- `global/response/exception/ExceptionAdvice.java` — L58 `ErrorStatus.valueOf("_BAD_REQUEST")` 가 enum 멤버를 문자열 참조(같은 파일 L72~ 는 `ErrorStatus._BAD_REQUEST` 직접 참조 — 불일치, 리네임 시 런타임에만 터짐). L38 `new RuntimeException("ConstraintViolationException 추출 도중 에러 발생")` 인라인 메시지, L69 `errors.put("json", "요청 JSON 형식이 잘못되었습니다.")` 의 필드 키·메시지, L55 조인 구분자 `", "` 모두 리터럴. → enum 상수 직접 참조 + 메시지/키를 `ErrorStatus`·상수로.
-
-#### TODO H4: 컨트롤러 성공 메시지 상수화 (MEDIUM)
+#### TODO H3: 컨트롤러 성공 메시지 상수화 (MEDIUM)
 
 9개 컨트롤러가 사용자 노출 한국어 성공 메시지를 메서드 본문에 직접 박음 — 각각 대응 `*ControllerTest` 에 같은 문자열이 재기재되어 파일 간 중복. 실패 메시지는 `ErrorStatus` enum 으로 가는데 성공 메시지는 분산. `SuccessStatus` enum 또는 공용 메시지 상수로 추출하고 컨트롤러·테스트가 동일 심볼 참조:
 
@@ -259,24 +251,19 @@ mju.capstone.ddingconnect
 - `global/alarm/AlarmController.java:46` — `"알람이 읽음 처리되었습니다."`
 - (LOW, 함께) `global/auth/service/AuthServiceImpl.java:61` — `"회원가입을 성공적으로 완료하였습니다"` 단건 메시지.
 
-#### TODO H5: 중복 로직·반복 리터럴 정리 (MEDIUM)
+#### TODO H4: 중복 로직·반복 리터럴 정리 (MEDIUM)
 
 - `domain/job_post/service/JobPostServiceImpl.java:82, 182` — `TargetJobCategory.valueOf(jobType.name())` enum 브리지 관용구가 `create`/`update` 양쪽에 verbatim 중복. 두 enum 의 name 동일성 가정에 의존(어긋나면 런타임 `IllegalArgumentException`). → 단일 private 헬퍼 `toCategory(JobType)` 로 추출. `### 통합 알람` 의 enum 매칭 방침과 연결.
 - `global/jwt/JwtUtilImpl.java:64, 104` — `Jwts.parser()...parseSignedClaims(token)` 파싱 체인이 `isTokenValid`/`parseClaims` 에 중복. → private 헬퍼로 단일화.
 - `domain/member/dto/request/UpdateMemberRequest.java:12, 16` — github/linkedin URL 검증 정규식과 메시지가 `@Pattern` 에 인라인. → `GITHUB_URL_REGEX`/`LINKEDIN_URL_REGEX` `static final` 상수 + 메시지 상수(어노테이션 값은 컴파일 상수여야 하므로 `static final` 로 가능).
 - `global/response/code/status/ErrorStatus.java` — 응답 코드 문자열의 숫자 접미사(`...400`/`401`/`403`/`404`/`409`/`500`)가 인접 `HttpStatus` 인자와 의미 중복. 드리프트 실재: `INVALID_ROLE`(L30)은 `HttpStatus.BAD_REQUEST` 인데 코드가 `"AUTH404"`. → 숫자부를 `httpStatus.value()` 에서 파생하거나, 최소한 각 코드 접미사 == `HttpStatus` 를 검증하는 단위 테스트 추가.
 
-#### TODO H6: 설정값 외부화 (MEDIUM)
-
-- `src/main/resources/application-db.yml:18` — Redis `port: 6379` 가 평문 리터럴. 같은 블록의 `host` 는 `${REDIS_HOST:localhost}` 로 외부화되어 비대칭. → `port: ${REDIS_PORT:6379}` 로 통일.
-- `src/main/resources/application-jwt.yml:4` — 토큰 TTL `expiration: 3600` 이 환경별 오버라이드 불가. → `${JWT_ACCESS_EXPIRATION:3600}` 으로(선택).
-
-#### TODO H7: 테스트 코드 하드코딩 + `*TestConstants` 도입 (MEDIUM)
+#### TODO H5: 테스트 코드 하드코딩 + `*TestConstants` 도입 (MEDIUM)
 
 CLAUDE.md 규칙은 테스트 코드에도 동일 적용("공유 값은 `*TestConstants` 등 상수 클래스로 참조"). 현재 도메인 `*TestConstants` 클래스는 사실상 부재(PR #22 의 `SseTestConstants` 하나뿐이고 형제 테스트도 미사용). 도메인별 `*TestConstants` 도입 후 아래를 참조형으로 전환:
 
 - **엔드포인트 경로 중복**: `*ControllerTest` 들이 `/api/v1/...` 경로를 메서드마다 재기재(`CoffeeChatControllerTest`·`JobPostControllerTest` 각 5회, `MemberControllerTest`·`TargetJobControllerTest`·`RoadmapControllerTest` 각 4회, `TechStackControllerTest`·`AlarmControllerTest` 각 3회, `Question`/`AnswerControllerTest` 다수) — 프로덕션 `@RequestMapping` 과도 중복.
-- **메시지 재기재**: H4 의 성공 메시지들이 각 `*ControllerTest` 에 리터럴로 복제. 알람 메시지도 — `JobPostServiceImplTest`(`"관심 직무에 새로운 공고가 등록되었습니다."` 5회), `AnswerServiceImplTest:93`, `RoadmapServiceImplTest:70`, `CoffeeChatServiceImplTest`(전개된 PENDING 알람 메시지 2회) — 프로덕션 상수 미참조. → 프로덕션 상수를 공유 위치로 올려 테스트가 같은 심볼 참조.
+- **메시지 재기재**: H3 의 성공 메시지들이 각 `*ControllerTest` 에 리터럴로 복제. 알람 메시지도 — `JobPostServiceImplTest`(`"관심 직무에 새로운 공고가 등록되었습니다."` 5회), `AnswerServiceImplTest:93`, `RoadmapServiceImplTest:70`, `CoffeeChatServiceImplTest`(전개된 PENDING 알람 메시지 2회) — 프로덕션 상수 미참조. → 프로덕션 상수를 공유 위치로 올려 테스트가 같은 심볼 참조.
 - `support/WithMockLoginMember.java` — `id(1L)` 가 `loginAsStudent`/`loginAsGraduate` 양쪽에 동일(두 헬퍼 동시 사용 시 회원 ID 충돌), 이메일 도메인 `@mju.ac.kr`·학과 `"컴퓨터공학과"`·학번 패턴이 3개 메서드에 반복. → 구분된 `STUDENT_ID`/`GRADUATE_ID` + 공유 상수.
 - `domain/EntityIntegrationTest.java` — 이메일 `"grd@mju.ac.kr"` 를 서로 다른 회원에 3개 테스트가 재사용(유니크 제약 필드), 학과·비밀번호·`point` 리터럴 반복, `"═".repeat(60)` 의 `60` 이 2회(기존 `LINE` 상수 미재사용), 커피챗 알람 문자열 verbatim 중복 + 카카오 링크 드리프트(`open.kakao.com/test` vs `/o/test`).
 - `domain/member/service/MemberServiceImplTest.java` — H1 의 `MIN_GRADE`/`MAX_GRADE` 를 테스트도 참조(현재 `4`·`99`·`-1`·`0` 매직 넘버 재기재).
