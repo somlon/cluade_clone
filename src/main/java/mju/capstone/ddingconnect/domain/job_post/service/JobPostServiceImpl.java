@@ -64,7 +64,7 @@ public class JobPostServiceImpl implements JobPostService {
                 .fullLocation(request.fullLocation())
                 .deadline(request.deadline())
                 .detailUrl(request.detailUrl())
-                .preferredLanguage(request.preferredLanguage())
+                .preferredLanguages(request.preferredLanguages())
                 .companyName(request.companyName())
                 .build();
 
@@ -145,7 +145,7 @@ public class JobPostServiceImpl implements JobPostService {
                 .fullLocation(request.fullLocation() != null ? request.fullLocation() : postContents.getFullLocation())
                 .deadline(request.deadline() != null ? request.deadline() : postContents.getDeadline())
                 .detailUrl(request.detailUrl() != null ? request.detailUrl() : postContents.getDetailUrl())
-                .preferredLanguage(request.preferredLanguage() != null ? request.preferredLanguage() : postContents.getPreferredLanguage())
+                .preferredLanguages(request.preferredLanguages() != null ? request.preferredLanguages() : postContents.getPreferredLanguages())
                 .companyName(request.companyName() != null ? request.companyName() : postContents.getCompanyName())
                 .build();
 

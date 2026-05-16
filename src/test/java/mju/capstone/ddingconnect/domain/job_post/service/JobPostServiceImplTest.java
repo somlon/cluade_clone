@@ -69,13 +69,14 @@ class JobPostServiceImplTest {
         postContents = PostContents.builder().id(100L)
                 .companyName("네이버").region("성남")
                 .careerType(CareerType.NEW_GRADUATE).jobType(JobType.BACKEND)
-                .deadline(LocalDate.of(2026, 6, 30)).build();
+                .deadline(LocalDate.of(2026, 6, 30))
+                .preferredLanguages(List.of("Java")).build();
     }
 
     private CreateJobPostRequest createReq() {
         return new CreateJobPostRequest("img", "성남", CareerType.NEW_GRADUATE, JobType.BACKEND,
                 "한국", "성남시", "분당구", LocalDate.of(2026, 6, 30),
-                "https://test.com", "Java", "네이버");
+                "https://test.com", List.of("JavaScript", "React", "Node.js"), "네이버");
     }
 
     @Test
@@ -143,6 +144,28 @@ class JobPostServiceImplTest {
     }
 
     @Test
+    @DisplayName("create - 선호 언어 리스트가 엔티티·응답에 그대로 반영된다")
+    void create_선호언어_리스트_반영() {
+        PostContents withLanguages = PostContents.builder().id(101L)
+                .companyName("네이버").jobType(JobType.BACKEND)
+                .preferredLanguages(List.of("JavaScript", "React", "Node.js")).build();
+        when(postContentsRepository.save(any(PostContents.class))).thenReturn(withLanguages);
+        when(graduateRepository.findByMemberId(graduateMember.getId())).thenReturn(Optional.of(graduate));
+        when(targetJobRepository.findByInterestedJob(TargetJobCategory.BACKEND)).thenReturn(List.of());
+
+        JobPostResponse response = jobPostService.create(graduateMember, createReq());
+
+        // 빌더에 request.preferredLanguages() 가 전달됐는지 확인
+        ArgumentCaptor<PostContents> captor = ArgumentCaptor.forClass(PostContents.class);
+        verify(postContentsRepository).save(captor.capture());
+        assertThat(captor.getValue().getPreferredLanguages())
+                .containsExactly("JavaScript", "React", "Node.js");
+        // 응답 매핑(JobPostResponse.from) 확인
+        assertThat(response.preferredLanguages())
+                .containsExactly("JavaScript", "React", "Node.js");
+    }
+
+    @Test
     @DisplayName("getList - 모든 구직 공고 목록을 반환한다")
     void getList_정상반환() {
         when(postContentsRepository.findAll()).thenReturn(List.of(postContents));
@@ -186,6 +209,27 @@ class JobPostServiceImplTest {
         JobPostResponse response = jobPostService.update(graduateMember, 100L, request);
 
         assertThat(response.companyName()).isEqualTo("카카오");
+    }
+
+    @Test
+    @DisplayName("update - preferredLanguages 는 새 리스트면 교체, null 이면 기존값 유지")
+    void update_선호언어_교체_및_유지() {
+        GraduateJobPost gjp = GraduateJobPost.builder().graduate(graduate).postContents(postContents).build();
+        when(postContentsRepository.findById(100L)).thenReturn(Optional.of(postContents));
+        when(graduateJobPostRepository.findByPostContentsId(100L)).thenReturn(List.of(gjp));
+        when(postContentsRepository.save(any(PostContents.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // 새 리스트 전달 → 교체
+        UpdateJobPostRequest replaceReq = new UpdateJobPostRequest(null, null, null, null,
+                null, null, null, null, null, List.of("Go", "Rust"), null);
+        assertThat(jobPostService.update(graduateMember, 100L, replaceReq).preferredLanguages())
+                .containsExactly("Go", "Rust");
+
+        // null 전달 → 기존값(setUp: ["Java"]) 유지
+        UpdateJobPostRequest keepReq = new UpdateJobPostRequest(null, null, null, null,
+                null, null, null, null, null, null, "카카오");
+        assertThat(jobPostService.update(graduateMember, 100L, keepReq).preferredLanguages())
+                .containsExactly("Java");
     }
 
     @Test

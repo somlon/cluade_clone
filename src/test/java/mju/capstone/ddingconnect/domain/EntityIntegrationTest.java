@@ -456,7 +456,7 @@ class EntityIntegrationTest {
                 .region("서울특별시 성남구").country("경기도").location("성남시").fullLocation("분당구")
                 .careerType(CareerType.NEW_GRADUATE).jobType(JobType.BACKEND)
                 .deadline(LocalDate.of(2026, 6, 30))
-                .detailUrl("https://recruit.naver.com/1").preferredLanguage("Java").build());
+                .detailUrl("https://recruit.naver.com/1").preferredLanguages(List.of("Java")).build());
 
         PostContents found = postContentsRepository.findByJobType(JobType.BACKEND).get(0);
         printSaved("id", found.getId(), "companyName", found.getCompanyName(),

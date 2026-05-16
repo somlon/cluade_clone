@@ -56,10 +56,10 @@ class JobPostControllerTest {
     void 구직공고_등록() throws Exception {
         CreateJobPostRequest req = new CreateJobPostRequest("img", "성남", CareerType.NEW_GRADUATE,
                 JobType.BACKEND, "한국", "성남시", "분당구",
-                LocalDate.of(2026, 6, 30), "https://t.com", "Java", "네이버");
+                LocalDate.of(2026, 6, 30), "https://t.com", List.of("JavaScript", "React", "Node.js"), "네이버");
         JobPostResponse res = new JobPostResponse(1L, "네이버", "img", "성남",
                 CareerType.NEW_GRADUATE, JobType.BACKEND, "분당구",
-                LocalDate.of(2026, 6, 30), "https://t.com", "Java");
+                LocalDate.of(2026, 6, 30), "https://t.com", List.of("JavaScript", "React", "Node.js"));
         given(jobPostService.create(any(), any())).willReturn(res);
 
         mockMvc.perform(post(BASE_URL)
@@ -68,7 +68,10 @@ class JobPostControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.isSuccess").value(true))
                 .andExpect(jsonPath("$.result.id").value(1L))
-                .andExpect(jsonPath("$.result.companyName").value("네이버"));
+                .andExpect(jsonPath("$.result.companyName").value("네이버"))
+                .andExpect(jsonPath("$.result.preferredLanguages").isArray())
+                .andExpect(jsonPath("$.result.preferredLanguages.length()").value(3))
+                .andExpect(jsonPath("$.result.preferredLanguages[0]").value("JavaScript"));
     }
 
     @Test

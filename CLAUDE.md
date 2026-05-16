@@ -74,6 +74,7 @@ mju.capstone.ddingconnect
 - `PostContents` (공고 본문) + `GraduateJobPost` (졸업생-공고 매핑)으로 분리
 - 수정/삭제는 매핑 테이블 통해 소유자 확인
 - `PostContents.jobType` enum 은 공고의 직무 속성. 구직 정보 화면의 **직무 필터** 용도 (`JobType` enum)
+- **선호 언어는 다중 입력** (`PostContents.preferredLanguages`, `List<String>`): `@ElementCollection` + `@CollectionTable(name = "post_contents_preferred_language", joinColumns = post_contents_id)` 로 별도 컬렉션 테이블에 매핑 — 공고 카드에서 언어별 칩으로 표시. `Create/UpdateJobPostRequest`·`JobPostResponse` 모두 `List<String>`. `update` 는 null-coalescing(요청 리스트가 null 이면 기존값 유지). 컬렉션 테이블 행은 `PostContents` 삭제 시 Hibernate 가 자동 정리하므로 서비스 레벨 수동 캐스케이드 대상 아님.
 - **삭제 캐스케이드 (서비스 레벨)**: `PostContents` 삭제 시 자식 행을 **서비스 코드에서 명시적으로 먼저 삭제** (`JobPostServiceImpl.delete`). 순서 = `JobAlarm` → `GraduateJobPost` → `PostContents`. 이유: `GraduateJobPost.postContents`, `JobAlarm.postContents` 가 `nullable = false` FK 인데 JPA cascade 설정이 없어, 부모만 지우면 영속성 컨텍스트의 자식이 transient 부모를 참조하게 되어 `TransientObjectException` 으로 터짐. 알람도 함께 hard delete 정책 (사용자의 알람 이력은 손실되지만, 공고가 사라진 상태의 dangling 알람을 막음).
 - **update 시 jobType 변경 알람 디스패치 (`JobPostServiceImpl.update`)**: `oldJobType != newJobType` 일 때, 이 공고의 기존 `JobAlarm` 수신자 (= prev) 와 새 `jobType` 매칭 학생 (= curr) 의 차집합을 계산해 두 종류 알람을 발행. **Removed = prev − curr** → `"관심 직군에서 벗어난 공고로 변경되었습니다."`, **Added = curr − prev** → `"관심 직무에 새로운 공고가 등록되었습니다."`. 기존 알람 row 는 보존(삭제·갱신 X). 등록 졸업생 본인 항상 제외. prev 집합 정의는 이 공고(`postContentsId`)에 연결된 `JobAlarm` row 만 본다 (다른 알람 타입/다른 공고는 무관).
 
@@ -231,19 +232,6 @@ mju.capstone.ddingconnect
 **미확정 (사용자 결정 필요)**: signup 이 인증 통과를 확인하는 방식. 후보 — (a) `verifyCode` 성공 시 `verified:{email}` 플래그를 Redis 에 단기 저장 → `signup` 진입부에서 존재 확인 후 소비, (b) `verifyCode` 가 단기 인증 토큰을 발급해 `signup` 요청에 포함. 방식 확정 전까지 코드 변경 보류.
 
 **출처**: PR #22.
-
-### TODO G: 구직 공고 선호 언어 다중 입력(리스트화) (사용자 요청, job_post 도메인)
-
-**요청**: 구직 공고의 선호 언어(`preferredLanguage`)가 현재 단일 문자열이라 한 개만 입력 가능하다. 한 번에 여러 개의 선호 언어를 입력받을 수 있도록 **리스트 형태**(`List<String>`)로 변경한다.
-
-**디폴트 결정**:
-- `PostContents` (`PostContents.java:70-71`): `String preferredLanguage` → `List<String> preferredLanguages` 로 변경하고 `@ElementCollection` + `@CollectionTable(name = "post_contents_preferred_language", joinColumns = @JoinColumn(name = "post_contents_id"))` + `@Column(name = "preferred_language")` 적용. 클래스 상단 컬럼 매핑 javadoc 갱신.
-- `CreateJobPostRequest` / `UpdateJobPostRequest` / `JobPostResponse`: `String preferredLanguage` → `List<String> preferredLanguages`, `JobPostResponse.from` 매핑 수정.
-- `JobPostServiceImpl` `create`/`update`: 빌더 `.preferredLanguage(...)` → `.preferredLanguages(...)`. `update` 의 null-coalescing 패턴(`request.preferredLanguages() != null ? ... : postContents.getPreferredLanguages()`) 유지.
-- 삭제 캐스케이드: `@ElementCollection` 컬렉션 테이블은 `postContentsRepository.delete()` 시 Hibernate 가 자동 정리하므로 `JobPostServiceImpl.delete` 의 수동 캐스케이드에 추가 작업 불필요.
-- `JobPostSwagger` 예시·설명에 리스트 형태 반영. DB: `post_contents.preferred_language` 컬럼 제거 + `post_contents_preferred_language` 컬렉션 테이블 신규 생성 (개발 `ddl-auto` 반영). CLAUDE.md `### 구직 공고` 섹션 갱신.
-
-**출처**: 사용자 요청 (2026-05-16).
 
 ### 11개 작업자 노트 (TODO #1~#11 머지 완료 후 보존되는 일반 가이드)
 

@@ -23,7 +23,7 @@ public interface JobPostSwagger {
     @PostMapping
     ApiResponse<JobPostResponse> createJobPost(
             @Parameter(hidden = true) @LoginMember Member member,
-            @Parameter(description = "구직 공고 등록 정보 (회사명, 직무, 경력, 마감일, 위치 등)")
+            @Parameter(description = "구직 공고 등록 정보 (회사명, 직무, 경력, 마감일, 위치, 선호 언어 목록 등). preferredLanguages 는 문자열 배열로 여러 개 입력 가능")
             @RequestBody CreateJobPostRequest request);
 
 
