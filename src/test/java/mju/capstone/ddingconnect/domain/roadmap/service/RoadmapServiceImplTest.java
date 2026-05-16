@@ -8,14 +8,18 @@ import mju.capstone.ddingconnect.domain.roadmap.domain.repository.RoadmapReposit
 import mju.capstone.ddingconnect.domain.roadmap.dto.request.CreateRoadmapRequest;
 import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapResponse;
 import mju.capstone.ddingconnect.global.response.exception.handler.RoadmapHandler;
+import mju.capstone.ddingconnect.global.sse.AlarmNotificationEvent;
+import mju.capstone.ddingconnect.global.sse.AlarmType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.List;
 import java.util.Optional;
@@ -31,6 +35,7 @@ class RoadmapServiceImplTest {
 
     @Mock RoadmapRepository roadmapRepository;
     @Mock RoadmapAlarmRepository roadmapAlarmRepository;
+    @Mock ApplicationEventPublisher eventPublisher;
     @InjectMocks RoadmapServiceImpl roadmapService;
 
     private Member author;
@@ -55,6 +60,14 @@ class RoadmapServiceImplTest {
         assertThat(response.id()).isEqualTo(10L);
         assertThat(response.content()).contains("step");
         verify(roadmapAlarmRepository).save(any(RoadmapAlarm.class));
+
+        // 커밋 후 SSE 푸시용 이벤트가 로드맵 생성자 본인 대상으로 발행된다
+        ArgumentCaptor<AlarmNotificationEvent> eventCaptor = ArgumentCaptor.forClass(AlarmNotificationEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        AlarmNotificationEvent event = eventCaptor.getValue();
+        assertThat(event.receiver().getId()).isEqualTo(author.getId());
+        assertThat(event.type()).isEqualTo(AlarmType.ROADMAP);
+        assertThat(event.content()).isEqualTo("로드맵 생성이 완료되었습니다.");
     }
 
     @Test

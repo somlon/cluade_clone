@@ -19,6 +19,9 @@ import mju.capstone.ddingconnect.domain.qna.question.dto.response.LikeToggleResp
 import mju.capstone.ddingconnect.global.response.code.status.ErrorStatus;
 import mju.capstone.ddingconnect.global.response.exception.handler.AnswerHandler;
 import mju.capstone.ddingconnect.global.response.exception.handler.QuestionHandler;
+import mju.capstone.ddingconnect.global.sse.AlarmNotificationEvent;
+import mju.capstone.ddingconnect.global.sse.AlarmType;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,10 +31,13 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AnswerServiceImpl implements AnswerService {
 
+    private static final String ANSWER_ALARM_CONTENT = "내 질문에 새로운 답변이 달렸습니다.";
+
     private final AnswerRepository answerRepository;
     private final AnswerLikeRepository answerLikeRepository;
     private final AnswerAlarmRepository answerAlarmRepository;
     private final QuestionRepository questionRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional
@@ -56,9 +62,11 @@ public class AnswerServiceImpl implements AnswerService {
         if (!question.getMember().getId().equals(member.getId())) {
             answerAlarmRepository.save(AnswerAlarm.builder()
                     .answer(saved)
-                    .content("내 질문에 새로운 답변이 달렸습니다.")
+                    .content(ANSWER_ALARM_CONTENT)
                     .isRead(false)
                     .build());
+            eventPublisher.publishEvent(new AlarmNotificationEvent(
+                    question.getMember(), AlarmType.ANSWER, ANSWER_ALARM_CONTENT));
         }
 
         // 새 답변이라 likeCount=0, likedByMe=false 가 자명

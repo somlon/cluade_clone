@@ -13,6 +13,8 @@ import mju.capstone.ddingconnect.domain.member.domain.MemberRole;
 import mju.capstone.ddingconnect.domain.member.domain.repository.MemberRepository;
 import mju.capstone.ddingconnect.global.response.exception.handler.CoffeeChatHandler;
 import mju.capstone.ddingconnect.global.response.exception.handler.MemberHandler;
+import mju.capstone.ddingconnect.global.sse.AlarmNotificationEvent;
+import mju.capstone.ddingconnect.global.sse.AlarmType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,6 +24,7 @@ import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.List;
 import java.util.Optional;
@@ -38,6 +41,7 @@ class CoffeeChatServiceImplTest {
     @Mock CoffeeChatRepository coffeeChatRepository;
     @Mock CoffeeChatAlarmRepository coffeeChatAlarmRepository;
     @Mock MemberRepository memberRepository;
+    @Mock ApplicationEventPublisher eventPublisher;
     @InjectMocks CoffeeChatServiceImpl coffeeChatService;
 
     private Member studentRequester;
@@ -75,6 +79,14 @@ class CoffeeChatServiceImplTest {
         assertThat(alarm.getMember().getId()).isEqualTo(graduateReceiver.getId());
         assertThat(alarm.getIsRead()).isFalse();
         assertThat(alarm.getContent()).isEqualTo("응용소프트웨어학과 김후배님이 커피챗을 요청했어요!");
+
+        // 커밋 후 SSE 푸시용 이벤트가 수신자 대상으로 1건 발행된다 (content 동적)
+        ArgumentCaptor<AlarmNotificationEvent> eventCaptor = ArgumentCaptor.forClass(AlarmNotificationEvent.class);
+        verify(eventPublisher, times(1)).publishEvent(eventCaptor.capture());
+        AlarmNotificationEvent event = eventCaptor.getValue();
+        assertThat(event.receiver().getId()).isEqualTo(graduateReceiver.getId());
+        assertThat(event.type()).isEqualTo(AlarmType.COFFEE_CHAT);
+        assertThat(event.content()).isEqualTo("응용소프트웨어학과 김후배님이 커피챗을 요청했어요!");
     }
 
     @Test
@@ -205,6 +217,16 @@ class CoffeeChatServiceImplTest {
             assertThat(a.getContent()).contains(coffeeChat.getKakaoOpenChatLink());
             assertThat(a.getIsRead()).isFalse();
         });
+
+        // 커밋 후 SSE 푸시용 이벤트도 요청자/수신자 양쪽 대상으로 2건 발행된다
+        ArgumentCaptor<AlarmNotificationEvent> eventCaptor = ArgumentCaptor.forClass(AlarmNotificationEvent.class);
+        verify(eventPublisher, times(2)).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getAllValues()).extracting(e -> e.receiver().getId())
+                .containsExactlyInAnyOrder(studentRequester.getId(), graduateReceiver.getId());
+        assertThat(eventCaptor.getAllValues()).allSatisfy(e -> {
+            assertThat(e.type()).isEqualTo(AlarmType.COFFEE_CHAT);
+            assertThat(e.content()).contains("수락");
+        });
     }
 
     @Test
@@ -221,6 +243,14 @@ class CoffeeChatServiceImplTest {
         CoffeeChatAlarm alarm = captor.getValue();
         assertThat(alarm.getMember().getId()).isEqualTo(studentRequester.getId());
         assertThat(alarm.getContent()).contains("거절");
+
+        // 커밋 후 SSE 푸시용 이벤트가 요청자 대상으로 1건 발행된다
+        ArgumentCaptor<AlarmNotificationEvent> eventCaptor = ArgumentCaptor.forClass(AlarmNotificationEvent.class);
+        verify(eventPublisher, times(1)).publishEvent(eventCaptor.capture());
+        AlarmNotificationEvent event = eventCaptor.getValue();
+        assertThat(event.receiver().getId()).isEqualTo(studentRequester.getId());
+        assertThat(event.type()).isEqualTo(AlarmType.COFFEE_CHAT);
+        assertThat(event.content()).contains("거절");
     }
 
     @Test

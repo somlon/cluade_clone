@@ -13,6 +13,9 @@ import mju.capstone.ddingconnect.domain.roadmap.dto.request.CreateRoadmapRequest
 import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapResponse;
 import mju.capstone.ddingconnect.global.response.code.status.ErrorStatus;
 import mju.capstone.ddingconnect.global.response.exception.handler.RoadmapHandler;
+import mju.capstone.ddingconnect.global.sse.AlarmNotificationEvent;
+import mju.capstone.ddingconnect.global.sse.AlarmType;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,9 +26,11 @@ import java.util.List;
 public class RoadmapServiceImpl implements RoadmapService {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final String ROADMAP_ALARM_CONTENT = "로드맵 생성이 완료되었습니다.";
 
     private final RoadmapRepository roadmapRepository;
     private final RoadmapAlarmRepository roadmapAlarmRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional
@@ -41,9 +46,11 @@ public class RoadmapServiceImpl implements RoadmapService {
         // [알람 발행] 본인(생성자)에게 1건
         roadmapAlarmRepository.save(RoadmapAlarm.builder()
                 .roadmap(saved)
-                .content("로드맵 생성이 완료되었습니다.")
+                .content(ROADMAP_ALARM_CONTENT)
                 .isRead(false)
                 .build());
+        eventPublisher.publishEvent(new AlarmNotificationEvent(
+                member, AlarmType.ROADMAP, ROADMAP_ALARM_CONTENT));
 
         return RoadmapResponse.from(saved);
     }
