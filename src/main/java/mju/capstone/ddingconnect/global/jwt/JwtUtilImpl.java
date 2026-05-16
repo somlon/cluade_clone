@@ -41,8 +41,6 @@ public class JwtUtilImpl implements JwtUtil {
     private static final String USERID_CLAIM = "id";
     /** Authorization 헤더 토큰 접두사 */
     private static final String BEARER = "Bearer ";
-    /** 초 단위 만료 시간을 밀리초로 환산할 때 사용 */
-    private static final long MILLIS_PER_SECOND = 1000L;
 
     /** 서명 키 (한 번만 생성해서 재사용) */
     private SecretKey key;
@@ -56,7 +54,7 @@ public class JwtUtilImpl implements JwtUtil {
     @Override
     public String createAccessToken(Member member) {
         Date now = new Date();
-        Date expiry = new Date(now.getTime() + accessExpiration * MILLIS_PER_SECOND);
+        Date expiry = new Date(now.getTime() + accessExpiration * 1000);
 
         return Jwts.builder()
                 .subject(ACCESS_TOKEN_SUBJECT)
@@ -82,7 +80,10 @@ public class JwtUtilImpl implements JwtUtil {
     @Override
     public boolean isTokenValid(String token) {
         try {
-            parseSignedClaims(token);
+            Jwts.parser()
+                    .verifyWith(key)
+                    .build()
+                    .parseSignedClaims(token);
             return true;
         } catch (ExpiredJwtException e) {
             throw new JwtHandler("만료된 JWT 토큰입니다.");
@@ -99,20 +100,16 @@ public class JwtUtilImpl implements JwtUtil {
 
     private Claims parseClaims(String token) {
         try {
-            return parseSignedClaims(token).getPayload();
+            Jws<Claims> jws = Jwts.parser()
+                    .verifyWith(key)
+                    .build()
+                    .parseSignedClaims(token);
+            return jws.getPayload();
         } catch (ExpiredJwtException e) {
             // 만료된 토큰이라도 클레임은 꺼낼 수 있음 (재발급 로직 등에서 유용)
             return e.getClaims();
         } catch (JwtException | IllegalArgumentException e) {
             throw new JwtHandler("유효하지 않은 Token입니다.");
         }
-    }
-
-    /** 서명 검증 후 파싱된 JWS 반환. 예외 처리는 호출자가 담당한다. */
-    private Jws<Claims> parseSignedClaims(String token) {
-        return Jwts.parser()
-                .verifyWith(key)
-                .build()
-                .parseSignedClaims(token);
     }
 }

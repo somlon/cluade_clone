@@ -146,7 +146,7 @@ mju.capstone.ddingconnect
 - **권한 검증**: 작성자 ID 비교 후 도메인별 `*Handler` 예외 throw
 - **응답 포맷**: 모든 컨트롤러는 `ApiResponse<T>` 래퍼 사용
 - **성공 메시지**: 삭제·탈퇴 등 컨트롤러가 `ApiResponse` result 로 반환하는 사용자 노출 성공 메시지는 `global/common/SuccessMessage` 상수로 관리 (컨트롤러·`*ControllerTest` 가 동일 심볼 참조)
-- **에러 코드**: `ErrorStatus` enum에 모두 정의. 코드 문자열은 `도메인 접두사 + httpStatus.value()` 로 파생 (`getCode()`, 예: `AUTH` + 400 → `"AUTH400"`) — 숫자 접미사를 직접 박지 않아 코드/HTTP 상태 드리프트가 차단된다
+- **에러 코드**: `ErrorStatus` enum에 모두 정의 (`AUTH401`, `POST403`, `ALARM404` …)
 - **감사**: `BaseEntity` 상속 → `createdAt`/`updatedAt` 자동 (`@JpaAuditingConfig`)
 - **Swagger 어노테이션**: 컨트롤러는 `*Swagger` 인터페이스 implements 패턴으로 분리
 
