@@ -100,6 +100,7 @@ mju.capstone.ddingconnect
   - REJECTED: 요청자에게만 1건 (content 정적)
 - 삭제(취소)는 요청자만 가능
 - **삭제 캐스케이드 (서비스 레벨)**: `CoffeeChatServiceImpl.delete` 에서 `CoffeeChatAlarm` 먼저 `deleteByCoffeeChatId` 로 정리 → `CoffeeChat` 삭제. `CoffeeChatAlarm.coffeeChat` 가 `nullable = false` FK 라 정리 없이는 MySQL FK constraint 위반.
+- **(현황) 카카오 오픈채팅 링크 생성 API 미구현**: 카카오 오픈채팅 링크를 발급/생성하는 API 는 아직 없다 (카카오 연동 미구현). 현재는 `CreateCoffeeChatRequest.kakaoOpenChatLink` (`String`, 검증 없음) 로 요청자가 링크를 직접 전달하면 `CoffeeChat.kakaoOpenChatLink` (`varchar(255)`) 에 그대로 저장만 한다. 추후 다른 방식으로 링크를 연결할 예정이며 연동 방식은 미정 — 커피챗 매칭 플로우의 신청 단계(`커피챗 신청하기`)에서 링크 입력/획득 경로를 함께 확정해야 한다.
 
 ### 통합 알람 (global/alarm + global/sse)
 - **패키지**: 통합 알람 조회 계층(`AlarmController` / `AlarmSwagger` / `AlarmService(Impl)` / `AlarmResponse` / `RelativeTimeFormatter`)과 알람 종류 enum(`AlarmType`)은 `global/alarm/` 에 둔다. SSE 실시간 푸시 채널(`SseController` / `SseService(Impl)` / `SseEmitterRepository` / `SseTestController` / `SseSwagger`)과 도메인 알람의 커밋 후 SSE 발행 브리지(`AlarmNotificationEvent` / `AlarmNotificationListener`)는 `global/sse/` 에 둔다. 알람 조회는 SSE 와 무관한 순수 REST/JPA 기능이라 `sse` 하위가 아닌 형제 패키지로 분리했다. 의존 방향은 `global/sse → global/alarm` 단방향(`SseService` / `AlarmNotificationEvent` 가 `AlarmType` 참조) — `global/alarm` 은 `global/sse` 를 참조하지 않아 패키지 순환이 없다. 별도 `domain/alarm/` 도메인은 없음 — 알람은 자체 엔티티 없이 4개 도메인의 알람 엔티티를 집계하는 cross-cutting 관심사라 `global` 에 둔다. 알람 엔티티(`AnswerAlarm` / `JobAlarm` / `RoadmapAlarm` / `CoffeeChatAlarm`) 자체는 각 도메인 패키지에 그대로 존속.
@@ -232,6 +233,105 @@ mju.capstone.ddingconnect
 **미확정 (사용자 결정 필요)**: signup 이 인증 통과를 확인하는 방식. 후보 — (a) `verifyCode` 성공 시 `verified:{email}` 플래그를 Redis 에 단기 저장 → `signup` 진입부에서 존재 확인 후 소비, (b) `verifyCode` 가 단기 인증 토큰을 발급해 `signup` 요청에 포함. 방식 확정 전까지 코드 변경 보류.
 
 **출처**: PR #22.
+
+### TODO H: 커피챗 매칭 플로우 구현 (coffeechat 도메인)
+
+> 대형 단독 PR. 다음 세션에서 "TODO H 작업" 지시로 일괄 구현 예정. 아래 결정은 모두 확정 — 다시 묻지 말 것.
+
+**목표**: Figma `0409.png` 커피챗 매칭 화면 흐름의 백엔드 구현. 화면 1(정보 입력) → 2(매칭 결과 리스트) → 3(매칭 상대 상세) → 4(커피챗 신청, 기존 재사용), 그리고 "나의 활동 › 커피챗" 이력.
+
+**확정 결정**:
+1. 알고리즘 연동 = 백엔드 오케스트레이션. 백엔드가 폼을 받아 유사도 알고리즘(타 파트)을 호출. 알고리즘은 **자체 DB 조회**로 후보를 찾고 **회원 ID 리스트만** 반환(점수 없음 → `CoffeeChat.jobScore/ability/goal`은 계속 미사용 컬럼).
+2. 입학연도 = 백엔드가 `Member.studentNumber`의 3·4번째 자리(0-index 2~3)를 잘라 파생. 별도 컬럼·필드 없음. 졸업생 카드/상세에만 사용.
+3. 직군 = `TargetJob`(`TargetJobCategory`). 회원당 1:N → 응답은 **전체 리스트**, 0개면 빈 리스트. `Graduate`/`Student`와 직접 FK 없음 → `member_id`로 조회(`TargetJobRepository.findByMemberId`).
+4. 매칭 입력값·결과는 **저장하지 않음**(무상태 pass-through). 매칭 이력 엔티티 없음. → 상세는 `memberId`만으로 조회하며 "내 매칭 결과였는지"는 검증하지 않음.
+5. 지역(region)은 **항상 null**. DTO에 `region` 필드는 두되 값은 null 고정(소스 추후 결정).
+6. "나의 활동 › 커피챗" = 로그인 회원이 **신청자(requester)이고 status=ACCEPTED**인 커피챗만.
+7. 중복 신청 방지 = 아래 [중복 신청 방지] 규칙.
+
+**엔드포인트** (신규 3 + 기존 1 재사용):
+
+| 메서드 | 경로 | 화면 | 비고 |
+|---|---|---|---|
+| `POST` | `/api/v1/coffeechat/matching` | 1→2 | 폼 수신 → 알고리즘 호출 → top3 카드 |
+| `GET` | `/api/v1/coffeechat/matching/{memberId}` | 3 | 매칭 상대 상세 |
+| `GET` | `/api/v1/coffeechat/my-activity` | 나의 활동 | requester=본인 & status=ACCEPTED |
+| `POST` | `/api/v1/coffeechat` | 4 | 기존 `CoffeeChatController` 재사용. 단 `create`에 중복방지 추가 |
+
+신규 컨트롤러 `CoffeeChatMatchingController`(base `/api/v1/coffeechat`) — 기존 `CoffeeChatController`와 메서드 경로가 달라 충돌 없음. 신청(4번)의 카카오 오픈채팅 링크는 본문 커피챗 섹션 "(현황) 카카오 오픈채팅 링크 생성 API 미구현" 참고 — 별도 연동 사안이라 본 TODO 범위 밖.
+
+**신규 파일** (`domain/coffeechat/`):
+- `controller/CoffeeChatMatchingController`, `controller/CoffeeChatMatchingSwagger`
+- `service/CoffeeChatMatchingService`, `service/CoffeeChatMatchingServiceImpl`
+- `service/CandidateProfileAssembler` — `memberId` → 카드/상세 DTO 조립(2·3·나의활동 공통 로직)
+- `service/MatchingAlgorithmClient`(interface), `service/MatchingAlgorithmClientImpl`(`RestClient` 구현)
+- `dto/request/MatchingRequest` — 폼 6필드
+- `dto/response/MatchedCandidateResponse`(카드), `dto/response/MatchedCandidateDetailResponse`(상세)
+
+**수정 파일**:
+- `CoffeeChatRepository` — 메서드 추가:
+  - `findByRequesterIdAndStatus(Long, CoffeeChatStatus)` — 나의 활동
+  - `existsByRequesterIdAndReceiverIdAndStatusIn(Long, Long, Collection<CoffeeChatStatus>)` — 중복방지(b)
+  - `existsByRequesterIdAndReceiverIdAndCreatedAtAfter(Long, Long, LocalDateTime)` — 쿨다운
+- `CoffeeChatServiceImpl.create` — self·role 검증 직후 중복방지 검증 추가
+- `ErrorStatus` — 신규 코드 3개: `COFFEE_CHAT_ALREADY_REQUESTED`(400), `COFFEE_CHAT_REQUEST_TOO_SOON`(429), `MATCHING_ALGORITHM_FAILED`(502). 예외는 기존 `CoffeeChatHandler` 재사용
+- `application.yml` — 알고리즘 base URL 설정 키(예: `matching.algorithm.base-url`). 하드코딩 금지
+- `CLAUDE.md` — 구현 머지 시: 본 TODO 삭제, 커피챗 섹션에 정식 규칙 통합, `패키지 구조`·`화면↔도메인 매핑` 표 갱신
+
+**DTO 필드** (한 record에 역할별 nullable 필드, `MemberResponse` 패턴):
+
+| 필드 | 졸업생 | 재학생 | 노출 |
+|---|---|---|---|
+| memberId · role · 닉네임 · 학과 · 직군(List) · 기술스택(List) | ✓ | ✓ | 카드·상세 |
+| 입학연도(`studentNumber` 파생) | ✓ | null | 카드·상세 |
+| 학년(`Student.grade`) | null | ✓ | 카드·상세 |
+| 회사 · 경력(`Graduate.company`/`careerYear`) | ✓ | null | 카드·상세 |
+| region | null | null | 카드·상세 |
+| 포트폴리오 · githubLink · linkedinLink | ✓ | ✓ | 상세만 |
+| 명함(`Graduate.businessCardImage`) | ✓ | null | 상세만 |
+| 공고 리스트(`JobPostResponse` 재사용) | ✓ | null | 상세만 |
+
+- `MatchedCandidateResponse`(카드) = "상세만" 행 제외, `MatchedCandidateDetailResponse`(상세) = 전체.
+- 상세 응답에 "나와의 커피챗 상태"는 **넣지 않음** — 수락/거절 결과는 기존 커피챗 알람으로 전달됨.
+
+**`CandidateProfileAssembler` 로직** (`memberId` 입력):
+- `MemberRepository.findById` → 닉네임 · 학과 · `studentNumber` · `portfolio` · `githubLink` · `linkedinLink` · `role`
+- role=GRADUATE → `GraduateRepository.findByMemberId` → `company` · `careerYear` · `businessCardImage`
+- role=STUDENT → `StudentRepository.findByMemberId` → `grade`
+- `TechStackRepository.findByMemberId` → 기술스택 리스트
+- `TargetJobRepository.findByMemberId` → 직군 리스트
+- 상세 & GRADUATE → `GraduateJobPostRepository.findByGraduateId` → 공고 리스트
+- `region`=null, 입학연도는 `studentNumber` 파싱
+- 카드용/상세용 빌더 메서드 분리. 타 도메인 repo 주입은 CLAUDE.md QnA 선례상 허용
+
+**매칭 흐름** (`POST /coffeechat/matching`):
+1. `@LoginMember`로 신청자 확보, `MatchingRequest`(폼 6필드) 수신
+2. `MatchingAlgorithmClient.topMatches(form, requesterId)` → top3 회원 ID 리스트
+3. 각 ID를 `CandidateProfileAssembler`로 카드 조립 → `List<MatchedCandidateResponse>` 반환
+
+**`MatchingRequest` 6필드** (타입은 알고리즘 스키마 확정 시 조정):
+`grade`(Integer 현재 학년) · `gpa`(String 학점) · `major`(String 전공) · `interestedJob`(String 관심 직무) · `capability`(String 보유 역량) · `targetCompany`(String 목표 기업)
+
+**알고리즘 클라이언트**:
+- `MatchingAlgorithmClient` 인터페이스: `List<Long> topMatches(MatchingRequest form, Long requesterId)`
+- 구현 = `RestClient`(`spring-boot-starter-web`에 이미 포함 — 신규 의존성 불필요). base URL은 설정값
+- 요청 = 폼 6필드 + 신청자 id. 응답 = 회원 ID 리스트
+- **타 파트 협의 미확정**: 알고리즘 엔드포인트 URL, 요청/응답 JSON 스키마. → 구현 시 인터페이스 뒤로 추상화. 스키마 확정 전에는 호출 골격 + 명확한 TODO 주석(또는 프로파일 가드 스텁), 확정 후 매핑만 채움
+- 호출 실패/타임아웃 → `MATCHING_ALGORITHM_FAILED`
+
+**[중복 신청 방지]** (`CoffeeChatServiceImpl.create`, self·role 검증 직후):
+- **규칙 (b)**: requester→receiver로 status가 `PENDING` 또는 `ACCEPTED`인 `CoffeeChat`이 있으면 → `COFFEE_CHAT_ALREADY_REQUESTED`. `REJECTED`만 있으면 통과(재신청 허용)
+- **쿨다운**: (b)를 통과했더라도 requester→receiver의 가장 최근 `CoffeeChat.createdAt`이 **24시간 이내**면 → `COFFEE_CHAT_REQUEST_TOO_SOON`. (실질적으로 "거절 직후 빠른 재신청"을 차단 — 빠르게·반복 신청 방지)
+- 쿨다운 기간은 `private static final Duration RE_REQUEST_COOLDOWN = Duration.ofHours(24)` 상수로 정의(단일 상수로 조정, 하드코딩 금지)
+
+**테스트**:
+- `CoffeeChatMatchingControllerTest`, `CoffeeChatMatchingServiceImplTest` — 기존 `*ControllerTest`/`*ServiceImplTest` 패턴 + `WithMockLoginMember`. `MatchingAlgorithmClient`는 mock
+- `CoffeeChatServiceImplTest`에 중복방지 (b)·쿨다운 케이스 추가
+- 공유 상수는 `*TestConstants`로 참조(하드코딩 금지)
+
+**미결정 (타 파트 협의 — 구현 차단 아님)**: 알고리즘 엔드포인트 URL·요청/응답 JSON 스키마. `MatchingAlgorithmClient` 추상화로 우회하고 확정 후 구현체만 연결.
+
+**출처**: 커피챗 매칭 플로우 설계 세션 (Figma `0409.png` 화면 1~3 + "나의 활동" 화면 기준).
 
 ### 11개 작업자 노트 (TODO #1~#11 머지 완료 후 보존되는 일반 가이드)
 
