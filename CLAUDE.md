@@ -236,7 +236,7 @@ mju.capstone.ddingconnect
 
 ### TODO H: 커피챗 매칭 플로우 구현 (coffeechat 도메인)
 
-> 대형 작업 — PR #38 에서 10단계로 분할해 구현 중. **1~3단계 main 머지 완료, 4단계 PR #42 작업 완료 — 다음 작업은 5단계부터.** "TODO H 작업" 지시 시 아래 [진행 현황] 의 미완료 단계를 5단계부터 순서대로 이어 수행한다. 아래 결정은 모두 확정 — 다시 묻지 말 것.
+> 대형 작업 — PR #38 에서 10단계로 분할해 구현 중. **1~3단계 main 머지 완료, 4·5단계 작업 완료 — 다음 작업은 6단계부터.** "TODO H 작업" 지시 시 아래 [진행 현황] 의 미완료 단계를 6단계부터 순서대로 이어 수행한다. 아래 결정은 모두 확정 — 다시 묻지 말 것.
 
 **[진행 현황]** — PR #38 이 TODO H 를 10단계로 분할. 1~3단계 main 머지 완료 (1~2단계 PR #38, 3단계 PR #40).
 
@@ -246,8 +246,8 @@ mju.capstone.ddingconnect
 | 2 | `CoffeeChatRepository` 파생 쿼리 3개 (`findByRequesterIdAndStatus` · `existsByRequesterIdAndReceiverIdAndStatusIn` · `existsByRequesterIdAndReceiverIdAndCreatedAtAfter`) | ✅ 완료 (PR #38) |
 | 3 | DTO 3개 — `MatchingRequest`(폼 6필드) · `MatchedCandidateResponse`(카드) · `MatchedCandidateDetailResponse`(상세) | ✅ 완료 (PR #40) |
 | 4 | `MatchingAlgorithmClient` 인터페이스 + `MatchingAlgorithmClientImpl`(`RestClient` 구현) | ✅ 완료 (PR #42) |
-| 5 | `CandidateProfileAssembler` — `memberId` → 카드/상세 DTO 조립 | ⬜ **다음 작업** |
-| 6 | `CoffeeChatMatchingService` + `CoffeeChatMatchingServiceImpl` — 매칭 흐름 오케스트레이션 | ⬜ 예정 |
+| 5 | `CandidateProfileAssembler` — `memberId` → 카드/상세 DTO 조립 | ✅ 완료 (브랜치 `claude/todo-h-step-5-94LrI`) |
+| 6 | `CoffeeChatMatchingService` + `CoffeeChatMatchingServiceImpl` — 매칭 흐름 오케스트레이션 | ⬜ **다음 작업** |
 | 7 | `CoffeeChatMatchingController` + `CoffeeChatMatchingSwagger` — 신규 엔드포인트 3개 | ⬜ 예정 |
 | 8 | `CoffeeChatServiceImpl.create` 중복 신청 방지 (규칙 b + 24h 쿨다운) | ⬜ 예정 |
 | 9 | 테스트 — `CoffeeChatMatchingControllerTest`/`CoffeeChatMatchingServiceImplTest` 신규 + `CoffeeChatServiceImplTest` 중복방지 보강 | ⬜ 예정 |
