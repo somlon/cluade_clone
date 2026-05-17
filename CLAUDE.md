@@ -236,7 +236,24 @@ mju.capstone.ddingconnect
 
 ### TODO H: 커피챗 매칭 플로우 구현 (coffeechat 도메인)
 
-> 대형 단독 PR. 다음 세션에서 "TODO H 작업" 지시로 일괄 구현 예정. 아래 결정은 모두 확정 — 다시 묻지 말 것.
+> 대형 작업 — PR #38 에서 10단계로 분할해 구현 중. **1~2단계 완료(main 머지 확인), 다음 작업은 3단계(DTO)부터.** "TODO H 작업" 지시 시 아래 [진행 현황] 의 미완료 단계를 3단계부터 순서대로 이어 수행한다. 아래 결정은 모두 확정 — 다시 묻지 말 것.
+
+**[진행 현황]** — PR #38 이 TODO H 를 10단계로 분할, 1~2단계 머지 완료. main(`7e60de7`) 코드 대조로 1~2단계 산출물 존재를 재확인함.
+
+| 단계 | 내용 | 상태 |
+|---|---|---|
+| 1 | `ErrorStatus` 코드 3개(`COFFEE_CHAT_ALREADY_REQUESTED` 400 · `COFFEE_CHAT_REQUEST_TOO_SOON` 429 · `MATCHING_ALGORITHM_FAILED` 502) + `application.yml` `matching.algorithm.base-url` 설정 키 | ✅ 완료 (PR #38) |
+| 2 | `CoffeeChatRepository` 파생 쿼리 3개 (`findByRequesterIdAndStatus` · `existsByRequesterIdAndReceiverIdAndStatusIn` · `existsByRequesterIdAndReceiverIdAndCreatedAtAfter`) | ✅ 완료 (PR #38) |
+| 3 | DTO 3개 — `MatchingRequest`(폼 6필드) · `MatchedCandidateResponse`(카드) · `MatchedCandidateDetailResponse`(상세) | ⬜ **다음 작업** |
+| 4 | `MatchingAlgorithmClient` 인터페이스 + `MatchingAlgorithmClientImpl`(`RestClient` 구현) | ⬜ 예정 |
+| 5 | `CandidateProfileAssembler` — `memberId` → 카드/상세 DTO 조립 | ⬜ 예정 |
+| 6 | `CoffeeChatMatchingService` + `CoffeeChatMatchingServiceImpl` — 매칭 흐름 오케스트레이션 | ⬜ 예정 |
+| 7 | `CoffeeChatMatchingController` + `CoffeeChatMatchingSwagger` — 신규 엔드포인트 3개 | ⬜ 예정 |
+| 8 | `CoffeeChatServiceImpl.create` 중복 신청 방지 (규칙 b + 24h 쿨다운) | ⬜ 예정 |
+| 9 | 테스트 — `CoffeeChatMatchingControllerTest`/`CoffeeChatMatchingServiceImplTest` 신규 + `CoffeeChatServiceImplTest` 중복방지 보강 | ⬜ 예정 |
+| 10 | `CLAUDE.md` 통합 — 본 TODO 삭제, 커피챗 섹션에 정식 규칙 통합, `패키지 구조`·`화면↔도메인 매핑` 표 갱신 | ⬜ 예정 |
+
+3~10단계 경계는 PR #38 의 분할 순서를 따른 가이드 — 한 PR 로 묶거나 더 잘게 나눠도 된다(작업자 판단). 1~2단계 산출물은 이미 main 에 있으니 재생성 금지. 단계별 상세 설계는 아래를 그대로 따른다.
 
 **목표**: Figma `0409.png` 커피챗 매칭 화면 흐름의 백엔드 구현. 화면 1(정보 입력) → 2(매칭 결과 리스트) → 3(매칭 상대 상세) → 4(커피챗 신청, 기존 재사용), 그리고 "나의 활동 › 커피챗" 이력.
 
@@ -269,14 +286,14 @@ mju.capstone.ddingconnect
 - `dto/response/MatchedCandidateResponse`(카드), `dto/response/MatchedCandidateDetailResponse`(상세)
 
 **수정 파일**:
-- `CoffeeChatRepository` — 메서드 추가:
+- ✅ **(2단계 완료, PR #38)** `CoffeeChatRepository` — 메서드 추가:
   - `findByRequesterIdAndStatus(Long, CoffeeChatStatus)` — 나의 활동
   - `existsByRequesterIdAndReceiverIdAndStatusIn(Long, Long, Collection<CoffeeChatStatus>)` — 중복방지(b)
   - `existsByRequesterIdAndReceiverIdAndCreatedAtAfter(Long, Long, LocalDateTime)` — 쿨다운
-- `CoffeeChatServiceImpl.create` — self·role 검증 직후 중복방지 검증 추가
-- `ErrorStatus` — 신규 코드 3개: `COFFEE_CHAT_ALREADY_REQUESTED`(400), `COFFEE_CHAT_REQUEST_TOO_SOON`(429), `MATCHING_ALGORITHM_FAILED`(502). 예외는 기존 `CoffeeChatHandler` 재사용
-- `application.yml` — 알고리즘 base URL 설정 키(예: `matching.algorithm.base-url`). 하드코딩 금지
-- `CLAUDE.md` — 구현 머지 시: 본 TODO 삭제, 커피챗 섹션에 정식 규칙 통합, `패키지 구조`·`화면↔도메인 매핑` 표 갱신
+- `CoffeeChatServiceImpl.create` **(8단계)** — self·role 검증 직후 중복방지 검증 추가
+- ✅ **(1단계 완료, PR #38)** `ErrorStatus` — 신규 코드 3개: `COFFEE_CHAT_ALREADY_REQUESTED`(400), `COFFEE_CHAT_REQUEST_TOO_SOON`(429), `MATCHING_ALGORITHM_FAILED`(502). 예외는 기존 `CoffeeChatHandler` 재사용
+- ✅ **(1단계 완료, PR #38)** `application.yml` — 알고리즘 base URL 설정 키 `matching.algorithm.base-url` (기본값 `http://localhost:8000`, env `MATCHING_ALGORITHM_BASE_URL` 오버라이드). 하드코딩 금지
+- `CLAUDE.md` **(10단계)** — 구현 머지 시: 본 TODO 삭제, 커피챗 섹션에 정식 규칙 통합, `패키지 구조`·`화면↔도메인 매핑` 표 갱신
 
 **DTO 필드** (한 record에 역할별 nullable 필드, `MemberResponse` 패턴):
 
