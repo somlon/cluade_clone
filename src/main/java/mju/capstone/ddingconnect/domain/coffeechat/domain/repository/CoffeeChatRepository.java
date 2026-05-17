@@ -4,6 +4,8 @@ import mju.capstone.ddingconnect.domain.coffeechat.domain.CoffeeChat;
 import mju.capstone.ddingconnect.domain.coffeechat.domain.CoffeeChatStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -17,4 +19,12 @@ public interface CoffeeChatRepository extends JpaRepository<CoffeeChat, Long> {
     List<CoffeeChat> findByReceiverId(Long receiverId);
 
     List<CoffeeChat> findByReceiverIdAndStatus(Long receiverId, CoffeeChatStatus status);
+
+    List<CoffeeChat> findByRequesterIdAndStatus(Long requesterId, CoffeeChatStatus status);
+
+    boolean existsByRequesterIdAndReceiverIdAndStatusIn(
+            Long requesterId, Long receiverId, Collection<CoffeeChatStatus> statuses);
+
+    boolean existsByRequesterIdAndReceiverIdAndCreatedAtAfter(
+            Long requesterId, Long receiverId, LocalDateTime threshold);
 }

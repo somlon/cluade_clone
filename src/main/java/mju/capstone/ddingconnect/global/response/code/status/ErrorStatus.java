@@ -40,6 +40,9 @@ public enum ErrorStatus implements BaseErrorCode {
     COFFEE_CHAT_UNAUTHORIZED(HttpStatus.FORBIDDEN, "COFFEECHAT403", "커피챗에 대한 권한이 없습니다."),
     COFFEE_CHAT_SELF_REQUEST(HttpStatus.BAD_REQUEST, "COFFEECHAT400", "자기 자신에게는 커피챗을 요청할 수 없습니다."),
     COFFEE_CHAT_ROLE_MISMATCH(HttpStatus.BAD_REQUEST, "COFFEECHAT400", "커피챗은 학생과 졸업생 사이에만 가능합니다."),
+    COFFEE_CHAT_ALREADY_REQUESTED(HttpStatus.BAD_REQUEST, "COFFEECHAT400", "이미 진행 중인 커피챗 요청이 있습니다."),
+    COFFEE_CHAT_REQUEST_TOO_SOON(HttpStatus.TOO_MANY_REQUESTS, "COFFEECHAT429", "커피챗 재요청은 일정 시간이 지난 후에 가능합니다."),
+    MATCHING_ALGORITHM_FAILED(HttpStatus.BAD_GATEWAY, "COFFEECHAT502", "매칭 알고리즘 호출에 실패했습니다."),
 
     // PostContents
     POST_CONTENTS_NOT_FOUND(HttpStatus.NOT_FOUND, "POST404", "존재하지 않는 구직 공고입니다."),
