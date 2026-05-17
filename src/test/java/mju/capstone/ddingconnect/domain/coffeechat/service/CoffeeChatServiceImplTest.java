@@ -11,6 +11,7 @@ import mju.capstone.ddingconnect.domain.coffeechat.dto.response.CoffeeChatRespon
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.domain.member.domain.MemberRole;
 import mju.capstone.ddingconnect.domain.member.domain.repository.MemberRepository;
+import mju.capstone.ddingconnect.global.response.code.status.ErrorStatus;
 import mju.capstone.ddingconnect.global.response.exception.handler.CoffeeChatHandler;
 import mju.capstone.ddingconnect.global.response.exception.handler.MemberHandler;
 import mju.capstone.ddingconnect.global.sse.AlarmNotificationEvent;
@@ -173,6 +174,37 @@ class CoffeeChatServiceImplTest {
 
         assertThatThrownBy(() -> coffeeChatService.create(studentRequester, req))
                 .isInstanceOf(MemberHandler.class);
+        verify(coffeeChatAlarmRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("create - 진행 중(PENDING/ACCEPTED) 커피챗이 있으면 COFFEE_CHAT_ALREADY_REQUESTED 예외, 본체 미저장")
+    void create_중복신청_진행중_예외() {
+        CreateCoffeeChatRequest req = new CreateCoffeeChatRequest(graduateReceiver.getId(), "https://link");
+        when(memberRepository.findById(graduateReceiver.getId())).thenReturn(Optional.of(graduateReceiver));
+        when(coffeeChatRepository.existsByRequesterIdAndReceiverIdAndStatusIn(any(), any(), any()))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> coffeeChatService.create(studentRequester, req))
+                .isInstanceOf(CoffeeChatHandler.class)
+                .hasFieldOrPropertyWithValue("code", ErrorStatus.COFFEE_CHAT_ALREADY_REQUESTED);
+        verify(coffeeChatRepository, never()).save(any());
+        verify(coffeeChatAlarmRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("create - 가장 최근 요청이 24시간 이내면 COFFEE_CHAT_REQUEST_TOO_SOON 예외, 본체 미저장")
+    void create_쿨다운_예외() {
+        CreateCoffeeChatRequest req = new CreateCoffeeChatRequest(graduateReceiver.getId(), "https://link");
+        when(memberRepository.findById(graduateReceiver.getId())).thenReturn(Optional.of(graduateReceiver));
+        // 진행 중 요청은 없으나(규칙 b 통과), 쿨다운 기간 내 최근 요청이 존재
+        when(coffeeChatRepository.existsByRequesterIdAndReceiverIdAndCreatedAtAfter(any(), any(), any()))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> coffeeChatService.create(studentRequester, req))
+                .isInstanceOf(CoffeeChatHandler.class)
+                .hasFieldOrPropertyWithValue("code", ErrorStatus.COFFEE_CHAT_REQUEST_TOO_SOON);
+        verify(coffeeChatRepository, never()).save(any());
         verify(coffeeChatAlarmRepository, never()).save(any());
     }
 

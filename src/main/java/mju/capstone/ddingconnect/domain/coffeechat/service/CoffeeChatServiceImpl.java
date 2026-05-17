@@ -21,6 +21,8 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -40,6 +42,12 @@ public class CoffeeChatServiceImpl implements CoffeeChatService {
     static final String PENDING_CONTENT_FORMAT = "%s %s님이 커피챗을 요청했어요!";
     private static final String ACCEPTED_CONTENT_PREFIX = "커피챗 요청이 수락되었습니다. 카카오톡 오픈채팅 링크: ";
     private static final String REJECTED_CONTENT = "커피챗 요청이 거절되었습니다.";
+
+    // 중복 신청 방지: 진행 중으로 간주해 재신청을 막는 상태 집합 (REJECTED 는 재신청 허용이라 제외)
+    private static final List<CoffeeChatStatus> ACTIVE_STATUSES =
+            List.of(CoffeeChatStatus.PENDING, CoffeeChatStatus.ACCEPTED);
+    // 재요청 쿨다운 — 가장 최근 요청 이후 이 기간이 지나야 같은 상대에게 다시 신청 가능
+    private static final Duration RE_REQUEST_COOLDOWN = Duration.ofHours(24);
 
     private final CoffeeChatRepository coffeeChatRepository;
     private final CoffeeChatAlarmRepository coffeeChatAlarmRepository;
@@ -64,6 +72,21 @@ public class CoffeeChatServiceImpl implements CoffeeChatService {
                 && receiver.getRole() == MemberRole.STUDENT;
         if (!studentToGraduate && !graduateToStudent) {
             throw new CoffeeChatHandler(ErrorStatus.COFFEE_CHAT_ROLE_MISMATCH);
+        }
+
+        // 중복 신청 방지 (b): requester→receiver 로 진행 중(PENDING/ACCEPTED)인 커피챗이 있으면 거부.
+        // REJECTED 만 있으면 통과(재신청 허용).
+        if (coffeeChatRepository.existsByRequesterIdAndReceiverIdAndStatusIn(
+                member.getId(), receiver.getId(), ACTIVE_STATUSES)) {
+            throw new CoffeeChatHandler(ErrorStatus.COFFEE_CHAT_ALREADY_REQUESTED);
+        }
+
+        // 재요청 쿨다운: (b)를 통과했더라도 가장 최근 요청이 24시간 이내면 거부
+        // (거절 직후 빠른 반복 재신청 차단).
+        LocalDateTime cooldownThreshold = LocalDateTime.now().minus(RE_REQUEST_COOLDOWN);
+        if (coffeeChatRepository.existsByRequesterIdAndReceiverIdAndCreatedAtAfter(
+                member.getId(), receiver.getId(), cooldownThreshold)) {
+            throw new CoffeeChatHandler(ErrorStatus.COFFEE_CHAT_REQUEST_TOO_SOON);
         }
 
         CoffeeChat coffeeChat = CoffeeChat.builder()
