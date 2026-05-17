@@ -236,16 +236,16 @@ mju.capstone.ddingconnect
 
 ### TODO H: 커피챗 매칭 플로우 구현 (coffeechat 도메인)
 
-> 대형 작업 — PR #38 에서 10단계로 분할해 구현 중. **1~2단계 완료(main 머지 확인), 다음 작업은 3단계(DTO)부터.** "TODO H 작업" 지시 시 아래 [진행 현황] 의 미완료 단계를 3단계부터 순서대로 이어 수행한다. 아래 결정은 모두 확정 — 다시 묻지 말 것.
+> 대형 작업 — PR #38 에서 10단계로 분할해 구현 중. **1~3단계 완료(main 머지 확인), 다음 작업은 4단계부터.** "TODO H 작업" 지시 시 아래 [진행 현황] 의 미완료 단계를 4단계부터 순서대로 이어 수행한다. 아래 결정은 모두 확정 — 다시 묻지 말 것.
 
-**[진행 현황]** — PR #38 이 TODO H 를 10단계로 분할, 1~2단계 머지 완료. main(`7e60de7`) 코드 대조로 1~2단계 산출물 존재를 재확인함.
+**[진행 현황]** — PR #38 이 TODO H 를 10단계로 분할. 1~3단계 main 머지 완료 (1~2단계 PR #38, 3단계 PR #40).
 
 | 단계 | 내용 | 상태 |
 |---|---|---|
 | 1 | `ErrorStatus` 코드 3개(`COFFEE_CHAT_ALREADY_REQUESTED` 400 · `COFFEE_CHAT_REQUEST_TOO_SOON` 429 · `MATCHING_ALGORITHM_FAILED` 502) + `application.yml` `matching.algorithm.base-url` 설정 키 | ✅ 완료 (PR #38) |
 | 2 | `CoffeeChatRepository` 파생 쿼리 3개 (`findByRequesterIdAndStatus` · `existsByRequesterIdAndReceiverIdAndStatusIn` · `existsByRequesterIdAndReceiverIdAndCreatedAtAfter`) | ✅ 완료 (PR #38) |
-| 3 | DTO 3개 — `MatchingRequest`(폼 6필드) · `MatchedCandidateResponse`(카드) · `MatchedCandidateDetailResponse`(상세) | ⬜ **다음 작업** |
-| 4 | `MatchingAlgorithmClient` 인터페이스 + `MatchingAlgorithmClientImpl`(`RestClient` 구현) | ⬜ 예정 |
+| 3 | DTO 3개 — `MatchingRequest`(폼 6필드) · `MatchedCandidateResponse`(카드) · `MatchedCandidateDetailResponse`(상세) | ✅ 완료 (PR #40) |
+| 4 | `MatchingAlgorithmClient` 인터페이스 + `MatchingAlgorithmClientImpl`(`RestClient` 구현) | ⬜ **다음 작업** |
 | 5 | `CandidateProfileAssembler` — `memberId` → 카드/상세 DTO 조립 | ⬜ 예정 |
 | 6 | `CoffeeChatMatchingService` + `CoffeeChatMatchingServiceImpl` — 매칭 흐름 오케스트레이션 | ⬜ 예정 |
 | 7 | `CoffeeChatMatchingController` + `CoffeeChatMatchingSwagger` — 신규 엔드포인트 3개 | ⬜ 예정 |
@@ -253,7 +253,7 @@ mju.capstone.ddingconnect
 | 9 | 테스트 — `CoffeeChatMatchingControllerTest`/`CoffeeChatMatchingServiceImplTest` 신규 + `CoffeeChatServiceImplTest` 중복방지 보강 | ⬜ 예정 |
 | 10 | `CLAUDE.md` 통합 — 본 TODO 삭제, 커피챗 섹션에 정식 규칙 통합, `패키지 구조`·`화면↔도메인 매핑` 표 갱신 | ⬜ 예정 |
 
-3~10단계 경계는 PR #38 의 분할 순서를 따른 가이드 — 한 PR 로 묶거나 더 잘게 나눠도 된다(작업자 판단). 1~2단계 산출물은 이미 main 에 있으니 재생성 금지. 단계별 상세 설계는 아래를 그대로 따른다.
+4~10단계 경계는 PR #38 의 분할 순서를 따른 가이드 — 한 PR 로 묶거나 더 잘게 나눠도 된다(작업자 판단). 1~3단계 산출물은 이미 main 에 있으니 재생성 금지. 단계별 상세 설계는 아래를 그대로 따른다.
 
 **목표**: Figma `0409.png` 커피챗 매칭 화면 흐름의 백엔드 구현. 화면 1(정보 입력) → 2(매칭 결과 리스트) → 3(매칭 상대 상세) → 4(커피챗 신청, 기존 재사용), 그리고 "나의 활동 › 커피챗" 이력.
 
