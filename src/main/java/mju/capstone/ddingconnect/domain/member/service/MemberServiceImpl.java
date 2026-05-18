@@ -95,7 +95,7 @@ public class MemberServiceImpl implements MemberService {
         // 1. Member 공통 필드 수정
         Member updated = Member.builder()
                 .id(member.getId())
-                .email(member.getEmail())
+                .email(resolveEmail(member, request))
                 .password(member.getPassword())
                 .role(member.getRole())
                 .isDeleted(member.getIsDeleted())
@@ -172,6 +172,24 @@ public class MemberServiceImpl implements MemberService {
         if (role == MemberRole.UNKNOWN && (studentField || graduateField)) {
             throw new MemberHandler(ErrorStatus.MEMBER_FIELD_ROLE_MISMATCH);
         }
+    }
+
+    /**
+     * 이메일 수정 정제:
+     * - null 또는 기존값과 동일 → 기존값 유지 (변경 없음)
+     * - 변경값이면 본인 제외 중복 검사 후, 이미 사용 중이면 409 (DUPLICATE_EMAIL)
+     * 형식(@mju.ac.kr) 검증은 컨트롤러 @Valid + UpdateMemberRequest 의 @Pattern 이 담당.
+     * (이메일 변경 시 재인증은 TODO D 인증 방식 확정 후 별도 도입 예정.)
+     */
+    private String resolveEmail(Member member, UpdateMemberRequest request) {
+        String requested = request.email();
+        if (requested == null || requested.equals(member.getEmail())) {
+            return member.getEmail();
+        }
+        if (memberRepository.existsByEmail(requested)) {
+            throw new MemberHandler(ErrorStatus.DUPLICATE_EMAIL);
+        }
+        return requested;
     }
 
     /**

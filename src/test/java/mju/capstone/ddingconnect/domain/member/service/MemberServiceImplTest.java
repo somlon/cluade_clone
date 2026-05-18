@@ -138,7 +138,7 @@ class MemberServiceImplTest {
     void updateMyProfile_재학생() {
         Member member = buildStudentMember();
         Student student = Student.builder().id(11L).member(member).grade(3).build();
-        UpdateMemberRequest request = new UpdateMemberRequest("새이름", "새닉네임", null, null,
+        UpdateMemberRequest request = new UpdateMemberRequest("새이름", null, "새닉네임", null, null,
                 null, null, null, null, MemberServiceImpl.MAX_GRADE, null, null, null, null);
 
         when(studentRepository.findByMemberId(1L)).thenReturn(Optional.of(student));
@@ -164,7 +164,7 @@ class MemberServiceImplTest {
         Member member = buildGraduateMember();
         Graduate graduate = Graduate.builder().id(22L).member(member)
                 .company("네이버").careerYear(5).build();
-        UpdateMemberRequest request = new UpdateMemberRequest(null, null, null, null,
+        UpdateMemberRequest request = new UpdateMemberRequest(null, null, null, null, null,
                 null, null, null, null, null, "newImg", "프론트엔드 개발자", "카카오", 7);
 
         when(graduateRepository.findByMemberId(2L)).thenReturn(Optional.of(graduate));
@@ -183,11 +183,44 @@ class MemberServiceImplTest {
     }
 
     @Test
+    @DisplayName("updateMyProfile - 이메일을 새 주소로 변경한다")
+    void updateMyProfile_이메일_변경() {
+        Member member = buildStudentMember();
+        Student student = Student.builder().id(11L).member(member).grade(3).build();
+        UpdateMemberRequest request = new UpdateMemberRequest(null, "new@mju.ac.kr", null, null, null,
+                null, null, null, null, null, null, null, null, null);
+
+        when(memberRepository.existsByEmail("new@mju.ac.kr")).thenReturn(false);
+        when(studentRepository.findByMemberId(1L)).thenReturn(Optional.of(student));
+        when(studentRepository.save(any(Student.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        memberService.updateMyProfile(member, request);
+
+        ArgumentCaptor<Member> memberCaptor = ArgumentCaptor.forClass(Member.class);
+        verify(memberRepository).save(memberCaptor.capture());
+        assertThat(memberCaptor.getValue().getEmail()).isEqualTo("new@mju.ac.kr");
+    }
+
+    @Test
+    @DisplayName("updateMyProfile - 이미 사용 중인 이메일로 변경 시 DUPLICATE_EMAIL 예외")
+    void updateMyProfile_이메일_중복_예외() {
+        Member member = buildStudentMember();
+        UpdateMemberRequest request = new UpdateMemberRequest(null, "taken@mju.ac.kr", null, null, null,
+                null, null, null, null, null, null, null, null, null);
+
+        when(memberRepository.existsByEmail("taken@mju.ac.kr")).thenReturn(true);
+
+        assertThatThrownBy(() -> memberService.updateMyProfile(member, request))
+                .isInstanceOf(MemberHandler.class);
+        verify(memberRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("updateMyProfile - grade > 4 입력 시 4 로 클램프해서 저장")
     void updateMyProfile_grade_클램프() {
         Member member = buildStudentMember();
         Student student = Student.builder().id(11L).member(member).grade(1).build();
-        UpdateMemberRequest request = new UpdateMemberRequest(null, null, null, null,
+        UpdateMemberRequest request = new UpdateMemberRequest(null, null, null, null, null,
                 null, null, null, null, MemberServiceImpl.MAX_GRADE + 1, null, null, null, null);
 
         when(studentRepository.findByMemberId(1L)).thenReturn(Optional.of(student));
@@ -205,7 +238,7 @@ class MemberServiceImplTest {
     void updateMyProfile_grade_음수_예외() {
         Member member = buildStudentMember();
         Student student = Student.builder().id(11L).member(member).grade(2).build();
-        UpdateMemberRequest request = new UpdateMemberRequest(null, null, null, null,
+        UpdateMemberRequest request = new UpdateMemberRequest(null, null, null, null, null,
                 null, null, null, null, MemberServiceImpl.MIN_GRADE - 2, null, null, null, null);
 
         when(studentRepository.findByMemberId(1L)).thenReturn(Optional.of(student));
@@ -219,7 +252,7 @@ class MemberServiceImplTest {
     void updateMyProfile_grade_0_예외() {
         Member member = buildStudentMember();
         Student student = Student.builder().id(11L).member(member).grade(2).build();
-        UpdateMemberRequest request = new UpdateMemberRequest(null, null, null, null,
+        UpdateMemberRequest request = new UpdateMemberRequest(null, null, null, null, null,
                 null, null, null, null, MemberServiceImpl.MIN_GRADE - 1, null, null, null, null);
 
         when(studentRepository.findByMemberId(1L)).thenReturn(Optional.of(student));
@@ -232,7 +265,7 @@ class MemberServiceImplTest {
     @DisplayName("updateMyProfile - STUDENT 가 GRADUATE 전용 필드 보내면 MEMBER_FIELD_ROLE_MISMATCH 예외")
     void updateMyProfile_역할필드_불일치_학생_예외() {
         Member member = buildStudentMember();
-        UpdateMemberRequest request = new UpdateMemberRequest(null, null, null, null,
+        UpdateMemberRequest request = new UpdateMemberRequest(null, null, null, null, null,
                 null, null, null, null, null, null, null, "카카오", null);
 
         assertThatThrownBy(() -> memberService.updateMyProfile(member, request))
@@ -244,7 +277,7 @@ class MemberServiceImplTest {
     @DisplayName("updateMyProfile - STUDENT 가 직무(jobTitle) 보내면 MEMBER_FIELD_ROLE_MISMATCH 예외")
     void updateMyProfile_역할필드_불일치_jobTitle_예외() {
         Member member = buildStudentMember();
-        UpdateMemberRequest request = new UpdateMemberRequest(null, null, null, null,
+        UpdateMemberRequest request = new UpdateMemberRequest(null, null, null, null, null,
                 null, null, null, null, null, null, "백엔드 개발자", null, null);
 
         assertThatThrownBy(() -> memberService.updateMyProfile(member, request))
@@ -256,7 +289,7 @@ class MemberServiceImplTest {
     @DisplayName("updateMyProfile - GRADUATE 가 grade 보내면 MEMBER_FIELD_ROLE_MISMATCH 예외")
     void updateMyProfile_역할필드_불일치_졸업생_예외() {
         Member member = buildGraduateMember();
-        UpdateMemberRequest request = new UpdateMemberRequest(null, null, null, null,
+        UpdateMemberRequest request = new UpdateMemberRequest(null, null, null, null, null,
                 null, null, null, null, 3, null, null, null, null);
 
         assertThatThrownBy(() -> memberService.updateMyProfile(member, request))
@@ -268,7 +301,7 @@ class MemberServiceImplTest {
     @DisplayName("updateMyProfile - UNKNOWN 이 grade 또는 graduate 필드 보내면 예외")
     void updateMyProfile_UNKNOWN_예외() {
         Member member = buildUnknownMember();
-        UpdateMemberRequest request = new UpdateMemberRequest(null, null, null, null,
+        UpdateMemberRequest request = new UpdateMemberRequest(null, null, null, null, null,
                 null, null, null, null, 3, null, null, null, null);
 
         assertThatThrownBy(() -> memberService.updateMyProfile(member, request))

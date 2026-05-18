@@ -75,7 +75,7 @@ class MemberControllerTest {
     @Test
     @DisplayName("PATCH /api/v1/members/me - 회원 정보 수정")
     void 회원정보_수정() throws Exception {
-        UpdateMemberRequest req = new UpdateMemberRequest("새이름", "새닉네임", null, null,
+        UpdateMemberRequest req = new UpdateMemberRequest("새이름", null, "새닉네임", null, null,
                 null, null, null, null, null, null, null, null, null);
         MemberResponse res = new MemberResponse(1L, "test@mju.ac.kr", "새이름", "새닉네임",
                 "60201234", "컴퓨터공학과", null, null, null, null, 0L,
