@@ -5,6 +5,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.domain.member.dto.request.UpdateMemberRequest;
+import mju.capstone.ddingconnect.domain.member.dto.request.UpdateMyPageRequest;
 import mju.capstone.ddingconnect.domain.member.dto.response.MemberResponse;
 import mju.capstone.ddingconnect.domain.member.dto.response.MyPageResponse;
 import mju.capstone.ddingconnect.domain.member.service.MemberService;
@@ -57,5 +58,13 @@ public class MemberController implements MemberSwagger {
     public ApiResponse<MyPageResponse> getMyPage(
             @Parameter(hidden = true) @LoginMember Member member) {
         return ApiResponse.onSuccess(myPageService.getMyPage(member));
+    }
+
+    /** 마이페이지 통합 수정 (Update) — 프로필/기술 스택/관심 직군/구직 공고를 1회 요청으로 일괄 수정 */
+    @PatchMapping("/mypage")
+    public ApiResponse<MyPageResponse> updateMyPage(
+            @Parameter(hidden = true) @LoginMember Member member,
+            @Valid @RequestBody UpdateMyPageRequest request) {
+        return ApiResponse.onSuccess(myPageService.updateMyPage(member, request));
     }
 }
