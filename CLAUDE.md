@@ -259,6 +259,25 @@ mju.capstone.ddingconnect
 
 **출처**: PR #22.
 
+### TODO F: ddingconnect-backend 전 계층 동기화 (cluade_clone 기준, 크로스 레포)
+
+**문제**: `mju-capstone-4/ddingconnect-backend` 가 이 레포(`cluade_clone`) 대비 controller/service/dto 계층과 global 인프라가 대거 누락된 상태. 마지막 동기화 커밋(`fe032d9 chore(db): cluade_clone 기준 DB 계층 동기화`)으로 도메인 엔티티·레포지토리 계층만 따라잡았고, 메인 소스 약 86개·테스트 약 26개 파일이 미반영. 일부 공통 파일은 내용 불일치, 잘못된 패키지 위치 등 구조 이슈 3건도 존재.
+
+**주의 — 크로스 레포**: 이 작업은 `ddingconnect-backend` 에 쓰기 작업을 한다. `## 작업 레포 범위 규칙` 에 따라 실행 전 사용자의 명시적 지시("ddingconnect-backend 에서 작업하라")가 반드시 필요하다 — 지시 없이 자동 실행하지 말 것. 모든 단계의 기준(source of truth)은 `cluade_clone` 이다.
+
+**작업 순서** (컴파일 의존성 순):
+
+1. **global 공통 상수 + ErrorStatus** — `global/common/SuccessMessage`·`ValidationPattern` 신규 추가. `ErrorStatus` 에 누락된 에러코드(Member·CoffeeChat·PostContents·Question·Answer·Roadmap·Alarm, 약 26개) 추가. 이후 전 계층 컴파일의 전제.
+2. **global/alarm 패키지 + sse 정합** — `AlarmController`·`AlarmSwagger`·`AlarmService(+Impl)`·`AlarmResponse`·`RelativeTimeFormatter` 신설. `AlarmType` 을 `global/sse/` → `global/alarm/` 로 이동. `global/sse/AlarmNotificationEvent`·`AlarmNotificationListener` 추가. `SseService`·`SseServiceImpl`·`SseTestController` 의 `AlarmType` import 경로 수정.
+3. **exception handler 8종** — `AlarmHandler`·`AnswerHandler`·`CoffeeChatHandler`·`JobPostHandler`·`QuestionHandler`·`RoadmapHandler`·`TargetJobHandler`·`TechStackHandler` 추가.
+4. **8개 비즈니스 도메인 (dto → service → controller 순)** — coffeechat·interested_job·job_post·member·qna(answer·question)·roadmap·techstack 의 dto/service/serviceImpl/controller/swagger 추가. 함께: `Member.name`·`Graduate.jobType` 필드 엔티티 재동기화. member — 잘못 위치한 `domain/member/domain/MemberController.java` stub 제거 후 `controller/` 정식 버전으로 교체. techstack — `TechStackRepository.existsByMemberIdAndName`(cluade_clone 미존재) 역방향 불일치 처리 방침 결정.
+5. **global/auth 내용 동기화 + 빌드/설정** — auth DTO 3종(`CodeSendRequest`·`SignupRequest`·`VerifyCodeRequest`) 인라인 정규식 → `ValidationPattern` 상수 참조, `AuthServiceImpl` → `SuccessMessage.SIGNUP_SUCCESS`, `JwtAuthenticationFilter` 화이트리스트에 `/swagger-ui.html` 추가. `build.gradle` 의 하드코딩된 `C:/gradle-builds/...` buildDir → `cluade_clone` 외부화 방식으로 교체, `application.yml` 에 `matching.algorithm.base-url` 추가.
+6. **테스트 보강** — 누락된 도메인별 controller/service 테스트(~21개), `global/alarm` 테스트 3종, `AlarmNotificationListenerTest`, `EntityIntegrationTest`, `support/WithMockLoginMember`, `CoffeeChatMatchingTestConstants` 추가. 테스트 리소스 `application.properties`·`logback-test.xml` 추가. 기존 SSE 테스트 3종(`SseControllerTest`·`SseEmitterRepositoryTest`·`SseServiceTest`)의 한글 메서드명 → 영문 camelCase 변경.
+
+**범위 제외**: `ddingconnect-backend` 에만 존재하는 `DdingconnectApplicationTests.java` 삭제는 사용자 지시에 따라 이 TODO 범위에서 제외한다.
+
+**출처**: `cluade_clone` ↔ `ddingconnect-backend` 전체 코드 비교 세션 (png·CLAUDE.md 제외).
+
 ### 11개 작업자 노트 (TODO #1~#11 머지 완료 후 보존되는 일반 가이드)
 
 - **브랜치 정책**: 각 TODO 를 **개별 브랜치 + 개별 PR** 로 처리하는 것을 기본으로 한다. 영향 범위가 큰 TODO 는 단독 PR 필수. 같은 도메인 내 작은 변경은 묶어서 1개 PR 도 허용 (작업자 판단). 사용자가 "TODO N 작업" 으로 단일 항목 지목 시 그 항목만 단독 PR.
