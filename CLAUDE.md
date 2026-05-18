@@ -251,6 +251,56 @@ mju.capstone.ddingconnect
 
 **출처**: PR #22.
 
+### TODO E: 마이페이지 통합 수정 API (member 도메인)
+
+**목표**: 마이페이지의 편집 가능 항목 전체를 한 화면에서 한 번에 수정한다. '수정 완료' 1회 요청으로 모든 항목을 일괄 반영하고, '취소' 시 수정 전 상태로 되돌린다.
+
+**설계 결정 (확정 — 디폴트로 진행)**:
+- **패턴**: 마이페이지 조회(`GET /api/v1/members/mypage`)와 동일한 애그리게이터. `MyPageService` 에 `updateMyPage` 추가, `MyPageServiceImpl` 이 레포지토리 직접 접근 없이 각 도메인의 **기존 수정 API** 에 위임한다.
+- **엔드포인트**: `PATCH /api/v1/members/mypage` (조회와 같은 경로, 메서드만 PATCH). `MemberController` 에 추가.
+- **위임 대상 (모두 기존 코드 재사용)**:
+  - `MemberService.updateMyProfile(member, UpdateMemberRequest)` — 회원 공통 + 역할별 필드
+  - `TechStackService.replace(member, ReplaceTechStackRequest)` — 기술 스택 일괄 교체
+  - `TargetJobService.replace(member, ReplaceTargetJobRequest)` — 관심 직군 일괄 교체 (재학생)
+- **'수정 완료' = 원자성**: `updateMyPage` 에 단일 `@Transactional`. 위임받는 도메인 수정 메서드는 모두 `@Transactional`(전파 REQUIRED)이라 애그리게이터 트랜잭션에 참여 → 일부라도 실패하면 전체 롤백, 부분 저장 없음.
+- **'취소' = 클라이언트 임시저장 방식**: 편집 임시상태는 프론트가 보관. 취소 시 서버 호출 없이 폼을 버리고 조회 데이터로 복원. 별도 취소 엔드포인트 없음(서버 무상태).
+- **요청 DTO**: `UpdateMyPageRequest` 신규 = `UpdateMemberRequest` 필드 + `List<TechStackName> techStacks` + `List<TargetJobCategory> targetJobs`. 애그리게이터가 분해해 각 도메인 수정 메서드에 전달. **응답은 `MyPageResponse` 재사용**(수정 후 최신 마이페이지 반환).
+
+**수정 범위 (Figma `0409.png` 재학생/졸업생 마이페이지 기준)** — '계정 설정'·'나의 활동' 두 섹션을 **제외한 전 항목**이 수정 대상:
+
+| 섹션 | 항목 | 수정 |
+|---|---|:--:|
+| 프로필 헤더 | 닉네임 · 프로필 이미지 | ✓ |
+| 기본 정보 | 이름 · 이메일 · 학번 · 학과 · 학년(재학생) | ✓ |
+| 진로 정보 | 관심 직군(재학생) · 기술 스택 | ✓ |
+| 경력 정보(졸업생) | 직무 · 회사 · 경력 | ✓ |
+| 소셜 링크 | GitHub · LinkedIn | ✓ |
+| 포트폴리오 | portfolio | ✓ |
+| 내 명함(졸업생) | businessCardImage | ✓ |
+| 나의 공고(졸업생) | 등록 구직 공고 | 결정 필요 (아래 5) |
+| 나의 활동 | 커피챗/로드맵/질문 수 | ✗ 집계값 |
+| 계정 설정 | 비밀번호 재설정·로그아웃·회원 탈퇴 | ✗ |
+
+**스크린샷 대비 코드 불일치 — 선행 보강 필요**:
+1. **이름(`name`) 필드 부재**: Figma 기본 정보에 '이름'이 있으나 `Member` 엔티티·`UpdateMemberRequest`·`MemberResponse` 어디에도 `name` 이 없다. → `Member` 에 `name` 컬럼(varchar 255) + DTO 3곳에 추가.
+2. **이메일 수정 미지원**: '이메일'은 기본 정보(계정 설정 아님)라 수정 대상이고 사용자도 "재학생·졸업생 모두 수정 가능"으로 확정했으나, `UpdateMemberRequest` 에 `email` 이 없다. → `email` 추가 + `@mju.ac.kr` 패턴 검증 + 본인 제외 중복 검사(기존 `DUPLICATE_EMAIL` 재사용). 이메일 변경 시 재인증 요구 여부는 정책 확인.
+3. **졸업생 '직무' 필드 부재**: Figma 경력 정보에 '직무'(예: 백엔드 개발자)가 있으나 `Graduate` 엔티티엔 `company`·`careerYear`·`businessCardImage` 만 있고 직무 필드가 없다. → `Graduate` 에 직무 필드 + `UpdateMemberRequest`·`MemberResponse` 에 추가.
+4. **소셜 링크 '링크 추가' 불일치**: Figma 수정 화면은 GitHub/LinkedIn 외 임의 링크를 추가할 수 있으나, `Member` 는 `githubLink`·`linkedinLink`·`portfolio` 고정 3칸이라 가변 링크를 담을 수 없다. → 별도 `SocialLink` 1:N 엔티티 도입 vs '링크 추가' 기능 범위 제외 — **결정 필요**.
+5. **졸업생 '나의 공고' 편집 범위**: Figma 졸업생 마이페이지의 '나의 공고 끌어오기'는 규칙상 수정 대상이나, 구직 공고는 제목·내용·마감일 등 복합 객체라 단일 폼 일괄 수정과 결이 다르다. 현재 `JobPostController`(`POST/PATCH/DELETE /api/v1/job-post`)로 개별 관리 중. → 마이페이지 통합 수정에 포함할지 별도 화면으로 둘지 **결정 필요**.
+
+> 참고: 관심 직군은 `TargetJob` 에 구직 공고 FK가 없는 단순 카테고리 매핑이고 `PATCH /api/v1/target-jobs` replace 가 이미 있어 그대로 위임하면 된다(별도 보강 불필요).
+
+**구현 체크리스트**:
+- [ ] 불일치 1~3 코드 보강(`name`/`email`/졸업생 직무), 4·5 는 결정 후 확정
+- [ ] `UpdateMyPageRequest` DTO 신규
+- [ ] `MyPageService.updateMyPage` + `MyPageServiceImpl` 구현 (애그리게이터, 단일 `@Transactional`)
+- [ ] `MemberController` 에 `PATCH /api/v1/members/mypage` + `MemberSwagger` 항목 추가
+- [ ] 검증·에러코드(`ErrorStatus`)·하드코딩 금지 관례 준수
+- [ ] 테스트: `MyPageServiceImplTest`(일괄 반영 + 일부 실패 시 전체 롤백), `MemberControllerTest`(PATCH 200 / 검증 400 / 비인증 401)
+- [ ] 머지 후 CLAUDE.md `### 마이페이지 (member)` 섹션에 수정 API 규칙 정식 통합
+
+**미확정 (사용자 결정 필요)**: 불일치 4(소셜 링크 추가 — 엔티티 확장 여부), 5(나의 공고 편집을 마이페이지 통합 수정에 포함할지).
+
 ### 11개 작업자 노트 (TODO #1~#11 머지 완료 후 보존되는 일반 가이드)
 
 - **브랜치 정책**: 각 TODO 를 **개별 브랜치 + 개별 PR** 로 처리하는 것을 기본으로 한다. 영향 범위가 큰 TODO 는 단독 PR 필수. 같은 도메인 내 작은 변경은 묶어서 1개 PR 도 허용 (작업자 판단). 사용자가 "TODO N 작업" 으로 단일 항목 지목 시 그 항목만 단독 PR.
