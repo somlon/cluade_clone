@@ -54,9 +54,9 @@ class MyPageServiceImplTest {
     }
 
     private MemberResponse profileOf(Member member) {
-        return new MemberResponse(member.getId(), member.getEmail(), member.getNickname(),
+        return new MemberResponse(member.getId(), member.getEmail(), null, member.getNickname(),
                 null, null, null, null, null, null, 0L, member.getRole(),
-                null, null, null, null);
+                null, null, null, null, null);
     }
 
     @Test

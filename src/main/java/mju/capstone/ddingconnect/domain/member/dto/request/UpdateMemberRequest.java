@@ -1,10 +1,17 @@
 package mju.capstone.ddingconnect.domain.member.dto.request;
 
 import jakarta.validation.constraints.Pattern;
+import mju.capstone.ddingconnect.domain.job_post.domain.JobType;
+import mju.capstone.ddingconnect.global.common.ValidationPattern;
 
 public record UpdateMemberRequest(
 
         // ── 공통 필드 (STUDENT / GRADUATE 모두 수정 가능) ──────────
+        String name,
+
+        @Pattern(regexp = ValidationPattern.MJU_EMAIL_REGEX, message = ValidationPattern.MJU_EMAIL_MESSAGE)
+        String email,
+
         String nickname,
         String studentNumber,
         String department,
@@ -23,6 +30,7 @@ public record UpdateMemberRequest(
 
         // ── GRADUATE 전용 필드 ────────────────────────────────────
         String businessCardImage,   // 명함이미지
+        JobType jobType,            // 직무
         String company,             // 회사명
         Integer careerYear          // 경력
 ) {

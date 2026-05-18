@@ -61,9 +61,9 @@ class MemberControllerTest {
     @Test
     @DisplayName("GET /api/v1/members/me - 내 프로필 조회")
     void 내프로필_조회() throws Exception {
-        MemberResponse res = new MemberResponse(1L, "test@mju.ac.kr", "테스터",
+        MemberResponse res = new MemberResponse(1L, "test@mju.ac.kr", null, "테스터",
                 "60201234", "컴퓨터공학과", null, null, null, null, 0L,
-                MemberRole.STUDENT, 3, null, null, null);
+                MemberRole.STUDENT, 3, null, null, null, null);
         given(memberService.getMyProfile(any())).willReturn(res);
 
         mockMvc.perform(get(BASE_URL + "/me"))
@@ -75,17 +75,18 @@ class MemberControllerTest {
     @Test
     @DisplayName("PATCH /api/v1/members/me - 회원 정보 수정")
     void 회원정보_수정() throws Exception {
-        UpdateMemberRequest req = new UpdateMemberRequest("새닉네임", null, null,
-                null, null, null, null, null, null, null, null);
-        MemberResponse res = new MemberResponse(1L, "test@mju.ac.kr", "새닉네임",
+        UpdateMemberRequest req = new UpdateMemberRequest("새이름", null, "새닉네임", null, null,
+                null, null, null, null, null, null, null, null, null);
+        MemberResponse res = new MemberResponse(1L, "test@mju.ac.kr", "새이름", "새닉네임",
                 "60201234", "컴퓨터공학과", null, null, null, null, 0L,
-                MemberRole.STUDENT, 3, null, null, null);
+                MemberRole.STUDENT, 3, null, null, null, null);
         given(memberService.updateMyProfile(any(), any())).willReturn(res);
 
         mockMvc.perform(patch(BASE_URL + "/me")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.name").value("새이름"))
                 .andExpect(jsonPath("$.result.nickname").value("새닉네임"));
     }
 
@@ -101,9 +102,9 @@ class MemberControllerTest {
     @Test
     @DisplayName("GET /api/v1/members/mypage - 마이페이지 조회")
     void 마이페이지_조회() throws Exception {
-        MemberResponse profile = new MemberResponse(1L, "test@mju.ac.kr", "테스터",
+        MemberResponse profile = new MemberResponse(1L, "test@mju.ac.kr", null, "테스터",
                 "60201234", "컴퓨터공학과", null, null, null, null, 0L,
-                MemberRole.STUDENT, 3, null, null, null);
+                MemberRole.STUDENT, 3, null, null, null, null);
         MyPageResponse res = new MyPageResponse(
                 profile,
                 new MyPageResponse.ActivityStats(2L, 1L, 5L),
