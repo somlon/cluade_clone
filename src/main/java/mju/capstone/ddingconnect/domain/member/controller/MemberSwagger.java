@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.domain.member.dto.request.UpdateMemberRequest;
+import mju.capstone.ddingconnect.domain.member.dto.request.UpdateMyPageRequest;
 import mju.capstone.ddingconnect.domain.member.dto.response.MemberResponse;
 import mju.capstone.ddingconnect.domain.member.dto.response.MyPageResponse;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMember;
@@ -70,5 +71,22 @@ public interface MemberSwagger {
     @GetMapping("/mypage")
     ApiResponse<MyPageResponse> getMyPage(
             @Parameter(hidden = true) @LoginMember Member member);
+
+
+
+
+    @Operation(
+            summary = "마이페이지 통합 수정",
+            description = "로그인된 회원의 마이페이지 편집 항목을 1회 요청으로 일괄 수정합니다. "
+                    + "프로필(닉네임/이름/이메일/학번/학과/소셜 링크 등 + 역할별 필드), 기술 스택, "
+                    + "관심 직군(재학생), 구직 공고 추가·삭제(졸업생)를 포함합니다. "
+                    + "단일 트랜잭션으로 처리되어 일부라도 실패하면 전체가 롤백됩니다. "
+                    + "각 항목은 미전송(null) 시 변경하지 않으며, 수정 후 최신 마이페이지를 반환합니다."
+    )
+    @PatchMapping("/mypage")
+    ApiResponse<MyPageResponse> updateMyPage(
+            @Parameter(hidden = true) @LoginMember Member member,
+            @Parameter(description = "마이페이지 통합 수정 요청")
+            @RequestBody UpdateMyPageRequest request);
 
 }
