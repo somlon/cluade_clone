@@ -152,4 +152,14 @@ class RoadmapServiceImplTest {
         assertThatThrownBy(() -> roadmapService.delete(author, 999L))
                 .isInstanceOf(RoadmapHandler.class);
     }
+
+    @Test
+    @DisplayName("countMyRoadmaps - 본인이 생성한 로드맵 수를 반환한다")
+    void countMyRoadmaps_정상반환() {
+        when(roadmapRepository.countByMemberId(author.getId())).thenReturn(4L);
+
+        long result = roadmapService.countMyRoadmaps(author);
+
+        assertThat(result).isEqualTo(4L);
+    }
 }

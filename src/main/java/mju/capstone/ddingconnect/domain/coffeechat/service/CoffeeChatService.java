@@ -23,4 +23,7 @@ public interface CoffeeChatService {
 
     /** 커피챗 취소 (삭제) */
     void delete(Member member, Long coffeeChatId);
+
+    /** 본인이 요청자/수신자로 참여한 수락(ACCEPTED) 상태 커피챗 수 */
+    long countMyAcceptedCoffeeChats(Member member);
 }

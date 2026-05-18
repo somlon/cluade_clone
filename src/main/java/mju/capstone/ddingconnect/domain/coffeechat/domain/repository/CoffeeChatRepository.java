@@ -27,4 +27,8 @@ public interface CoffeeChatRepository extends JpaRepository<CoffeeChat, Long> {
 
     boolean existsByRequesterIdAndReceiverIdAndCreatedAtAfter(
             Long requesterId, Long receiverId, LocalDateTime threshold);
+
+    long countByRequesterIdAndStatus(Long requesterId, CoffeeChatStatus status);
+
+    long countByReceiverIdAndStatus(Long receiverId, CoffeeChatStatus status);
 }

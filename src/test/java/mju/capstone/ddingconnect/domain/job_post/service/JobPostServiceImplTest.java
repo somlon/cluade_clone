@@ -440,4 +440,27 @@ class JobPostServiceImplTest {
         assertThatThrownBy(() -> jobPostService.delete(graduateMember, 999L))
                 .isInstanceOf(JobPostHandler.class);
     }
+
+    @Test
+    @DisplayName("getMyJobPosts - 졸업생이 등록한 구직 공고 목록을 반환한다")
+    void getMyJobPosts_정상반환() {
+        GraduateJobPost gjp = GraduateJobPost.builder().graduate(graduate).postContents(postContents).build();
+        when(graduateRepository.findByMemberId(graduateMember.getId())).thenReturn(Optional.of(graduate));
+        when(graduateJobPostRepository.findByGraduateId(graduate.getId())).thenReturn(List.of(gjp));
+
+        List<JobPostResponse> result = jobPostService.getMyJobPosts(graduateMember);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).id()).isEqualTo(100L);
+    }
+
+    @Test
+    @DisplayName("getMyJobPosts - 졸업생 매핑이 없으면 빈 리스트를 반환한다")
+    void getMyJobPosts_졸업생없음_빈리스트() {
+        when(graduateRepository.findByMemberId(otherMember.getId())).thenReturn(Optional.empty());
+
+        List<JobPostResponse> result = jobPostService.getMyJobPosts(otherMember);
+
+        assertThat(result).isEmpty();
+    }
 }

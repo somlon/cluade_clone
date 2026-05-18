@@ -21,4 +21,7 @@ public interface QuestionService {
     void delete(Member member, Long questionId);
 
     LikeToggleResponse toggleLike(Member member, Long questionId);
+
+    /** 본인이 작성한 질문 수 */
+    long countMyQuestions(Member member);
 }

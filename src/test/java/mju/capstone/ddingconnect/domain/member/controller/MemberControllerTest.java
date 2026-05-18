@@ -4,7 +4,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import mju.capstone.ddingconnect.domain.member.domain.MemberRole;
 import mju.capstone.ddingconnect.domain.member.dto.request.UpdateMemberRequest;
 import mju.capstone.ddingconnect.domain.member.dto.response.MemberResponse;
+import mju.capstone.ddingconnect.domain.member.dto.response.MyPageResponse;
 import mju.capstone.ddingconnect.domain.member.service.MemberService;
+import mju.capstone.ddingconnect.domain.member.service.MyPageService;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMemberArgumentResolver;
 import mju.capstone.ddingconnect.global.common.SuccessMessage;
 import mju.capstone.ddingconnect.global.config.WebMvcConfig;
@@ -20,6 +22,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
@@ -38,6 +42,7 @@ class MemberControllerTest {
     @Autowired MockMvc mockMvc;
     @Autowired ObjectMapper objectMapper;
     @MockitoBean MemberService memberService;
+    @MockitoBean MyPageService myPageService;
 
     @BeforeEach
     void setUp() { WithMockLoginMember.loginAsStudent(); }
@@ -91,5 +96,23 @@ class MemberControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result").value(SuccessMessage.MEMBER_WITHDRAWN));
         verify(memberService).withdraw(any());
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/members/mypage - 마이페이지 조회")
+    void 마이페이지_조회() throws Exception {
+        MemberResponse profile = new MemberResponse(1L, "test@mju.ac.kr", "테스터",
+                "60201234", "컴퓨터공학과", null, null, null, null, 0L,
+                MemberRole.STUDENT, 3, null, null, null);
+        MyPageResponse res = new MyPageResponse(
+                profile,
+                new MyPageResponse.ActivityStats(2L, 1L, 5L),
+                List.of(), List.of(), List.of());
+        given(myPageService.getMyPage(any())).willReturn(res);
+
+        mockMvc.perform(get(BASE_URL + "/mypage"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.profile.email").value("test@mju.ac.kr"))
+                .andExpect(jsonPath("$.result.activity.questionCount").value(5));
     }
 }

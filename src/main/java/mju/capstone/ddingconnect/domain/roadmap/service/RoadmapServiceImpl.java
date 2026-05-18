@@ -87,4 +87,10 @@ public class RoadmapServiceImpl implements RoadmapService {
         roadmapAlarmRepository.deleteByRoadmapId(roadmapId);
         roadmapRepository.delete(roadmap);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countMyRoadmaps(Member member) {
+        return roadmapRepository.countByMemberId(member.getId());
+    }
 }

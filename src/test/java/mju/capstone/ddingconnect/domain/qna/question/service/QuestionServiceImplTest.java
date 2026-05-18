@@ -238,4 +238,14 @@ class QuestionServiceImplTest {
         assertThatThrownBy(() -> questionService.toggleLike(other, 999L))
                 .isInstanceOf(QuestionHandler.class);
     }
+
+    @Test
+    @DisplayName("countMyQuestions - 본인이 작성한 질문 수를 반환한다")
+    void countMyQuestions_정상반환() {
+        when(questionRepository.countByMemberId(author.getId())).thenReturn(6L);
+
+        long result = questionService.countMyQuestions(author);
+
+        assertThat(result).isEqualTo(6L);
+    }
 }
