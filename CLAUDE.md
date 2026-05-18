@@ -284,8 +284,8 @@ mju.capstone.ddingconnect
 
 **스크린샷 대비 코드 불일치 — 선행 보강 필요**:
 1. **이름(`name`) 필드 부재**: Figma 기본 정보에 '이름'이 있으나 `Member` 엔티티·`UpdateMemberRequest`·`MemberResponse` 어디에도 `name` 이 없다. → `Member` 에 `name` 컬럼(varchar 255) + DTO 3곳에 추가.
-2. **이메일 수정 미지원**: '이메일'은 기본 정보(계정 설정 아님)라 수정 대상이고 사용자도 "재학생·졸업생 모두 수정 가능"으로 확정했으나, `UpdateMemberRequest` 에 `email` 이 없다. → `email` 추가 + `@mju.ac.kr` 패턴 검증 + 본인 제외 중복 검사(기존 `DUPLICATE_EMAIL` 재사용). 이메일 변경 시 재인증 요구 여부는 정책 확인.
-3. **졸업생 '직무' 필드 부재**: Figma 경력 정보에 '직무'(예: 백엔드 개발자)가 있으나 `Graduate` 엔티티엔 `company`·`careerYear`·`businessCardImage` 만 있고 직무 필드가 없다. → `Graduate` 에 직무 필드 + `UpdateMemberRequest`·`MemberResponse` 에 추가.
+2. **이메일 수정 미지원**: '이메일'은 기본 정보(계정 설정 아님)라 수정 대상이고 사용자도 "재학생·졸업생 모두 수정 가능"으로 확정했으나, `UpdateMemberRequest` 에 `email` 이 없다. → `email` 추가 + `@mju.ac.kr` 패턴 검증 + 본인 제외 중복 검사(기존 `DUPLICATE_EMAIL` 재사용). **이메일 변경 시 재인증은 요구하지 않는다 (결정 완료)** — `@mju.ac.kr` 패턴·본인 제외 중복 검사만 통과하면 즉시 반영.
+3. **졸업생 '직무' 필드 부재**: Figma 경력 정보에 '직무'(예: 백엔드 개발자)가 있으나 `Graduate` 엔티티엔 `company`·`careerYear`·`businessCardImage` 만 있고 직무 필드가 없다. → `Graduate` 에 직무 필드(**기존 `job_post` 의 `JobType` enum 재사용 — 결정 완료**, 신규 enum 추가 없음) + `UpdateMemberRequest`·`MemberResponse` 에 추가.
 4. **소셜 링크 — '링크 추가' 범위 제외 (결정 완료)**: 소셜 링크는 `Member.githubLink`·`linkedinLink` 두 컬럼이 전부다. Figma 의 '링크 추가하기' UI는 이번 범위에서 제외하며 별도 `SocialLink` 엔티티는 도입하지 않는다. 통합 수정은 GitHub·LinkedIn 두 링크만 다룬다 (코드 보강 불필요).
 5. **졸업생 '나의 공고' — 조회 + 추가/삭제만 (결정 완료)**: 나의 공고 리스트 **조회**는 마이페이지 조회 응답의 기존 `jobPosts`(`JobPostResponse` 카드 리스트)를 그대로 사용한다 — 공고 카드(회사·직무·지역·마감일 D-day·선호 언어 칩 등) 표시에 필요한 필드가 `JobPostResponse` 에 있는지 확인 후 부족하면 보강. 통합 수정에서는 공고 **추가·삭제만** 허용하고 기존 공고 본문 편집은 제외한다 (본문 개별 편집은 기존 `PATCH /api/v1/job-post/{id}` 사용). → `updateMyPage` 가 `JobPostService.create`(추가)·`delete`(삭제)에 위임.
 
@@ -301,7 +301,7 @@ mju.capstone.ddingconnect
 - [ ] 테스트: `MyPageServiceImplTest`(일괄 반영 + 일부 실패 시 전체 롤백), `MemberControllerTest`(PATCH 200 / 검증 400 / 비인증 401)
 - [ ] 머지 후 CLAUDE.md `### 마이페이지 (member)` 섹션에 수정 API 규칙 정식 통합
 
-**미확정 사항 없음** — 불일치 4·5 결정 완료. 머지 후 본문 도메인 섹션에 정식 규칙으로 통합.
+**미확정 사항 없음** — 불일치 2(이메일 재인증 미요구)·3(직무 `JobType` enum 재사용)·4·5 모두 결정 완료. 머지 후 본문 도메인 섹션에 정식 규칙으로 통합.
 
 ### 11개 작업자 노트 (TODO #1~#11 머지 완료 후 보존되는 일반 가이드)
 
