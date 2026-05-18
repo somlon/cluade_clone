@@ -5,6 +5,7 @@ import mju.capstone.ddingconnect.domain.coffeechat.domain.repository.CoffeeChatA
 import mju.capstone.ddingconnect.domain.coffeechat.domain.repository.CoffeeChatRepository;
 import mju.capstone.ddingconnect.domain.interested_job.domain.repository.TargetJobRepository;
 import mju.capstone.ddingconnect.domain.job_post.domain.GraduateJobPost;
+import mju.capstone.ddingconnect.domain.job_post.domain.JobType;
 import mju.capstone.ddingconnect.domain.job_post.domain.PostContents;
 import mju.capstone.ddingconnect.domain.job_post.domain.repository.GraduateJobPostRepository;
 import mju.capstone.ddingconnect.domain.job_post.domain.repository.JobAlarmRepository;
@@ -120,7 +121,7 @@ class MemberServiceImplTest {
         Member member = buildGraduateMember();
         Graduate graduate = Graduate.builder().id(22L).member(member)
                 .company("네이버").careerYear(5).businessCardImage("img")
-                .jobTitle("백엔드 개발자").build();
+                .jobType(JobType.BACKEND).build();
         when(graduateRepository.findByMemberId(2L)).thenReturn(Optional.of(graduate));
 
         MemberResponse response = memberService.getMyProfile(member);
@@ -129,7 +130,7 @@ class MemberServiceImplTest {
         assertThat(response.name()).isEqualTo("박졸업");
         assertThat(response.company()).isEqualTo("네이버");
         assertThat(response.careerYear()).isEqualTo(5);
-        assertThat(response.jobTitle()).isEqualTo("백엔드 개발자");
+        assertThat(response.jobType()).isEqualTo(JobType.BACKEND);
         assertThat(response.grade()).isNull();
     }
 
@@ -165,7 +166,7 @@ class MemberServiceImplTest {
         Graduate graduate = Graduate.builder().id(22L).member(member)
                 .company("네이버").careerYear(5).build();
         UpdateMemberRequest request = new UpdateMemberRequest(null, null, null, null, null,
-                null, null, null, null, null, "newImg", "프론트엔드 개발자", "카카오", 7);
+                null, null, null, null, null, "newImg", JobType.FRONTEND, "카카오", 7);
 
         when(graduateRepository.findByMemberId(2L)).thenReturn(Optional.of(graduate));
         when(graduateRepository.save(any(Graduate.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -174,11 +175,11 @@ class MemberServiceImplTest {
 
         ArgumentCaptor<Graduate> grdCaptor = ArgumentCaptor.forClass(Graduate.class);
         verify(graduateRepository).save(grdCaptor.capture());
-        assertThat(grdCaptor.getValue().getJobTitle()).isEqualTo("프론트엔드 개발자");
+        assertThat(grdCaptor.getValue().getJobType()).isEqualTo(JobType.FRONTEND);
         assertThat(grdCaptor.getValue().getCompany()).isEqualTo("카카오");
         assertThat(grdCaptor.getValue().getCareerYear()).isEqualTo(7);
 
-        assertThat(response.jobTitle()).isEqualTo("프론트엔드 개발자");
+        assertThat(response.jobType()).isEqualTo(JobType.FRONTEND);
         assertThat(response.company()).isEqualTo("카카오");
     }
 
@@ -274,11 +275,11 @@ class MemberServiceImplTest {
     }
 
     @Test
-    @DisplayName("updateMyProfile - STUDENT 가 직무(jobTitle) 보내면 MEMBER_FIELD_ROLE_MISMATCH 예외")
-    void updateMyProfile_역할필드_불일치_jobTitle_예외() {
+    @DisplayName("updateMyProfile - STUDENT 가 직무(jobType) 보내면 MEMBER_FIELD_ROLE_MISMATCH 예외")
+    void updateMyProfile_역할필드_불일치_jobType_예외() {
         Member member = buildStudentMember();
         UpdateMemberRequest request = new UpdateMemberRequest(null, null, null, null, null,
-                null, null, null, null, null, null, "백엔드 개발자", null, null);
+                null, null, null, null, null, null, JobType.BACKEND, null, null);
 
         assertThatThrownBy(() -> memberService.updateMyProfile(member, request))
                 .isInstanceOf(MemberHandler.class);

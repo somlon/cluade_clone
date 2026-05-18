@@ -131,7 +131,7 @@ public class MemberServiceImpl implements MemberService {
                         .id(graduate.getId())
                         .member(graduate.getMember())
                         .businessCardImage(request.businessCardImage() != null ? request.businessCardImage() : graduate.getBusinessCardImage())
-                        .jobTitle(request.jobTitle() != null ? request.jobTitle() : graduate.getJobTitle())
+                        .jobType(request.jobType() != null ? request.jobType() : graduate.getJobType())
                         .company(request.company() != null ? request.company() : graduate.getCompany())
                         .careerYear(request.careerYear() != null ? request.careerYear() : graduate.getCareerYear())
                         .build();
@@ -160,7 +160,7 @@ public class MemberServiceImpl implements MemberService {
     private void validateRoleFields(MemberRole role, UpdateMemberRequest req) {
         boolean studentField = req.grade() != null;
         boolean graduateField = req.businessCardImage() != null
-                || req.jobTitle() != null
+                || req.jobType() != null
                 || req.company() != null
                 || req.careerYear() != null;
         if (role == MemberRole.STUDENT && graduateField) {

@@ -2,6 +2,7 @@ package mju.capstone.ddingconnect.domain.member.domain;
 
 import jakarta.persistence.*;
 import lombok.*;
+import mju.capstone.ddingconnect.domain.job_post.domain.JobType;
 import mju.capstone.ddingconnect.global.common.BaseEntity;
 
 /**
@@ -10,7 +11,7 @@ import mju.capstone.ddingconnect.global.common.BaseEntity;
  * - PK(Long)        → id
  * - FK(Long)        → member (회원.PK 참조)
  * - 명함이미지        → businessCardImage (varchar(255))
- * - 직무            → jobTitle (varchar(255))
+ * - 직무(ENUM)       → jobType (JobType)
  * - 회사명           → company (varchar(255))
  * - 경력(Integer)    → careerYear
  *
@@ -37,9 +38,9 @@ public class Graduate extends BaseEntity {
     @Column(length = 255)
     private String businessCardImage;   // 명함이미지
 
-    // 직무 (예: "백엔드 개발자") — 자유 텍스트. 공고의 직무 필터용 PostContents.jobType(enum)과는 별개.
-    @Column(length = 255)
-    private String jobTitle;
+    // 직무 — 구직 공고 직무 필터에 쓰는 PostContents.jobType 과 동일한 JobType enum 으로 받는다.
+    @Enumerated(EnumType.STRING)
+    private JobType jobType;             // 직무(ENUM)
 
     @Column(length = 255)
     private String company;             // 회사명
