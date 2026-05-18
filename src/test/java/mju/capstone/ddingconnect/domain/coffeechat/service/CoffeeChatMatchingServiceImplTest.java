@@ -44,7 +44,7 @@ class CoffeeChatMatchingServiceImplTest {
 
     @Test
     @DisplayName("match - 알고리즘이 반환한 후보 ID 순서대로 카드 DTO 를 조립해 반환한다")
-    void match_후보카드_조립() {
+    void matchAssemblesCandidateCards() {
         MatchingRequest form = sampleForm();
         when(matchingAlgorithmClient.topMatches(form, REQUESTER_ID))
                 .thenReturn(List.of(CANDIDATE_ID_1, CANDIDATE_ID_2, CANDIDATE_ID_3));
@@ -61,7 +61,7 @@ class CoffeeChatMatchingServiceImplTest {
 
     @Test
     @DisplayName("match - 알고리즘 후보가 없으면 빈 리스트를 반환하고 조립기를 호출하지 않는다")
-    void match_후보없음_빈리스트() {
+    void matchReturnsEmptyWhenNoCandidates() {
         MatchingRequest form = sampleForm();
         when(matchingAlgorithmClient.topMatches(form, REQUESTER_ID)).thenReturn(List.of());
 
@@ -73,7 +73,7 @@ class CoffeeChatMatchingServiceImplTest {
 
     @Test
     @DisplayName("getCandidateDetail - memberId 로 상세 DTO 조립을 조립기에 위임한다")
-    void getCandidateDetail_위임() {
+    void getCandidateDetailDelegatesToAssembler() {
         when(candidateProfileAssembler.assembleDetail(CANDIDATE_ID_1))
                 .thenReturn(candidateDetail(CANDIDATE_ID_1));
 
@@ -85,7 +85,7 @@ class CoffeeChatMatchingServiceImplTest {
 
     @Test
     @DisplayName("getMyActivity - 신청자=본인 & status=ACCEPTED 커피챗의 수신자를 상세 DTO 로 조립한다")
-    void getMyActivity_수락된커피챗_수신자상세() {
+    void getMyActivityReturnsAcceptedReceiverDetails() {
         Member candidate1 = Member.builder().id(CANDIDATE_ID_1).build();
         Member candidate2 = Member.builder().id(CANDIDATE_ID_2).build();
         CoffeeChat chat1 = CoffeeChat.builder().requester(requester).receiver(candidate1)
@@ -107,7 +107,7 @@ class CoffeeChatMatchingServiceImplTest {
 
     @Test
     @DisplayName("getMyActivity - 수락된 커피챗이 없으면 빈 리스트를 반환한다")
-    void getMyActivity_없음_빈리스트() {
+    void getMyActivityReturnsEmptyWhenNone() {
         when(coffeeChatRepository.findByRequesterIdAndStatus(REQUESTER_ID, CoffeeChatStatus.ACCEPTED))
                 .thenReturn(List.of());
 

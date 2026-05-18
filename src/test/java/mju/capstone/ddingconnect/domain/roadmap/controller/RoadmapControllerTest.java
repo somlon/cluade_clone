@@ -49,7 +49,7 @@ class RoadmapControllerTest {
 
     @Test
     @DisplayName("POST /api/v1/roadmaps - 로드맵 등록")
-    void 로드맵_등록() throws Exception {
+    void createRoadmap() throws Exception {
         CreateRoadmapRequest req = new CreateRoadmapRequest("{}");
         given(roadmapService.create(any(), any())).willReturn(new RoadmapResponse(1L, 1L, "{}"));
 
@@ -62,7 +62,7 @@ class RoadmapControllerTest {
 
     @Test
     @DisplayName("GET /api/v1/roadmaps - 로드맵 목록")
-    void 로드맵_목록() throws Exception {
+    void getRoadmapList() throws Exception {
         given(roadmapService.getList()).willReturn(List.of());
 
         mockMvc.perform(get(BASE_URL))
@@ -72,7 +72,7 @@ class RoadmapControllerTest {
 
     @Test
     @DisplayName("GET /api/v1/roadmaps/{id} - 로드맵 상세")
-    void 로드맵_상세() throws Exception {
+    void getRoadmapDetail() throws Exception {
         given(roadmapService.getOne(1L)).willReturn(new RoadmapResponse(1L, 1L, "{}"));
 
         mockMvc.perform(get(BASE_URL + "/1"))
@@ -82,7 +82,7 @@ class RoadmapControllerTest {
 
     @Test
     @DisplayName("DELETE /api/v1/roadmaps/{id} - 로드맵 삭제")
-    void 로드맵_삭제() throws Exception {
+    void deleteRoadmap() throws Exception {
         mockMvc.perform(delete(BASE_URL + "/1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result").value(SuccessMessage.ROADMAP_DELETED));

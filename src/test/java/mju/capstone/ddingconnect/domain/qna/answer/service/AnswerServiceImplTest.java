@@ -71,7 +71,7 @@ class AnswerServiceImplTest {
 
     @Test
     @DisplayName("create - 졸업생이 다른 사람 질문에 답변 시 AnswerAlarm 1건 발행한다")
-    void create_정상등록_타인질문_알람발행() {
+    void createPublishesAlarmForOthersQuestion() {
         CreateAnswerRequest req = new CreateAnswerRequest("답변내용");
         when(questionRepository.findById(10L)).thenReturn(Optional.of(question));
         when(answerRepository.save(any(Answer.class))).thenReturn(answer);
@@ -95,7 +95,7 @@ class AnswerServiceImplTest {
 
     @Test
     @DisplayName("create - 졸업생이 본인 질문에 답변하면 AnswerAlarm 미발행")
-    void create_본인질문_본인답변_알람미발행() {
+    void createDoesNotPublishAlarmForOwnQuestion() {
         // graduate 가 자기 질문에 직접 답변
         Member graduateAuthor = Member.builder().id(7L).nickname("졸업생작성자").role(MemberRole.GRADUATE).build();
         Question myQuestion = Question.builder().id(11L).member(graduateAuthor)
@@ -113,7 +113,7 @@ class AnswerServiceImplTest {
 
     @Test
     @DisplayName("create - 학생이 본인이 작성한 질문에 답변하면 정상 등록되고 알람은 미발행")
-    void create_학생이_본인질문_답변_허용() {
+    void createAllowsStudentAnsweringOwnQuestion() {
         // questioner(STUDENT)가 본인이 작성한 question(10L)에 자답
         CreateAnswerRequest req = new CreateAnswerRequest("내 질문에 대한 내 답변");
         Answer selfAnswer = Answer.builder()
@@ -131,7 +131,7 @@ class AnswerServiceImplTest {
 
     @Test
     @DisplayName("create - 학생이 타인 질문에 답변 시도 시 ANSWER_NOT_GRADUATE 예외")
-    void create_학생이_타인질문_답변시도_예외() {
+    void createThrowsWhenStudentAnswersOthersQuestion() {
         // otherStudent 는 question(10L) 작성자가 아닌 STUDENT
         Member otherStudent = Member.builder().id(5L).nickname("다른학생").role(MemberRole.STUDENT).build();
         CreateAnswerRequest req = new CreateAnswerRequest("답변");
@@ -144,7 +144,7 @@ class AnswerServiceImplTest {
 
     @Test
     @DisplayName("create - UNKNOWN 역할이 타인 질문에 답변 시도 시 ANSWER_NOT_GRADUATE 예외")
-    void create_UNKNOWN답변_예외() {
+    void createThrowsWhenUnknownAnswersOthersQuestion() {
         Member unknown = Member.builder().id(99L).role(MemberRole.UNKNOWN).build();
         CreateAnswerRequest req = new CreateAnswerRequest("답변");
         when(questionRepository.findById(10L)).thenReturn(Optional.of(question));
@@ -156,7 +156,7 @@ class AnswerServiceImplTest {
 
     @Test
     @DisplayName("create - 질문이 없으면 QUESTION_NOT_FOUND 예외")
-    void create_질문없음_예외() {
+    void createThrowsWhenQuestionNotFound() {
         CreateAnswerRequest req = new CreateAnswerRequest("답변");
         when(questionRepository.findById(999L)).thenReturn(Optional.empty());
 
@@ -168,7 +168,7 @@ class AnswerServiceImplTest {
 
     @Test
     @DisplayName("getList - 특정 질문의 답변 목록을 카운트/likedByMe와 함께 반환한다")
-    void getList_카운트_likedByMe_포함() {
+    void getListReturnsCountsAndLikedByMe() {
         when(answerRepository.findByQuestionId(10L)).thenReturn(List.of(answer));
         when(answerLikeRepository.countByAnswerId(20L)).thenReturn(4L);
         when(answerLikeRepository.existsByMemberIdAndAnswerId(other.getId(), 20L)).thenReturn(true);
@@ -183,7 +183,7 @@ class AnswerServiceImplTest {
 
     @Test
     @DisplayName("update - 작성자가 답변을 정상 수정한다")
-    void update_정상수정() {
+    void updateByAuthorSucceeds() {
         UpdateAnswerRequest req = new UpdateAnswerRequest("수정된 답변");
         when(answerRepository.findById(20L)).thenReturn(Optional.of(answer));
         when(answerRepository.save(any(Answer.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -195,7 +195,7 @@ class AnswerServiceImplTest {
 
     @Test
     @DisplayName("update - 작성자가 아니면 UNAUTHORIZED 예외")
-    void update_권한없음_예외() {
+    void updateThrowsWhenUnauthorized() {
         UpdateAnswerRequest req = new UpdateAnswerRequest("수정");
         when(answerRepository.findById(20L)).thenReturn(Optional.of(answer));
 
@@ -205,7 +205,7 @@ class AnswerServiceImplTest {
 
     @Test
     @DisplayName("update - 존재하지 않으면 ANSWER_NOT_FOUND 예외")
-    void update_없음_예외() {
+    void updateThrowsWhenNotFound() {
         UpdateAnswerRequest req = new UpdateAnswerRequest("수정");
         when(answerRepository.findById(999L)).thenReturn(Optional.empty());
 
@@ -215,7 +215,7 @@ class AnswerServiceImplTest {
 
     @Test
     @DisplayName("delete - 작성자가 정상 삭제하면 AnswerAlarm/AnswerLike 먼저 삭제 후 Answer 삭제")
-    void delete_정상삭제() {
+    void deleteByAuthorSucceeds() {
         when(answerRepository.findById(20L)).thenReturn(Optional.of(answer));
 
         answerService.delete(answerer, 20L);
@@ -228,7 +228,7 @@ class AnswerServiceImplTest {
 
     @Test
     @DisplayName("delete - 작성자가 아니면 UNAUTHORIZED 예외, 자식/본체 모두 미삭제")
-    void delete_권한없음_예외() {
+    void deleteThrowsWhenUnauthorized() {
         when(answerRepository.findById(20L)).thenReturn(Optional.of(answer));
 
         assertThatThrownBy(() -> answerService.delete(other, 20L))
@@ -240,7 +240,7 @@ class AnswerServiceImplTest {
 
     @Test
     @DisplayName("delete - 존재하지 않으면 ANSWER_NOT_FOUND 예외")
-    void delete_없음_예외() {
+    void deleteThrowsWhenNotFound() {
         when(answerRepository.findById(999L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> answerService.delete(answerer, 999L))
@@ -249,7 +249,7 @@ class AnswerServiceImplTest {
 
     @Test
     @DisplayName("toggleLike - 좋아요가 없으면 새로 추가하고 liked=true/likeCount 반환")
-    void toggleLike_좋아요추가() {
+    void toggleLikeAddsLike() {
         when(answerRepository.findById(20L)).thenReturn(Optional.of(answer));
         when(answerLikeRepository.findById(any(AnswerLikeId.class))).thenReturn(Optional.empty());
         when(answerLikeRepository.existsByMemberIdAndAnswerId(other.getId(), 20L)).thenReturn(true);
@@ -265,7 +265,7 @@ class AnswerServiceImplTest {
 
     @Test
     @DisplayName("toggleLike - 이미 좋아요가 있으면 삭제하고 liked=false/likeCount 반환")
-    void toggleLike_좋아요취소() {
+    void toggleLikeRemovesLike() {
         AnswerLike existing = AnswerLike.builder().answer(answer).member(other).build();
         when(answerRepository.findById(20L)).thenReturn(Optional.of(answer));
         when(answerLikeRepository.findById(any(AnswerLikeId.class))).thenReturn(Optional.of(existing));
@@ -282,7 +282,7 @@ class AnswerServiceImplTest {
 
     @Test
     @DisplayName("toggleLike - 본인 답변이면 ANSWER_SELF_LIKE 예외")
-    void toggleLike_본인답변_예외() {
+    void toggleLikeThrowsOnOwnAnswer() {
         when(answerRepository.findById(20L)).thenReturn(Optional.of(answer));
 
         assertThatThrownBy(() -> answerService.toggleLike(answerer, 20L))
@@ -293,7 +293,7 @@ class AnswerServiceImplTest {
 
     @Test
     @DisplayName("toggleLike - 답변이 없으면 ANSWER_NOT_FOUND 예외")
-    void toggleLike_없음_예외() {
+    void toggleLikeThrowsWhenNotFound() {
         when(answerRepository.findById(999L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> answerService.toggleLike(other, 999L))

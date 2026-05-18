@@ -143,7 +143,7 @@ class EntityIntegrationTest {
     // ─── 회원 (Member) ───────────────────────────────────────────────────────
     @Test
     @DisplayName("ERD '회원' 테이블 - 전체 컬럼 저장 및 조회")
-    void member_전체컬럼_저장조회() {
+    void persistsMemberWithAllColumns() {
         printHeader("회원 (Member)");
 
         Member saved = memberRepository.save(Member.builder()
@@ -175,7 +175,7 @@ class EntityIntegrationTest {
     // ─── 재학생 (Student) ────────────────────────────────────────────────────
     @Test
     @DisplayName("ERD '재학생' 테이블 - FK(회원), 학년 저장")
-    void student_저장() {
+    void persistsStudent() {
         printHeader("재학생 (Student)");
 
         Member member = saveMember("s@mju.ac.kr", "재학생");
@@ -192,7 +192,7 @@ class EntityIntegrationTest {
     // ─── 졸업생 (Graduate) ───────────────────────────────────────────────────
     @Test
     @DisplayName("ERD '졸업생' 테이블 - FK(회원), 명함이미지, 회사명, 경력 저장")
-    void graduate_저장() {
+    void persistsGraduate() {
         printHeader("졸업생 (Graduate)");
 
         Member member = saveMember("g@mju.ac.kr", "졸업생");
@@ -212,7 +212,7 @@ class EntityIntegrationTest {
     // ─── 기술 스택 (TechStack) ───────────────────────────────────────────────
     @Test
     @DisplayName("ERD '기술 스텍' 테이블 - FK(회원), 이름(ENUM) 저장")
-    void techStack_저장() {
+    void persistsTechStack() {
         printHeader("기술스택 (TechStack)");
 
         Member member = saveMember("dev@mju.ac.kr", "개발자");
@@ -232,7 +232,7 @@ class EntityIntegrationTest {
     // ─── 질문 (Question) ─────────────────────────────────────────────────────
     @Test
     @DisplayName("ERD '질문' 테이블 - FK(회원), 카테고리ENUM, 제목, 본문, 조회수 저장")
-    void question_저장() {
+    void persistsQuestion() {
         printHeader("질문 (Question)");
 
         Member member = saveMember("q@mju.ac.kr", "질문자");
@@ -251,7 +251,7 @@ class EntityIntegrationTest {
     // ─── 질문 좋아요 (QuestionLike) ──────────────────────────────────────────
     @Test
     @DisplayName("ERD '질문 좋아요' 테이블 - FK2(질문), FK(회원) 저장")
-    void questionLike_저장() {
+    void persistsQuestionLike() {
         printHeader("질문 좋아요 (QuestionLike)");
 
         Member liker  = saveMember("lk@mju.ac.kr", "좋아요누르는사람");
@@ -277,7 +277,7 @@ class EntityIntegrationTest {
     // ─── 답변 (Answer) ───────────────────────────────────────────────────────
     @Test
     @DisplayName("ERD '답변' 테이블 - FK(질문), PK2(회원), 본문 저장")
-    void answer_저장() {
+    void persistsAnswer() {
         printHeader("답변 (Answer)");
 
         Member q = saveMember("q2@mju.ac.kr", "질문자2");
@@ -300,7 +300,7 @@ class EntityIntegrationTest {
     // ─── 답변 좋아요 (AnswerLike) ────────────────────────────────────────────
     @Test
     @DisplayName("ERD '답변 좋아요' 테이블 - PK(answer_id), PK2(member_id) 복합키 저장")
-    void answerLike_저장() {
+    void persistsAnswerLike() {
         printHeader("답변 좋아요 (AnswerLike) - 복합키");
 
         Member q = saveMember("q3@mju.ac.kr", "q3");
@@ -323,7 +323,7 @@ class EntityIntegrationTest {
     // ─── 답변 알람 (AnswerAlarm) ─────────────────────────────────────────────
     @Test
     @DisplayName("ERD '답변 알람' 테이블 - FK(answer_id), 알람내용, 읽음여부 저장")
-    void answerAlarm_저장() {
+    void persistsAnswerAlarm() {
         printHeader("답변 알람 (AnswerAlarm)");
 
         Member q = saveMember("q_al@mju.ac.kr", "질문자");
@@ -347,7 +347,7 @@ class EntityIntegrationTest {
     // ─── 커피챗 (CoffeeChat) ─────────────────────────────────────────────────
     @Test
     @DisplayName("ERD '커피챗' 테이블 - 요청자/수신자(회원FK), 점수들, 수략여부ENUM, 카카오링크 저장")
-    void coffeeChat_저장() {
+    void persistsCoffeeChat() {
         printHeader("커피챗 (CoffeeChat)");
 
         Member requester = saveMember("req@mju.ac.kr", "요청자");
@@ -372,7 +372,7 @@ class EntityIntegrationTest {
     // ─── 커피챗 알람 (CoffeeChatAlarm) ──────────────────────────────────────
     @Test
     @DisplayName("ERD '커피챗 알람' 테이블 - FK(커피챗), 알람내용, 읽음여부 저장")
-    void coffeeChatAlarm_저장() {
+    void persistsCoffeeChatAlarm() {
         printHeader("커피챗 알람 (CoffeeChatAlarm)");
 
         Member req = saveMember("req2@mju.ac.kr", "요청자2");
@@ -409,7 +409,7 @@ class EntityIntegrationTest {
     // ─── 로드맵 (Roadmap) ────────────────────────────────────────────────────
     @Test
     @DisplayName("ERD '로드맵' 테이블 - FK(회원), 내용(JSON) 저장")
-    void roadmap_저장() {
+    void persistsRoadmap() {
         printHeader("로드맵 (Roadmap)");
 
         Member m = saveMember("roadmap@mju.ac.kr", "로드맵작성자");
@@ -427,7 +427,7 @@ class EntityIntegrationTest {
     // ─── 로드맵 알람 (RoadmapAlarm) ──────────────────────────────────────────
     @Test
     @DisplayName("ERD '로드맵 알람' 테이블 - PK2(로드맵), 알람내용, 읽음여부 저장")
-    void roadmapAlarm_저장() {
+    void persistsRoadmapAlarm() {
         printHeader("로드맵 알람 (RoadmapAlarm)");
 
         Member m = saveMember("recv@mju.ac.kr", "알람수신자");
@@ -448,7 +448,7 @@ class EntityIntegrationTest {
     // ─── 구직 공고 (PostContents) ────────────────────────────────────────────
     @Test
     @DisplayName("ERD '구직 공고' 테이블 - 전체 컬럼 저장")
-    void postContents_저장() {
+    void persistsPostContents() {
         printHeader("구직 공고 (PostContents)");
 
         postContentsRepository.save(PostContents.builder()
@@ -471,7 +471,7 @@ class EntityIntegrationTest {
     // ─── 졸업생이 생성한 구직공고 (GraduateJobPost) ──────────────────────────
     @Test
     @DisplayName("ERD '졸업생이 생성한 구직공고' 테이블 - PK2(졸업생), PK3(구직공고) 저장")
-    void graduateJobPost_저장() {
+    void persistsGraduateJobPost() {
         printHeader("졸업생 구직공고 (GraduateJobPost)");
 
         Member m = saveMember("grd2@mju.ac.kr", "졸업생2");
@@ -495,7 +495,7 @@ class EntityIntegrationTest {
     // ─── 구직 알람 (JobAlarm) ────────────────────────────────────────────────
     @Test
     @DisplayName("ERD '구직 알람' 테이블 - PK2(회원), PK3(구직공고), 알람내용, 읽음여부 저장")
-    void jobAlarm_저장() {
+    void persistsJobAlarm() {
         printHeader("구직 알람 (JobAlarm)");
 
         Member member = saveMember("jal@mju.ac.kr", "구직알람수신자");
@@ -518,7 +518,7 @@ class EntityIntegrationTest {
     // ─── 관심 직군 (TargetJob) ───────────────────────────────────────────────
     @Test
     @DisplayName("ERD '관심 직군' 테이블 - FK(회원), 직군ENUM, Key2 저장")
-    void targetJob_저장() {
+    void persistsTargetJob() {
         printHeader("관심 직군 (TargetJob)");
 
         Member member = saveMember("int@mju.ac.kr", "관심등록자");
@@ -538,7 +538,7 @@ class EntityIntegrationTest {
     // ─── 전체 시나리오 통합 테스트 ───────────────────────────────────────────
     @Test
     @DisplayName("통합 시나리오: 재학생 질문 → 졸업생 답변 → 커피챗 요청 전체 흐름")
-    void 전체시나리오_통합테스트() {
+    void fullScenarioIntegration() {
         printHeader("통합 시나리오: 재학생 질문 → 졸업생 답변 → 커피챗");
 
         // 1. 회원

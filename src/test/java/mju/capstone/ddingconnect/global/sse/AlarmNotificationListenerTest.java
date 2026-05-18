@@ -23,7 +23,7 @@ class AlarmNotificationListenerTest {
 
     @Test
     @DisplayName("onAlarmNotification - 이벤트 수신 시 SseService.send 로 위임한다")
-    void onAlarmNotification_send_위임() {
+    void onAlarmNotificationDelegatesToSend() {
         Member receiver = Member.builder().id(TEST_MEMBER_ID).nickname(TEST_NICKNAME).build();
         AlarmNotificationEvent event =
                 new AlarmNotificationEvent(receiver, AlarmType.ANSWER, TEST_ALARM_CONTENT);

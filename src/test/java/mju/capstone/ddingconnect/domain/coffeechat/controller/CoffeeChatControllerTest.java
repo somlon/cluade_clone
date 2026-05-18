@@ -51,7 +51,7 @@ class CoffeeChatControllerTest {
 
     @Test
     @DisplayName("POST /api/v1/coffeechat - 커피챗 요청")
-    void 커피챗_요청() throws Exception {
+    void requestCoffeeChat() throws Exception {
         CreateCoffeeChatRequest req = new CreateCoffeeChatRequest(2L, "https://t");
         given(coffeeChatService.create(any(), any()))
                 .willReturn(new CoffeeChatResponse(1L, 1L, 2L, CoffeeChatStatus.PENDING, "https://t"));
@@ -65,7 +65,7 @@ class CoffeeChatControllerTest {
 
     @Test
     @DisplayName("GET /api/v1/coffeechat/sent - 보낸 목록")
-    void 보낸_목록() throws Exception {
+    void getSentList() throws Exception {
         given(coffeeChatService.getSentList(any())).willReturn(List.of());
 
         mockMvc.perform(get(BASE_URL + "/sent"))
@@ -75,7 +75,7 @@ class CoffeeChatControllerTest {
 
     @Test
     @DisplayName("GET /api/v1/coffeechat/received - 받은 목록")
-    void 받은_목록() throws Exception {
+    void getReceivedList() throws Exception {
         given(coffeeChatService.getReceivedList(any())).willReturn(List.of());
 
         mockMvc.perform(get(BASE_URL + "/received"))
@@ -85,7 +85,7 @@ class CoffeeChatControllerTest {
 
     @Test
     @DisplayName("PATCH /api/v1/coffeechat/{id}/status - 수락/거절")
-    void 상태_변경() throws Exception {
+    void updateStatus() throws Exception {
         UpdateCoffeeChatStatusRequest req = new UpdateCoffeeChatStatusRequest(CoffeeChatStatus.ACCEPTED);
         given(coffeeChatService.updateStatus(any(), eq(1L), any()))
                 .willReturn(new CoffeeChatResponse(1L, 1L, 2L, CoffeeChatStatus.ACCEPTED, "https://t"));
@@ -99,7 +99,7 @@ class CoffeeChatControllerTest {
 
     @Test
     @DisplayName("DELETE /api/v1/coffeechat/{id} - 커피챗 취소")
-    void 커피챗_취소() throws Exception {
+    void cancelCoffeeChat() throws Exception {
         mockMvc.perform(delete(BASE_URL + "/1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result").value(SuccessMessage.COFFEE_CHAT_CANCELED));

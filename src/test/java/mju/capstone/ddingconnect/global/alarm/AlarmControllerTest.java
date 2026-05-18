@@ -46,7 +46,7 @@ class AlarmControllerTest {
 
     @Test
     @DisplayName("GET /api/v1/alarms - 내 알람 목록")
-    void 알람_목록() throws Exception {
+    void getMyAlarms() throws Exception {
         AlarmResponse alarm = new AlarmResponse(AlarmType.ANSWER, 1L, 100L,
                 "답변 알람", false, LocalDateTime.now(), "방금 전");
         given(alarmService.getMyAlarms(any())).willReturn(List.of(alarm));
@@ -58,7 +58,7 @@ class AlarmControllerTest {
 
     @Test
     @DisplayName("GET /api/v1/alarms/{type}/{id} - 알람 상세")
-    void 알람_상세() throws Exception {
+    void getAlarmDetail() throws Exception {
         AlarmResponse alarm = new AlarmResponse(AlarmType.JOB, 1L, 100L,
                 "구직 알람", false, LocalDateTime.now(), "방금 전");
         given(alarmService.getAlarmDetail(any(), eq(AlarmType.JOB), eq(1L))).willReturn(alarm);
@@ -70,7 +70,7 @@ class AlarmControllerTest {
 
     @Test
     @DisplayName("PATCH /api/v1/alarms/{type}/{id}/read - 알람 읽음 처리")
-    void 알람_읽음() throws Exception {
+    void markAlarmAsRead() throws Exception {
         mockMvc.perform(patch(BASE_URL + "/ROADMAP/5/read"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result").value(SuccessMessage.ALARM_MARKED_AS_READ));

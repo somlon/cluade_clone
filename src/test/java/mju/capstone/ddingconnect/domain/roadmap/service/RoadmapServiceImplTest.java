@@ -51,7 +51,7 @@ class RoadmapServiceImplTest {
 
     @Test
     @DisplayName("create - 로드맵을 정상 등록하고 본인에게 RoadmapAlarm 1건 발행한다")
-    void create_정상등록_알람발행() {
+    void createSucceedsAndPublishesAlarm() {
         CreateRoadmapRequest req = new CreateRoadmapRequest("백엔드 개발자 로드맵 본문");
         when(roadmapRepository.save(any(Roadmap.class))).thenReturn(roadmap);
 
@@ -72,7 +72,7 @@ class RoadmapServiceImplTest {
 
     @Test
     @DisplayName("create - JSON 형식이 아닌 일반 문자열도 형식 제한 없이 정상 등록된다")
-    void create_일반문자열_정상등록() {
+    void createAcceptsPlainStringContent() {
         // 이전에는 JSON object/array만 허용했으나, 이제는 일반 문자열도 그대로 통과해야 한다
         CreateRoadmapRequest req = new CreateRoadmapRequest("Java 부터 차근차근 학습하세요");
         when(roadmapRepository.save(any(Roadmap.class))).thenReturn(roadmap);
@@ -84,7 +84,7 @@ class RoadmapServiceImplTest {
 
     @Test
     @DisplayName("create - content가 null 또는 공백이면 INVALID_CONTENT 예외")
-    void create_blankContent_예외() {
+    void createThrowsOnBlankContent() {
         assertThatThrownBy(() -> roadmapService.create(author, new CreateRoadmapRequest(null)))
                 .isInstanceOf(RoadmapHandler.class);
         assertThatThrownBy(() -> roadmapService.create(author, new CreateRoadmapRequest("   ")))
@@ -94,7 +94,7 @@ class RoadmapServiceImplTest {
 
     @Test
     @DisplayName("getList - 로드맵 목록을 반환한다")
-    void getList_정상반환() {
+    void getListReturnsList() {
         when(roadmapRepository.findAll()).thenReturn(List.of(roadmap));
 
         List<RoadmapResponse> result = roadmapService.getList();
@@ -104,7 +104,7 @@ class RoadmapServiceImplTest {
 
     @Test
     @DisplayName("getOne - 존재하는 로드맵을 반환한다")
-    void getOne_정상조회() {
+    void getOneReturnsRoadmap() {
         when(roadmapRepository.findById(10L)).thenReturn(Optional.of(roadmap));
 
         RoadmapResponse response = roadmapService.getOne(10L);
@@ -114,7 +114,7 @@ class RoadmapServiceImplTest {
 
     @Test
     @DisplayName("getOne - 존재하지 않으면 NOT_FOUND 예외")
-    void getOne_없음_예외() {
+    void getOneThrowsWhenNotFound() {
         when(roadmapRepository.findById(999L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> roadmapService.getOne(999L))
@@ -123,7 +123,7 @@ class RoadmapServiceImplTest {
 
     @Test
     @DisplayName("delete - 작성자가 정상 삭제하면 RoadmapAlarm 먼저 삭제 후 Roadmap 삭제")
-    void delete_정상삭제() {
+    void deleteByAuthorSucceeds() {
         when(roadmapRepository.findById(10L)).thenReturn(Optional.of(roadmap));
 
         roadmapService.delete(author, 10L);
@@ -135,7 +135,7 @@ class RoadmapServiceImplTest {
 
     @Test
     @DisplayName("delete - 작성자가 아니면 UNAUTHORIZED 예외, 자식/본체 모두 미삭제")
-    void delete_권한없음_예외() {
+    void deleteThrowsWhenUnauthorized() {
         when(roadmapRepository.findById(10L)).thenReturn(Optional.of(roadmap));
 
         assertThatThrownBy(() -> roadmapService.delete(other, 10L))
@@ -146,7 +146,7 @@ class RoadmapServiceImplTest {
 
     @Test
     @DisplayName("delete - 존재하지 않으면 NOT_FOUND 예외")
-    void delete_없음_예외() {
+    void deleteThrowsWhenNotFound() {
         when(roadmapRepository.findById(999L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> roadmapService.delete(author, 999L))
@@ -155,7 +155,7 @@ class RoadmapServiceImplTest {
 
     @Test
     @DisplayName("countMyRoadmaps - 본인이 생성한 로드맵 수를 반환한다")
-    void countMyRoadmaps_정상반환() {
+    void countMyRoadmapsReturnsCount() {
         when(roadmapRepository.countByMemberId(author.getId())).thenReturn(4L);
 
         long result = roadmapService.countMyRoadmaps(author);

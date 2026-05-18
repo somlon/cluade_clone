@@ -59,7 +59,7 @@ class SseControllerTest {
     }
 
     @Test
-    void subscribe_성공() throws Exception {
+    void subscribeSuccess() throws Exception {
         SseEmitter emitter = new SseEmitter();
         given(sseService.subscribe(any(Member.class))).willReturn(emitter);
 

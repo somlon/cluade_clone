@@ -46,7 +46,7 @@ class CoffeeChatMatchingControllerTest {
 
     @Test
     @DisplayName("POST /api/v1/coffeechat/matching - 매칭 후보 카드 리스트 반환")
-    void 매칭_요청() throws Exception {
+    void getMatchingCandidates() throws Exception {
         given(coffeeChatMatchingService.match(any(), any()))
                 .willReturn(List.of(candidateCard(CANDIDATE_ID_1), candidateCard(CANDIDATE_ID_2)));
 
@@ -60,7 +60,7 @@ class CoffeeChatMatchingControllerTest {
 
     @Test
     @DisplayName("GET /api/v1/coffeechat/matching/{memberId} - 매칭 상대 상세 반환")
-    void 매칭_상세() throws Exception {
+    void getMatchingDetail() throws Exception {
         given(coffeeChatMatchingService.getCandidateDetail(eq(CANDIDATE_ID_1)))
                 .willReturn(candidateDetail(CANDIDATE_ID_1));
 
@@ -71,7 +71,7 @@ class CoffeeChatMatchingControllerTest {
 
     @Test
     @DisplayName("GET /api/v1/coffeechat/my-activity - 수락된 커피챗 상대 리스트 반환")
-    void 나의활동() throws Exception {
+    void getMyActivity() throws Exception {
         given(coffeeChatMatchingService.getMyActivity(any()))
                 .willReturn(List.of(candidateDetail(CANDIDATE_ID_1)));
 
