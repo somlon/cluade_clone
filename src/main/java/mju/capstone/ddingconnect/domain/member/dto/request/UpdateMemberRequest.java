@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Pattern;
 public record UpdateMemberRequest(
 
         // ── 공통 필드 (STUDENT / GRADUATE 모두 수정 가능) ──────────
+        String name,
         String nickname,
         String studentNumber,
         String department,
@@ -23,6 +24,7 @@ public record UpdateMemberRequest(
 
         // ── GRADUATE 전용 필드 ────────────────────────────────────
         String businessCardImage,   // 명함이미지
+        String jobTitle,            // 직무
         String company,             // 회사명
         Integer careerYear          // 경력
 ) {

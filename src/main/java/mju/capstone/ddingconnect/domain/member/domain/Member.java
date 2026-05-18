@@ -11,6 +11,7 @@ import static mju.capstone.ddingconnect.domain.member.domain.MemberRole.UNKNOWN;
  * ERD 컬럼 매핑:
  * - PK(Long)       → id
  * - 명지대 이메일   → email (varchar(255))
+ * - 이름           → name (varchar(255))
  * - 닉네임         → nickname (varchar(255))
  * - 비밀번호        → password (varchar(255))
  * - 학번           → studentNumber (varchar(255))
@@ -50,6 +51,9 @@ public class Member extends BaseEntity {
 
     @Column(length = 255)
     private String email;           // 명지대 이메일
+
+    @Column(length = 255)
+    private String name;            // 이름
 
     @Column(length = 255)
     private String nickname;        // 닉네임

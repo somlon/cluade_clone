@@ -83,13 +83,13 @@ class MemberServiceImplTest {
     @InjectMocks MemberServiceImpl memberService;
 
     private Member buildStudentMember() {
-        return Member.builder().id(1L).email("s@mju.ac.kr").nickname("재학생")
+        return Member.builder().id(1L).email("s@mju.ac.kr").name("김재학").nickname("재학생")
                 .role(MemberRole.STUDENT).studentNumber("60201234").department("컴퓨터공학과")
                 .point(0L).isDeleted(false).build();
     }
 
     private Member buildGraduateMember() {
-        return Member.builder().id(2L).email("g@mju.ac.kr").nickname("졸업생")
+        return Member.builder().id(2L).email("g@mju.ac.kr").name("박졸업").nickname("졸업생")
                 .role(MemberRole.GRADUATE).studentNumber("60150001").department("컴퓨터공학과")
                 .point(100L).isDeleted(false).build();
     }
@@ -109,6 +109,7 @@ class MemberServiceImplTest {
         MemberResponse response = memberService.getMyProfile(member);
 
         assertThat(response.role()).isEqualTo(MemberRole.STUDENT);
+        assertThat(response.name()).isEqualTo("김재학");
         assertThat(response.grade()).isEqualTo(3);
         assertThat(response.company()).isNull();
     }
@@ -118,24 +119,27 @@ class MemberServiceImplTest {
     void getMyProfile_졸업생() {
         Member member = buildGraduateMember();
         Graduate graduate = Graduate.builder().id(22L).member(member)
-                .company("네이버").careerYear(5).businessCardImage("img").build();
+                .company("네이버").careerYear(5).businessCardImage("img")
+                .jobTitle("백엔드 개발자").build();
         when(graduateRepository.findByMemberId(2L)).thenReturn(Optional.of(graduate));
 
         MemberResponse response = memberService.getMyProfile(member);
 
         assertThat(response.role()).isEqualTo(MemberRole.GRADUATE);
+        assertThat(response.name()).isEqualTo("박졸업");
         assertThat(response.company()).isEqualTo("네이버");
         assertThat(response.careerYear()).isEqualTo(5);
+        assertThat(response.jobTitle()).isEqualTo("백엔드 개발자");
         assertThat(response.grade()).isNull();
     }
 
     @Test
-    @DisplayName("updateMyProfile - 재학생이 닉네임/학년을 수정한다")
+    @DisplayName("updateMyProfile - 재학생이 이름/닉네임/학년을 수정한다")
     void updateMyProfile_재학생() {
         Member member = buildStudentMember();
         Student student = Student.builder().id(11L).member(member).grade(3).build();
-        UpdateMemberRequest request = new UpdateMemberRequest("새닉네임", null, null,
-                null, null, null, null, MemberServiceImpl.MAX_GRADE, null, null, null);
+        UpdateMemberRequest request = new UpdateMemberRequest("새이름", "새닉네임", null, null,
+                null, null, null, null, MemberServiceImpl.MAX_GRADE, null, null, null, null);
 
         when(studentRepository.findByMemberId(1L)).thenReturn(Optional.of(student));
         when(studentRepository.save(any(Student.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -144,6 +148,7 @@ class MemberServiceImplTest {
 
         ArgumentCaptor<Member> memberCaptor = ArgumentCaptor.forClass(Member.class);
         verify(memberRepository).save(memberCaptor.capture());
+        assertThat(memberCaptor.getValue().getName()).isEqualTo("새이름");
         assertThat(memberCaptor.getValue().getNickname()).isEqualTo("새닉네임");
 
         ArgumentCaptor<Student> studentCaptor = ArgumentCaptor.forClass(Student.class);
@@ -154,13 +159,13 @@ class MemberServiceImplTest {
     }
 
     @Test
-    @DisplayName("updateMyProfile - 졸업생이 회사/경력을 수정한다")
+    @DisplayName("updateMyProfile - 졸업생이 직무/회사/경력을 수정한다")
     void updateMyProfile_졸업생() {
         Member member = buildGraduateMember();
         Graduate graduate = Graduate.builder().id(22L).member(member)
                 .company("네이버").careerYear(5).build();
-        UpdateMemberRequest request = new UpdateMemberRequest(null, null, null,
-                null, null, null, null, null, "newImg", "카카오", 7);
+        UpdateMemberRequest request = new UpdateMemberRequest(null, null, null, null,
+                null, null, null, null, null, "newImg", "프론트엔드 개발자", "카카오", 7);
 
         when(graduateRepository.findByMemberId(2L)).thenReturn(Optional.of(graduate));
         when(graduateRepository.save(any(Graduate.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -169,9 +174,11 @@ class MemberServiceImplTest {
 
         ArgumentCaptor<Graduate> grdCaptor = ArgumentCaptor.forClass(Graduate.class);
         verify(graduateRepository).save(grdCaptor.capture());
+        assertThat(grdCaptor.getValue().getJobTitle()).isEqualTo("프론트엔드 개발자");
         assertThat(grdCaptor.getValue().getCompany()).isEqualTo("카카오");
         assertThat(grdCaptor.getValue().getCareerYear()).isEqualTo(7);
 
+        assertThat(response.jobTitle()).isEqualTo("프론트엔드 개발자");
         assertThat(response.company()).isEqualTo("카카오");
     }
 
@@ -180,8 +187,8 @@ class MemberServiceImplTest {
     void updateMyProfile_grade_클램프() {
         Member member = buildStudentMember();
         Student student = Student.builder().id(11L).member(member).grade(1).build();
-        UpdateMemberRequest request = new UpdateMemberRequest(null, null, null,
-                null, null, null, null, MemberServiceImpl.MAX_GRADE + 1, null, null, null);
+        UpdateMemberRequest request = new UpdateMemberRequest(null, null, null, null,
+                null, null, null, null, MemberServiceImpl.MAX_GRADE + 1, null, null, null, null);
 
         when(studentRepository.findByMemberId(1L)).thenReturn(Optional.of(student));
         when(studentRepository.save(any(Student.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -198,8 +205,8 @@ class MemberServiceImplTest {
     void updateMyProfile_grade_음수_예외() {
         Member member = buildStudentMember();
         Student student = Student.builder().id(11L).member(member).grade(2).build();
-        UpdateMemberRequest request = new UpdateMemberRequest(null, null, null,
-                null, null, null, null, MemberServiceImpl.MIN_GRADE - 2, null, null, null);
+        UpdateMemberRequest request = new UpdateMemberRequest(null, null, null, null,
+                null, null, null, null, MemberServiceImpl.MIN_GRADE - 2, null, null, null, null);
 
         when(studentRepository.findByMemberId(1L)).thenReturn(Optional.of(student));
 
@@ -212,8 +219,8 @@ class MemberServiceImplTest {
     void updateMyProfile_grade_0_예외() {
         Member member = buildStudentMember();
         Student student = Student.builder().id(11L).member(member).grade(2).build();
-        UpdateMemberRequest request = new UpdateMemberRequest(null, null, null,
-                null, null, null, null, MemberServiceImpl.MIN_GRADE - 1, null, null, null);
+        UpdateMemberRequest request = new UpdateMemberRequest(null, null, null, null,
+                null, null, null, null, MemberServiceImpl.MIN_GRADE - 1, null, null, null, null);
 
         when(studentRepository.findByMemberId(1L)).thenReturn(Optional.of(student));
 
@@ -225,8 +232,20 @@ class MemberServiceImplTest {
     @DisplayName("updateMyProfile - STUDENT 가 GRADUATE 전용 필드 보내면 MEMBER_FIELD_ROLE_MISMATCH 예외")
     void updateMyProfile_역할필드_불일치_학생_예외() {
         Member member = buildStudentMember();
-        UpdateMemberRequest request = new UpdateMemberRequest(null, null, null,
-                null, null, null, null, null, null, "카카오", null);
+        UpdateMemberRequest request = new UpdateMemberRequest(null, null, null, null,
+                null, null, null, null, null, null, null, "카카오", null);
+
+        assertThatThrownBy(() -> memberService.updateMyProfile(member, request))
+                .isInstanceOf(MemberHandler.class);
+        verify(memberRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("updateMyProfile - STUDENT 가 직무(jobTitle) 보내면 MEMBER_FIELD_ROLE_MISMATCH 예외")
+    void updateMyProfile_역할필드_불일치_jobTitle_예외() {
+        Member member = buildStudentMember();
+        UpdateMemberRequest request = new UpdateMemberRequest(null, null, null, null,
+                null, null, null, null, null, null, "백엔드 개발자", null, null);
 
         assertThatThrownBy(() -> memberService.updateMyProfile(member, request))
                 .isInstanceOf(MemberHandler.class);
@@ -237,8 +256,8 @@ class MemberServiceImplTest {
     @DisplayName("updateMyProfile - GRADUATE 가 grade 보내면 MEMBER_FIELD_ROLE_MISMATCH 예외")
     void updateMyProfile_역할필드_불일치_졸업생_예외() {
         Member member = buildGraduateMember();
-        UpdateMemberRequest request = new UpdateMemberRequest(null, null, null,
-                null, null, null, null, 3, null, null, null);
+        UpdateMemberRequest request = new UpdateMemberRequest(null, null, null, null,
+                null, null, null, null, 3, null, null, null, null);
 
         assertThatThrownBy(() -> memberService.updateMyProfile(member, request))
                 .isInstanceOf(MemberHandler.class);
@@ -249,8 +268,8 @@ class MemberServiceImplTest {
     @DisplayName("updateMyProfile - UNKNOWN 이 grade 또는 graduate 필드 보내면 예외")
     void updateMyProfile_UNKNOWN_예외() {
         Member member = buildUnknownMember();
-        UpdateMemberRequest request = new UpdateMemberRequest(null, null, null,
-                null, null, null, null, 3, null, null, null);
+        UpdateMemberRequest request = new UpdateMemberRequest(null, null, null, null,
+                null, null, null, null, 3, null, null, null, null);
 
         assertThatThrownBy(() -> memberService.updateMyProfile(member, request))
                 .isInstanceOf(MemberHandler.class);

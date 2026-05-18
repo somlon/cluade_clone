@@ -10,6 +10,7 @@ import mju.capstone.ddingconnect.global.common.BaseEntity;
  * - PK(Long)        → id
  * - FK(Long)        → member (회원.PK 참조)
  * - 명함이미지        → businessCardImage (varchar(255))
+ * - 직무            → jobTitle (varchar(255))
  * - 회사명           → company (varchar(255))
  * - 경력(Integer)    → careerYear
  *
@@ -35,6 +36,10 @@ public class Graduate extends BaseEntity {
 
     @Column(length = 255)
     private String businessCardImage;   // 명함이미지
+
+    // 직무 (예: "백엔드 개발자") — 자유 텍스트. 공고의 직무 필터용 PostContents.jobType(enum)과는 별개.
+    @Column(length = 255)
+    private String jobTitle;
 
     @Column(length = 255)
     private String company;             // 회사명

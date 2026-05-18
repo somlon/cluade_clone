@@ -101,6 +101,7 @@ public class MemberServiceImpl implements MemberService {
                 .isDeleted(member.getIsDeleted())
                 .point(member.getPoint())
                 .certificate(member.getCertificate())
+                .name(request.name() != null ? request.name() : member.getName())
                 .nickname(request.nickname() != null ? request.nickname() : member.getNickname())
                 .studentNumber(request.studentNumber() != null ? request.studentNumber() : member.getStudentNumber())
                 .department(request.department() != null ? request.department() : member.getDepartment())
@@ -130,6 +131,7 @@ public class MemberServiceImpl implements MemberService {
                         .id(graduate.getId())
                         .member(graduate.getMember())
                         .businessCardImage(request.businessCardImage() != null ? request.businessCardImage() : graduate.getBusinessCardImage())
+                        .jobTitle(request.jobTitle() != null ? request.jobTitle() : graduate.getJobTitle())
                         .company(request.company() != null ? request.company() : graduate.getCompany())
                         .careerYear(request.careerYear() != null ? request.careerYear() : graduate.getCareerYear())
                         .build();
@@ -158,6 +160,7 @@ public class MemberServiceImpl implements MemberService {
     private void validateRoleFields(MemberRole role, UpdateMemberRequest req) {
         boolean studentField = req.grade() != null;
         boolean graduateField = req.businessCardImage() != null
+                || req.jobTitle() != null
                 || req.company() != null
                 || req.careerYear() != null;
         if (role == MemberRole.STUDENT && graduateField) {
