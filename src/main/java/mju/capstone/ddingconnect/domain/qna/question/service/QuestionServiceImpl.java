@@ -143,6 +143,12 @@ public class QuestionServiceImpl implements QuestionService {
         return new LikeToggleResponse(liked, likeCount);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public long countMyQuestions(Member member) {
+        return questionRepository.countByMemberId(member.getId());
+    }
+
     private QuestionResponse toResponse(Question question, Member member) {
         long likeCount = questionLikeRepository.countByQuestionId(question.getId());
         long answerCount = answerRepository.countByQuestionId(question.getId());

@@ -15,4 +15,6 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
     List<Question> findByMemberId(Long memberId);
 
     List<Question> findByCategory(QuestionCategory category);
+
+    long countByMemberId(Long memberId);
 }

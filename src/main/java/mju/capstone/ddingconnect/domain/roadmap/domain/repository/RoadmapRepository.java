@@ -12,4 +12,6 @@ import java.util.List;
 public interface RoadmapRepository extends JpaRepository<Roadmap, Long> {
 
     List<Roadmap> findByMemberId(Long memberId);
+
+    long countByMemberId(Long memberId);
 }

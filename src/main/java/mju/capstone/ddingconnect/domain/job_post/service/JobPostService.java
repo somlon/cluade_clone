@@ -23,4 +23,7 @@ public interface JobPostService {
 
     /** 구직 공고 삭제 */
     void delete(Member member, Long jobPostId);
+
+    /** 본인(졸업생)이 등록한 구직 공고 목록 */
+    List<JobPostResponse> getMyJobPosts(Member member);
 }

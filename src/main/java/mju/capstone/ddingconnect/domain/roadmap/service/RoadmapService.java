@@ -15,4 +15,7 @@ public interface RoadmapService {
     RoadmapResponse getOne(Long roadmapId);
 
     void delete(Member member, Long roadmapId);
+
+    /** 본인이 생성한 로드맵 수 */
+    long countMyRoadmaps(Member member);
 }

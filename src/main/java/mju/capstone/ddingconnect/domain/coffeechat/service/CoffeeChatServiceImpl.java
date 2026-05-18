@@ -206,4 +206,12 @@ public class CoffeeChatServiceImpl implements CoffeeChatService {
         coffeeChatAlarmRepository.deleteByCoffeeChatId(coffeeChatId);
         coffeeChatRepository.delete(coffeeChat);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countMyAcceptedCoffeeChats(Member member) {
+        Long memberId = member.getId();
+        return coffeeChatRepository.countByRequesterIdAndStatus(memberId, CoffeeChatStatus.ACCEPTED)
+                + coffeeChatRepository.countByReceiverIdAndStatus(memberId, CoffeeChatStatus.ACCEPTED);
+    }
 }

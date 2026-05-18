@@ -242,6 +242,18 @@ public class JobPostServiceImpl implements JobPostService {
         postContentsRepository.delete(postContents);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<JobPostResponse> getMyJobPosts(Member member) {
+        return graduateRepository.findByMemberId(member.getId())
+                .map(graduate -> graduateJobPostRepository.findByGraduateId(graduate.getId())
+                        .stream()
+                        .map(GraduateJobPost::getPostContents)
+                        .map(JobPostResponse::from)
+                        .toList())
+                .orElseGet(List::of);
+    }
+
     /**
      * JobType → TargetJobCategory 브리지.
      * 두 enum 은 같은 원티드 taxonomy 의 동일한 값을 공유하되 타입만 분리돼 있어 name() 으로 매칭한다.

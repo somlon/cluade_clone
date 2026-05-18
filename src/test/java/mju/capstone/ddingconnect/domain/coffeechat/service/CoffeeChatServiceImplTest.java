@@ -341,4 +341,16 @@ class CoffeeChatServiceImplTest {
         assertThatThrownBy(() -> coffeeChatService.delete(studentRequester, 999L))
                 .isInstanceOf(CoffeeChatHandler.class);
     }
+
+    @Test
+    @DisplayName("countMyAcceptedCoffeeChats - 요청자/수신자 ACCEPTED 커피챗 수를 합산한다")
+    void countMyAcceptedCoffeeChats_합산() {
+        Long memberId = studentRequester.getId();
+        when(coffeeChatRepository.countByRequesterIdAndStatus(memberId, CoffeeChatStatus.ACCEPTED)).thenReturn(2L);
+        when(coffeeChatRepository.countByReceiverIdAndStatus(memberId, CoffeeChatStatus.ACCEPTED)).thenReturn(3L);
+
+        long result = coffeeChatService.countMyAcceptedCoffeeChats(studentRequester);
+
+        assertThat(result).isEqualTo(5L);
+    }
 }
