@@ -81,7 +81,7 @@ class JobPostServiceImplTest {
 
     @Test
     @DisplayName("create - 졸업생이 구직 공고를 정상 등록한다 (매칭되는 TargetJob 없으면 알람 미발행)")
-    void create_졸업생_정상등록() {
+    void createByGraduateSucceeds() {
         when(postContentsRepository.save(any(PostContents.class))).thenReturn(postContents);
         when(graduateRepository.findByMemberId(graduateMember.getId())).thenReturn(Optional.of(graduate));
         when(targetJobRepository.findByInterestedJob(TargetJobCategory.BACKEND)).thenReturn(List.of());
@@ -98,7 +98,7 @@ class JobPostServiceImplTest {
 
     @Test
     @DisplayName("create - 매칭되는 학생 N명에게 JobAlarm 발행, 본인/중복 멤버는 제외")
-    void create_매칭학생에게_알람발행() {
+    void createPublishesAlarmToMatchingStudents() {
         Member studentA = Member.builder().id(11L).nickname("A").build();
         Member studentB = Member.builder().id(12L).nickname("B").build();
         // 본인 (등록한 졸업생) 도 같은 카테고리 관심을 가진 경우 → 제외돼야 함
@@ -133,7 +133,7 @@ class JobPostServiceImplTest {
 
     @Test
     @DisplayName("create - 졸업생이 아니면 POST_CONTENTS_NOT_GRADUATE 예외")
-    void create_졸업생아님_예외() {
+    void createThrowsWhenNotGraduate() {
         Member student = Member.builder().id(3L).role(MemberRole.STUDENT).build();
 
         assertThatThrownBy(() -> jobPostService.create(student, createReq()))
@@ -145,7 +145,7 @@ class JobPostServiceImplTest {
 
     @Test
     @DisplayName("create - 선호 언어 리스트가 엔티티·응답에 그대로 반영된다")
-    void create_선호언어_리스트_반영() {
+    void createReflectsPreferredLanguages() {
         PostContents withLanguages = PostContents.builder().id(101L)
                 .companyName("네이버").jobType(JobType.BACKEND)
                 .preferredLanguages(List.of("JavaScript", "React", "Node.js")).build();
@@ -167,7 +167,7 @@ class JobPostServiceImplTest {
 
     @Test
     @DisplayName("getList - 모든 구직 공고 목록을 반환한다")
-    void getList_정상반환() {
+    void getListReturnsAll() {
         when(postContentsRepository.findAll()).thenReturn(List.of(postContents));
 
         List<JobPostResponse> result = jobPostService.getList();
@@ -178,7 +178,7 @@ class JobPostServiceImplTest {
 
     @Test
     @DisplayName("getOne - 존재하는 구직 공고를 반환한다")
-    void getOne_정상조회() {
+    void getOneReturnsPost() {
         when(postContentsRepository.findById(100L)).thenReturn(Optional.of(postContents));
 
         JobPostResponse response = jobPostService.getOne(100L);
@@ -188,7 +188,7 @@ class JobPostServiceImplTest {
 
     @Test
     @DisplayName("getOne - 존재하지 않으면 POST_CONTENTS_NOT_FOUND 예외")
-    void getOne_없음_예외() {
+    void getOneThrowsWhenNotFound() {
         when(postContentsRepository.findById(999L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> jobPostService.getOne(999L))
@@ -197,7 +197,7 @@ class JobPostServiceImplTest {
 
     @Test
     @DisplayName("update - 작성자(졸업생)가 정상 수정한다")
-    void update_정상수정() {
+    void updateByAuthorSucceeds() {
         GraduateJobPost gjp = GraduateJobPost.builder().graduate(graduate).postContents(postContents).build();
         when(postContentsRepository.findById(100L)).thenReturn(Optional.of(postContents));
         when(graduateJobPostRepository.findByPostContentsId(100L)).thenReturn(List.of(gjp));
@@ -213,7 +213,7 @@ class JobPostServiceImplTest {
 
     @Test
     @DisplayName("update - preferredLanguages 는 새 리스트면 교체, null 이면 기존값 유지")
-    void update_선호언어_교체_및_유지() {
+    void updateReplacesOrKeepsPreferredLanguages() {
         GraduateJobPost gjp = GraduateJobPost.builder().graduate(graduate).postContents(postContents).build();
         when(postContentsRepository.findById(100L)).thenReturn(Optional.of(postContents));
         when(graduateJobPostRepository.findByPostContentsId(100L)).thenReturn(List.of(gjp));
@@ -234,7 +234,7 @@ class JobPostServiceImplTest {
 
     @Test
     @DisplayName("update - jobType 변경 없으면 알람 미발행 (findByPostContentsId 도 호출되지 않음)")
-    void update_jobType_변경없음_알람미발행() {
+    void updateDoesNotPublishAlarmWhenJobTypeUnchanged() {
         GraduateJobPost gjp = GraduateJobPost.builder().graduate(graduate).postContents(postContents).build();
         when(postContentsRepository.findById(100L)).thenReturn(Optional.of(postContents));
         when(graduateJobPostRepository.findByPostContentsId(100L)).thenReturn(List.of(gjp));
@@ -258,7 +258,7 @@ class JobPostServiceImplTest {
 
     @Test
     @DisplayName("update - jobType 변경 시 prev 만 있고 curr 비면 'Removed' 알람만 발행")
-    void update_jobType_변경_removedOnly() {
+    void updateJobTypeChangePublishesRemovedAlarmOnly() {
         Member studentA = Member.builder().id(11L).nickname("A").build();
         GraduateJobPost gjp = GraduateJobPost.builder().graduate(graduate).postContents(postContents).build();
         // 기존 알람 = A 가 BACKEND 매칭으로 받았던 알람 1건
@@ -292,7 +292,7 @@ class JobPostServiceImplTest {
 
     @Test
     @DisplayName("update - jobType 변경 시 curr 만 있고 prev 비면 'Added' 알람만 발행")
-    void update_jobType_변경_addedOnly() {
+    void updateJobTypeChangePublishesAddedAlarmOnly() {
         Member studentB = Member.builder().id(12L).nickname("B").build();
         GraduateJobPost gjp = GraduateJobPost.builder().graduate(graduate).postContents(postContents).build();
         TargetJob bMatch = TargetJob.builder().id(2L).member(studentB)
@@ -319,7 +319,7 @@ class JobPostServiceImplTest {
 
     @Test
     @DisplayName("update - jobType 변경 시 prev/curr 교집합 보존, Removed/Added 만 새 알람 (등록 졸업생 본인 항상 제외)")
-    void update_jobType_변경_mixed() {
+    void updateJobTypeChangePublishesMixedAlarms() {
         Member studentA = Member.builder().id(11L).nickname("A").build();
         Member studentB = Member.builder().id(12L).nickname("B").build();
         Member studentC = Member.builder().id(13L).nickname("C").build();
@@ -378,7 +378,7 @@ class JobPostServiceImplTest {
 
     @Test
     @DisplayName("update - 작성자가 아니면 POST_CONTENTS_UNAUTHORIZED 예외")
-    void update_권한없음_예외() {
+    void updateThrowsWhenUnauthorized() {
         GraduateJobPost gjp = GraduateJobPost.builder().graduate(graduate).postContents(postContents).build();
         when(postContentsRepository.findById(100L)).thenReturn(Optional.of(postContents));
         when(graduateJobPostRepository.findByPostContentsId(100L)).thenReturn(List.of(gjp));
@@ -392,7 +392,7 @@ class JobPostServiceImplTest {
 
     @Test
     @DisplayName("update - 존재하지 않는 공고면 NOT_FOUND 예외")
-    void update_없음_예외() {
+    void updateThrowsWhenNotFound() {
         when(postContentsRepository.findById(999L)).thenReturn(Optional.empty());
 
         UpdateJobPostRequest request = new UpdateJobPostRequest(null, null, null, null,
@@ -404,7 +404,7 @@ class JobPostServiceImplTest {
 
     @Test
     @DisplayName("delete - 작성자가 정상 삭제하면 JobAlarm/GraduateJobPost/PostContents 순서로 삭제한다")
-    void delete_정상삭제() {
+    void deleteByAuthorSucceeds() {
         GraduateJobPost gjp = GraduateJobPost.builder().graduate(graduate).postContents(postContents).build();
         List<GraduateJobPost> mappings = List.of(gjp);
         when(postContentsRepository.findById(100L)).thenReturn(Optional.of(postContents));
@@ -420,7 +420,7 @@ class JobPostServiceImplTest {
 
     @Test
     @DisplayName("delete - 작성자가 아니면 UNAUTHORIZED 예외 (자식 행도 삭제하지 않음)")
-    void delete_권한없음_예외() {
+    void deleteThrowsWhenUnauthorized() {
         GraduateJobPost gjp = GraduateJobPost.builder().graduate(graduate).postContents(postContents).build();
         when(postContentsRepository.findById(100L)).thenReturn(Optional.of(postContents));
         when(graduateJobPostRepository.findByPostContentsId(100L)).thenReturn(List.of(gjp));
@@ -434,7 +434,7 @@ class JobPostServiceImplTest {
 
     @Test
     @DisplayName("delete - 존재하지 않는 공고면 NOT_FOUND 예외")
-    void delete_없음_예외() {
+    void deleteThrowsWhenNotFound() {
         when(postContentsRepository.findById(999L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> jobPostService.delete(graduateMember, 999L))
@@ -443,7 +443,7 @@ class JobPostServiceImplTest {
 
     @Test
     @DisplayName("getMyJobPosts - 졸업생이 등록한 구직 공고 목록을 반환한다")
-    void getMyJobPosts_정상반환() {
+    void getMyJobPostsReturnsList() {
         GraduateJobPost gjp = GraduateJobPost.builder().graduate(graduate).postContents(postContents).build();
         when(graduateRepository.findByMemberId(graduateMember.getId())).thenReturn(Optional.of(graduate));
         when(graduateJobPostRepository.findByGraduateId(graduate.getId())).thenReturn(List.of(gjp));
@@ -456,7 +456,7 @@ class JobPostServiceImplTest {
 
     @Test
     @DisplayName("getMyJobPosts - 졸업생 매핑이 없으면 빈 리스트를 반환한다")
-    void getMyJobPosts_졸업생없음_빈리스트() {
+    void getMyJobPostsReturnsEmptyWhenNoGraduate() {
         when(graduateRepository.findByMemberId(otherMember.getId())).thenReturn(Optional.empty());
 
         List<JobPostResponse> result = jobPostService.getMyJobPosts(otherMember);

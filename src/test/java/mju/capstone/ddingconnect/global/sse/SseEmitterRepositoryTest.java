@@ -35,7 +35,7 @@ class SseEmitterRepositoryTest {
     }
 
     @Test
-    void save_emitter_저장_및_반환() {
+    void saveStoresAndReturnsEmitter() {
         stubScheduler();
         SseEmitter emitter = new SseEmitter();
 
@@ -46,7 +46,7 @@ class SseEmitterRepositoryTest {
     }
 
     @Test
-    void save_heartbeat_스케줄_등록() {
+    void saveRegistersHeartbeatSchedule() {
         ScheduledFuture<?> mockFuture = stubScheduler();
         SseEmitter emitter = new SseEmitter();
 
@@ -60,7 +60,7 @@ class SseEmitterRepositoryTest {
     }
 
     @Test
-    void save_중복구독시_기존_emitter_complete_및_task_취소() {
+    void saveCompletesExistingEmitterAndCancelsTaskOnDuplicate() {
         ScheduledFuture<?> firstTask = stubScheduler();
         SseEmitter firstEmitter = mock(SseEmitter.class);
         repository.save(TEST_MEMBER_ID, firstEmitter);
@@ -73,7 +73,7 @@ class SseEmitterRepositoryTest {
     }
 
     @Test
-    void findById_존재하는_emitter_반환() {
+    void findByIdReturnsExistingEmitter() {
         stubScheduler();
         SseEmitter emitter = new SseEmitter();
         repository.save(TEST_MEMBER_ID, emitter);
@@ -82,12 +82,12 @@ class SseEmitterRepositoryTest {
     }
 
     @Test
-    void findById_없으면_empty_반환() {
+    void findByIdReturnsEmptyWhenAbsent() {
         assertThat(repository.findById(TEST_MEMBER_ID)).isEmpty();
     }
 
     @Test
-    void deleteById_emitter_제거_및_task_취소() {
+    void deleteByIdRemovesEmitterAndCancelsTask() {
         ScheduledFuture<?> mockFuture = stubScheduler();
         repository.save(TEST_MEMBER_ID, new SseEmitter());
 
@@ -98,12 +98,12 @@ class SseEmitterRepositoryTest {
     }
 
     @Test
-    void deleteById_없는_id는_예외_없이_종료() {
+    void deleteByIdCompletesWithoutErrorForUnknownId() {
         repository.deleteById(TEST_MEMBER_ID);
     }
 
     @Test
-    void shutdown_scheduler_종료() {
+    void shutdownStopsScheduler() {
         repository.shutdown();
 
         verify(mockScheduler).shutdown();

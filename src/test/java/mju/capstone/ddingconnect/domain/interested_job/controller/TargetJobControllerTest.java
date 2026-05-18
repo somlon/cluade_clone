@@ -47,7 +47,7 @@ class TargetJobControllerTest {
 
     @Test
     @DisplayName("PATCH /api/v1/target-jobs - 관심 직군 일괄 교체")
-    void 관심직군_교체() throws Exception {
+    void replaceTargetJobs() throws Exception {
         ReplaceTargetJobRequest req = new ReplaceTargetJobRequest(
                 List.of(TargetJobCategory.BACKEND, TargetJobCategory.FRONTEND));
         given(targetJobService.replace(any(), any()))
@@ -67,7 +67,7 @@ class TargetJobControllerTest {
 
     @Test
     @DisplayName("GET /api/v1/target-jobs - 내 관심 직군 목록")
-    void 관심직군_목록() throws Exception {
+    void getMyTargetJobs() throws Exception {
         given(targetJobService.getMyTargetJobs(any())).willReturn(List.of());
 
         mockMvc.perform(get(BASE_URL))

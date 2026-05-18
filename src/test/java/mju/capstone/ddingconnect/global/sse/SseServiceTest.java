@@ -44,7 +44,7 @@ class SseServiceTest {
     }
 
     @Test
-    void subscribe_emitter_저장_및_반환() {
+    void subscribeStoresAndReturnsEmitter() {
         SseEmitter savedEmitter = new SseEmitter();
         given(sseEmitterRepository.save(eq(TEST_MEMBER_ID), any(SseEmitter.class))).willReturn(savedEmitter);
 
@@ -55,7 +55,7 @@ class SseServiceTest {
     }
 
     @Test
-    void subscribe_연결이벤트_전송_실패시_emitter_삭제() throws IOException {
+    void subscribeRemovesEmitterWhenConnectEventFails() throws IOException {
         try (MockedConstruction<SseEmitter> mocked = mockConstruction(SseEmitter.class, (mock, context) ->
                 doThrow(new IOException()).when(mock).send(any(SseEmitter.SseEventBuilder.class))
         )) {
@@ -69,7 +69,7 @@ class SseServiceTest {
     }
 
     @Test
-    void send_emitter_존재시_이벤트_전송() throws IOException {
+    void sendDeliversEventWhenEmitterExists() throws IOException {
         SseEmitter mockEmitter = mock(SseEmitter.class);
         given(sseEmitterRepository.findById(TEST_MEMBER_ID)).willReturn(Optional.of(mockEmitter));
 
@@ -79,7 +79,7 @@ class SseServiceTest {
     }
 
     @Test
-    void send_emitter_없으면_아무것도_안함() {
+    void sendDoesNothingWhenEmitterAbsent() {
         given(sseEmitterRepository.findById(TEST_MEMBER_ID)).willReturn(Optional.empty());
 
         sseService.send(testMember, AlarmType.JOB, TEST_ALARM_CONTENT);
@@ -88,7 +88,7 @@ class SseServiceTest {
     }
 
     @Test
-    void send_전송_실패시_emitter_삭제() throws IOException {
+    void sendRemovesEmitterWhenDeliveryFails() throws IOException {
         SseEmitter mockEmitter = mock(SseEmitter.class);
         doThrow(new IOException()).when(mockEmitter).send(any(SseEmitter.SseEventBuilder.class));
         given(sseEmitterRepository.findById(TEST_MEMBER_ID)).willReturn(Optional.of(mockEmitter));

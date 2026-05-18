@@ -71,7 +71,7 @@ class AlarmServiceImplTest {
 
     @Test
     @DisplayName("getMyAlarms - 4종 알람을 모두 합쳐 반환한다")
-    void getMyAlarms_4종통합() {
+    void getMyAlarmsMergesAllFourTypes() {
         when(answerAlarmRepository.findByQuestionOwnerId(1L)).thenReturn(List.of(answerAlarm));
         when(jobAlarmRepository.findByMemberId(1L)).thenReturn(List.of(jobAlarm));
         when(roadmapAlarmRepository.findByRoadmapOwnerId(1L)).thenReturn(List.of(roadmapAlarm));
@@ -128,7 +128,7 @@ class AlarmServiceImplTest {
 
     @Test
     @DisplayName("getAlarmDetail - 존재하지 않으면 ALARM_NOT_FOUND 예외")
-    void getAlarmDetail_없음_예외() {
+    void getAlarmDetailThrowsWhenNotFound() {
         when(answerAlarmRepository.findById(999L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
@@ -138,7 +138,7 @@ class AlarmServiceImplTest {
 
     @Test
     @DisplayName("getAlarmDetail - 권한이 없으면 ALARM_UNAUTHORIZED 예외")
-    void getAlarmDetail_권한없음_예외() {
+    void getAlarmDetailThrowsWhenUnauthorized() {
         when(jobAlarmRepository.findById(12L)).thenReturn(Optional.of(jobAlarm));
 
         assertThatThrownBy(() ->
@@ -196,7 +196,7 @@ class AlarmServiceImplTest {
 
     @Test
     @DisplayName("markAsRead - 권한이 없으면 ALARM_UNAUTHORIZED 예외")
-    void markAsRead_권한없음_예외() {
+    void markAsReadThrowsWhenUnauthorized() {
         when(coffeeChatAlarmRepository.findById(14L)).thenReturn(Optional.of(coffeeChatAlarm));
 
         assertThatThrownBy(() ->

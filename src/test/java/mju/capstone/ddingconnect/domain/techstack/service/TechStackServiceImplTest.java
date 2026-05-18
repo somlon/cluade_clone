@@ -41,7 +41,7 @@ class TechStackServiceImplTest {
 
     @Test
     @DisplayName("replace - deleteByMemberId 호출 후 입력 개수만큼 save 한다")
-    void replace_정상교체() {
+    void replaceDeletesThenSaves() {
         ReplaceTechStackRequest req = new ReplaceTechStackRequest(
                 List.of(TechStackName.JAVA, TechStackName.SPRING));
         when(techStackRepository.save(any(TechStack.class)))
@@ -60,7 +60,7 @@ class TechStackServiceImplTest {
 
     @Test
     @DisplayName("replace - 빈 리스트면 본인 row 전부 삭제하고 save 는 호출하지 않는다")
-    void replace_빈리스트() {
+    void replaceWithEmptyList() {
         ReplaceTechStackRequest req = new ReplaceTechStackRequest(List.of());
 
         List<TechStackResponse> result = techStackService.replace(owner, req);
@@ -72,7 +72,7 @@ class TechStackServiceImplTest {
 
     @Test
     @DisplayName("replace - 입력에 중복 enum 이 섞이면 dedup 후 1건만 저장한다")
-    void replace_중복_dedup() {
+    void replaceDeduplicatesInput() {
         ReplaceTechStackRequest req = new ReplaceTechStackRequest(
                 List.of(TechStackName.JAVA, TechStackName.JAVA));
         when(techStackRepository.save(any(TechStack.class)))
@@ -86,7 +86,7 @@ class TechStackServiceImplTest {
 
     @Test
     @DisplayName("replace - names 가 null 이면 _BAD_REQUEST 예외, 삭제·저장 미수행")
-    void replace_null_예외() {
+    void replaceThrowsOnNull() {
         ReplaceTechStackRequest req = new ReplaceTechStackRequest(null);
 
         assertThatThrownBy(() -> techStackService.replace(owner, req))
@@ -97,7 +97,7 @@ class TechStackServiceImplTest {
 
     @Test
     @DisplayName("replace - 다른 회원이 호출하면 그 회원 id 로만 deleteByMemberId 한다")
-    void replace_다른회원_격리() {
+    void replaceIsolatesByMember() {
         ReplaceTechStackRequest req = new ReplaceTechStackRequest(List.of(TechStackName.PYTHON));
         when(techStackRepository.save(any(TechStack.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
@@ -110,7 +110,7 @@ class TechStackServiceImplTest {
 
     @Test
     @DisplayName("getMyTechStacks - 본인의 기술 스택 목록을 반환한다")
-    void getMyTechStacks_정상반환() {
+    void getMyTechStacksReturnsList() {
         TechStack stack = TechStack.builder().id(10L).member(owner).name(TechStackName.JAVA).build();
         when(techStackRepository.findByMemberId(owner.getId())).thenReturn(List.of(stack));
 

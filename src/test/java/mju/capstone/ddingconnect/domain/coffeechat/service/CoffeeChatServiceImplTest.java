@@ -64,7 +64,7 @@ class CoffeeChatServiceImplTest {
 
     @Test
     @DisplayName("create - 학생→졸업생 요청 시 수신자에게 알람 1건 발행, content 에 요청자 학과/닉네임 포함")
-    void create_정상요청_알람발행_동적content() {
+    void createPublishesAlarmWithDynamicContent() {
         CreateCoffeeChatRequest req = new CreateCoffeeChatRequest(graduateReceiver.getId(), "https://link");
         when(memberRepository.findById(graduateReceiver.getId())).thenReturn(Optional.of(graduateReceiver));
         when(coffeeChatRepository.save(any(CoffeeChat.class))).thenReturn(coffeeChat);
@@ -95,7 +95,7 @@ class CoffeeChatServiceImplTest {
 
     @Test
     @DisplayName("create - 졸업생→학생 요청도 정상 통과")
-    void create_졸업생_학생_허용() {
+    void createAllowsGraduateToStudent() {
         Member studentReceiver = Member.builder().id(5L).nickname("재학생").department("학과")
                 .role(MemberRole.STUDENT).build();
         Member graduateRequester = Member.builder().id(6L).nickname("졸업생").department("학과")
@@ -111,7 +111,7 @@ class CoffeeChatServiceImplTest {
 
     @Test
     @DisplayName("create - 자기 자신에게 요청 시 COFFEE_CHAT_SELF_REQUEST 예외")
-    void create_자기자신_예외() {
+    void createThrowsOnSelfRequest() {
         CreateCoffeeChatRequest req = new CreateCoffeeChatRequest(studentRequester.getId(), "https://link");
         when(memberRepository.findById(studentRequester.getId())).thenReturn(Optional.of(studentRequester));
 
@@ -123,7 +123,7 @@ class CoffeeChatServiceImplTest {
 
     @Test
     @DisplayName("create - STUDENT 가 STUDENT 에게 요청 시 COFFEE_CHAT_ROLE_MISMATCH 예외")
-    void create_학생_학생_예외() {
+    void createThrowsOnStudentToStudent() {
         Member otherStudent = Member.builder().id(8L).role(MemberRole.STUDENT).build();
         CreateCoffeeChatRequest req = new CreateCoffeeChatRequest(otherStudent.getId(), "https://link");
         when(memberRepository.findById(otherStudent.getId())).thenReturn(Optional.of(otherStudent));
@@ -135,7 +135,7 @@ class CoffeeChatServiceImplTest {
 
     @Test
     @DisplayName("create - GRADUATE 가 GRADUATE 에게 요청 시 COFFEE_CHAT_ROLE_MISMATCH 예외")
-    void create_졸업생_졸업생_예외() {
+    void createThrowsOnGraduateToGraduate() {
         Member otherGraduate = Member.builder().id(9L).role(MemberRole.GRADUATE).build();
         CreateCoffeeChatRequest req = new CreateCoffeeChatRequest(otherGraduate.getId(), "https://link");
         when(memberRepository.findById(otherGraduate.getId())).thenReturn(Optional.of(otherGraduate));
@@ -146,7 +146,7 @@ class CoffeeChatServiceImplTest {
 
     @Test
     @DisplayName("create - UNKNOWN 이 요청자 시 COFFEE_CHAT_ROLE_MISMATCH 예외")
-    void create_UNKNOWN_요청자_예외() {
+    void createThrowsWhenRequesterIsUnknown() {
         Member unknown = Member.builder().id(11L).role(MemberRole.UNKNOWN).build();
         CreateCoffeeChatRequest req = new CreateCoffeeChatRequest(graduateReceiver.getId(), "https://link");
         when(memberRepository.findById(graduateReceiver.getId())).thenReturn(Optional.of(graduateReceiver));
@@ -157,7 +157,7 @@ class CoffeeChatServiceImplTest {
 
     @Test
     @DisplayName("create - UNKNOWN 이 수신자 시 COFFEE_CHAT_ROLE_MISMATCH 예외")
-    void create_UNKNOWN_수신자_예외() {
+    void createThrowsWhenReceiverIsUnknown() {
         Member unknownReceiver = Member.builder().id(12L).role(MemberRole.UNKNOWN).build();
         CreateCoffeeChatRequest req = new CreateCoffeeChatRequest(unknownReceiver.getId(), "https://link");
         when(memberRepository.findById(unknownReceiver.getId())).thenReturn(Optional.of(unknownReceiver));
@@ -168,7 +168,7 @@ class CoffeeChatServiceImplTest {
 
     @Test
     @DisplayName("create - 수신자가 존재하지 않으면 MEMBER_NOT_FOUND 예외")
-    void create_수신자없음_예외() {
+    void createThrowsWhenReceiverNotFound() {
         CreateCoffeeChatRequest req = new CreateCoffeeChatRequest(999L, "https://link");
         when(memberRepository.findById(999L)).thenReturn(Optional.empty());
 
@@ -179,7 +179,7 @@ class CoffeeChatServiceImplTest {
 
     @Test
     @DisplayName("create - 진행 중(PENDING/ACCEPTED) 커피챗이 있으면 COFFEE_CHAT_ALREADY_REQUESTED 예외, 본체 미저장")
-    void create_중복신청_진행중_예외() {
+    void createThrowsOnDuplicateInProgressRequest() {
         CreateCoffeeChatRequest req = new CreateCoffeeChatRequest(graduateReceiver.getId(), "https://link");
         when(memberRepository.findById(graduateReceiver.getId())).thenReturn(Optional.of(graduateReceiver));
         when(coffeeChatRepository.existsByRequesterIdAndReceiverIdAndStatusIn(any(), any(), any()))
@@ -194,7 +194,7 @@ class CoffeeChatServiceImplTest {
 
     @Test
     @DisplayName("create - 가장 최근 요청이 24시간 이내면 COFFEE_CHAT_REQUEST_TOO_SOON 예외, 본체 미저장")
-    void create_쿨다운_예외() {
+    void createThrowsOnCooldown() {
         CreateCoffeeChatRequest req = new CreateCoffeeChatRequest(graduateReceiver.getId(), "https://link");
         when(memberRepository.findById(graduateReceiver.getId())).thenReturn(Optional.of(graduateReceiver));
         // 진행 중 요청은 없으나(규칙 b 통과), 쿨다운 기간 내 최근 요청이 존재
@@ -210,7 +210,7 @@ class CoffeeChatServiceImplTest {
 
     @Test
     @DisplayName("getSentList - 보낸 커피챗 목록을 반환한다")
-    void getSentList_정상반환() {
+    void getSentListReturnsList() {
         when(coffeeChatRepository.findByRequesterId(studentRequester.getId())).thenReturn(List.of(coffeeChat));
 
         List<CoffeeChatResponse> result = coffeeChatService.getSentList(studentRequester);
@@ -221,7 +221,7 @@ class CoffeeChatServiceImplTest {
 
     @Test
     @DisplayName("getReceivedList - 받은 커피챗 목록을 반환한다")
-    void getReceivedList_정상반환() {
+    void getReceivedListReturnsList() {
         when(coffeeChatRepository.findByReceiverId(graduateReceiver.getId())).thenReturn(List.of(coffeeChat));
 
         List<CoffeeChatResponse> result = coffeeChatService.getReceivedList(graduateReceiver);
@@ -232,7 +232,7 @@ class CoffeeChatServiceImplTest {
 
     @Test
     @DisplayName("updateStatus - 수락 시 요청자/수신자 양쪽에 카카오 링크 포함 알람 2건을 발행한다")
-    void updateStatus_수락_알람2건() {
+    void updateStatusAcceptPublishesTwoAlarms() {
         UpdateCoffeeChatStatusRequest req = new UpdateCoffeeChatStatusRequest(CoffeeChatStatus.ACCEPTED);
         when(coffeeChatRepository.findById(10L)).thenReturn(Optional.of(coffeeChat));
         when(coffeeChatRepository.save(any(CoffeeChat.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -266,7 +266,7 @@ class CoffeeChatServiceImplTest {
 
     @Test
     @DisplayName("updateStatus - 거절 시 요청자에게만 알람 1건을 발행한다")
-    void updateStatus_거절_알람1건() {
+    void updateStatusRejectPublishesOneAlarm() {
         UpdateCoffeeChatStatusRequest req = new UpdateCoffeeChatStatusRequest(CoffeeChatStatus.REJECTED);
         when(coffeeChatRepository.findById(10L)).thenReturn(Optional.of(coffeeChat));
         when(coffeeChatRepository.save(any(CoffeeChat.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -290,7 +290,7 @@ class CoffeeChatServiceImplTest {
 
     @Test
     @DisplayName("updateStatus - 수신자가 아니면 UNAUTHORIZED 예외, 알람 미발행")
-    void updateStatus_권한없음_예외() {
+    void updateStatusThrowsWhenUnauthorized() {
         UpdateCoffeeChatStatusRequest req = new UpdateCoffeeChatStatusRequest(CoffeeChatStatus.ACCEPTED);
         when(coffeeChatRepository.findById(10L)).thenReturn(Optional.of(coffeeChat));
 
@@ -301,7 +301,7 @@ class CoffeeChatServiceImplTest {
 
     @Test
     @DisplayName("updateStatus - 존재하지 않으면 NOT_FOUND 예외")
-    void updateStatus_없음_예외() {
+    void updateStatusThrowsWhenNotFound() {
         UpdateCoffeeChatStatusRequest req = new UpdateCoffeeChatStatusRequest(CoffeeChatStatus.ACCEPTED);
         when(coffeeChatRepository.findById(999L)).thenReturn(Optional.empty());
 
@@ -312,7 +312,7 @@ class CoffeeChatServiceImplTest {
 
     @Test
     @DisplayName("delete - 요청자가 정상 취소하면 CoffeeChatAlarm 먼저 삭제 후 CoffeeChat 삭제")
-    void delete_정상취소() {
+    void deleteCancelsSuccessfully() {
         when(coffeeChatRepository.findById(10L)).thenReturn(Optional.of(coffeeChat));
 
         coffeeChatService.delete(studentRequester, 10L);
@@ -324,7 +324,7 @@ class CoffeeChatServiceImplTest {
 
     @Test
     @DisplayName("delete - 요청자가 아니면 UNAUTHORIZED 예외, 자식/본체 모두 미삭제")
-    void delete_권한없음_예외() {
+    void deleteThrowsWhenUnauthorized() {
         when(coffeeChatRepository.findById(10L)).thenReturn(Optional.of(coffeeChat));
 
         assertThatThrownBy(() -> coffeeChatService.delete(graduateReceiver, 10L))
@@ -335,7 +335,7 @@ class CoffeeChatServiceImplTest {
 
     @Test
     @DisplayName("delete - 존재하지 않으면 NOT_FOUND 예외")
-    void delete_없음_예외() {
+    void deleteThrowsWhenNotFound() {
         when(coffeeChatRepository.findById(999L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> coffeeChatService.delete(studentRequester, 999L))
@@ -344,7 +344,7 @@ class CoffeeChatServiceImplTest {
 
     @Test
     @DisplayName("countMyAcceptedCoffeeChats - 요청자/수신자 ACCEPTED 커피챗 수를 합산한다")
-    void countMyAcceptedCoffeeChats_합산() {
+    void countMyAcceptedCoffeeChatsSumsBothSides() {
         Long memberId = studentRequester.getId();
         when(coffeeChatRepository.countByRequesterIdAndStatus(memberId, CoffeeChatStatus.ACCEPTED)).thenReturn(2L);
         when(coffeeChatRepository.countByReceiverIdAndStatus(memberId, CoffeeChatStatus.ACCEPTED)).thenReturn(3L);

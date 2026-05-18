@@ -53,7 +53,7 @@ class JobPostControllerTest {
 
     @Test
     @DisplayName("POST /api/v1/job-post - 구직 공고 등록")
-    void 구직공고_등록() throws Exception {
+    void createJobPost() throws Exception {
         CreateJobPostRequest req = new CreateJobPostRequest("img", "성남", CareerType.NEW_GRADUATE,
                 JobType.BACKEND, "한국", "성남시", "분당구",
                 LocalDate.of(2026, 6, 30), "https://t.com", List.of("JavaScript", "React", "Node.js"), "네이버");
@@ -76,7 +76,7 @@ class JobPostControllerTest {
 
     @Test
     @DisplayName("GET /api/v1/job-post - 구직 공고 목록 조회")
-    void 구직공고_목록조회() throws Exception {
+    void getJobPostList() throws Exception {
         given(jobPostService.getList()).willReturn(List.of());
 
         mockMvc.perform(get(BASE_URL))
@@ -87,7 +87,7 @@ class JobPostControllerTest {
 
     @Test
     @DisplayName("GET /api/v1/job-post/{id} - 구직 공고 상세 조회")
-    void 구직공고_상세조회() throws Exception {
+    void getJobPostDetail() throws Exception {
         JobPostResponse res = new JobPostResponse(1L, "네이버", null, null, null, null, null, null, null, null);
         given(jobPostService.getOne(1L)).willReturn(res);
 
@@ -98,7 +98,7 @@ class JobPostControllerTest {
 
     @Test
     @DisplayName("PATCH /api/v1/job-post/{id} - 구직 공고 수정")
-    void 구직공고_수정() throws Exception {
+    void updateJobPost() throws Exception {
         UpdateJobPostRequest req = new UpdateJobPostRequest(null, null, null, null,
                 null, null, null, null, null, null, "카카오");
         JobPostResponse res = new JobPostResponse(1L, "카카오", null, null, null, null, null, null, null, null);
@@ -113,7 +113,7 @@ class JobPostControllerTest {
 
     @Test
     @DisplayName("DELETE /api/v1/job-post/{id} - 구직 공고 삭제")
-    void 구직공고_삭제() throws Exception {
+    void deleteJobPost() throws Exception {
         mockMvc.perform(delete(BASE_URL + "/1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result").value(SuccessMessage.JOB_POST_DELETED));

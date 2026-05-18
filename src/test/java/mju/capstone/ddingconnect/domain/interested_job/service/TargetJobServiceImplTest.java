@@ -41,7 +41,7 @@ class TargetJobServiceImplTest {
 
     @Test
     @DisplayName("replace - deleteByMemberId 호출 후 입력 개수만큼 save 한다")
-    void replace_정상교체() {
+    void replaceDeletesThenSaves() {
         ReplaceTargetJobRequest req = new ReplaceTargetJobRequest(
                 List.of(TargetJobCategory.BACKEND, TargetJobCategory.FRONTEND));
         when(targetJobRepository.save(any(TargetJob.class)))
@@ -60,7 +60,7 @@ class TargetJobServiceImplTest {
 
     @Test
     @DisplayName("replace - 빈 리스트면 본인 row 전부 삭제하고 save 는 호출하지 않는다")
-    void replace_빈리스트() {
+    void replaceWithEmptyList() {
         ReplaceTargetJobRequest req = new ReplaceTargetJobRequest(List.of());
 
         List<TargetJobResponse> result = targetJobService.replace(owner, req);
@@ -72,7 +72,7 @@ class TargetJobServiceImplTest {
 
     @Test
     @DisplayName("replace - 입력에 중복 카테고리가 섞이면 dedup 후 1건만 저장한다")
-    void replace_중복_dedup() {
+    void replaceDeduplicatesInput() {
         ReplaceTargetJobRequest req = new ReplaceTargetJobRequest(
                 List.of(TargetJobCategory.BACKEND, TargetJobCategory.BACKEND));
         when(targetJobRepository.save(any(TargetJob.class)))
@@ -86,7 +86,7 @@ class TargetJobServiceImplTest {
 
     @Test
     @DisplayName("replace - categories 가 null 이면 _BAD_REQUEST 예외, 삭제·저장 미수행")
-    void replace_null_예외() {
+    void replaceThrowsOnNull() {
         ReplaceTargetJobRequest req = new ReplaceTargetJobRequest(null);
 
         assertThatThrownBy(() -> targetJobService.replace(owner, req))
@@ -97,7 +97,7 @@ class TargetJobServiceImplTest {
 
     @Test
     @DisplayName("replace - 다른 회원이 호출하면 그 회원 id 로만 deleteByMemberId 한다")
-    void replace_다른회원_격리() {
+    void replaceIsolatesByMember() {
         ReplaceTargetJobRequest req = new ReplaceTargetJobRequest(List.of(TargetJobCategory.DATA));
         when(targetJobRepository.save(any(TargetJob.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
@@ -110,7 +110,7 @@ class TargetJobServiceImplTest {
 
     @Test
     @DisplayName("getMyTargetJobs - 본인의 관심 직군 목록을 반환한다")
-    void getMyTargetJobs_정상반환() {
+    void getMyTargetJobsReturnsList() {
         TargetJob targetJob = TargetJob.builder().id(10L).member(owner)
                 .interestedJob(TargetJobCategory.BACKEND).key2("k").build();
         when(targetJobRepository.findByMemberId(owner.getId())).thenReturn(List.of(targetJob));

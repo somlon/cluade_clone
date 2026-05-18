@@ -60,7 +60,7 @@ class QuestionServiceImplTest {
 
     @Test
     @DisplayName("create - 질문을 정상 등록한다")
-    void create_정상등록() {
+    void createSucceeds() {
         CreateQuestionRequest req = new CreateQuestionRequest(QuestionCategory.CAREER, "제목", "내용");
         when(questionRepository.save(any(Question.class))).thenReturn(question);
 
@@ -72,7 +72,7 @@ class QuestionServiceImplTest {
 
     @Test
     @DisplayName("getList - 질문 목록을 카운트/likedByMe와 함께 반환한다")
-    void getList_카운트_likedByMe_포함() {
+    void getListReturnsCountsAndLikedByMe() {
         when(questionRepository.findAll()).thenReturn(List.of(question));
         when(questionLikeRepository.countByQuestionId(10L)).thenReturn(7L);
         when(answerRepository.countByQuestionId(10L)).thenReturn(3L);
@@ -89,7 +89,7 @@ class QuestionServiceImplTest {
 
     @Test
     @DisplayName("getOne - 상세 조회 시 조회수가 +1 증가하고 카운트/likedByMe가 반환된다")
-    void getOne_조회수증가_카운트반환() {
+    void getOneIncrementsViewCountAndReturnsCounts() {
         when(questionRepository.findById(10L)).thenReturn(Optional.of(question));
         ArgumentCaptor<Question> captor = ArgumentCaptor.forClass(Question.class);
         when(questionRepository.save(captor.capture())).thenAnswer(inv -> inv.getArgument(0));
@@ -107,7 +107,7 @@ class QuestionServiceImplTest {
 
     @Test
     @DisplayName("getOne - 존재하지 않으면 NOT_FOUND 예외")
-    void getOne_없음_예외() {
+    void getOneThrowsWhenNotFound() {
         when(questionRepository.findById(999L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> questionService.getOne(other, 999L))
@@ -116,7 +116,7 @@ class QuestionServiceImplTest {
 
     @Test
     @DisplayName("update - 작성자가 질문을 정상 수정한다")
-    void update_정상수정() {
+    void updateByAuthorSucceeds() {
         UpdateQuestionRequest req = new UpdateQuestionRequest(null, "수정 제목", null);
         when(questionRepository.findById(10L)).thenReturn(Optional.of(question));
         when(questionRepository.save(any(Question.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -128,7 +128,7 @@ class QuestionServiceImplTest {
 
     @Test
     @DisplayName("update - 작성자가 아니면 UNAUTHORIZED 예외")
-    void update_권한없음_예외() {
+    void updateThrowsWhenUnauthorized() {
         when(questionRepository.findById(10L)).thenReturn(Optional.of(question));
         UpdateQuestionRequest req = new UpdateQuestionRequest(null, "수정", null);
 
@@ -138,7 +138,7 @@ class QuestionServiceImplTest {
 
     @Test
     @DisplayName("update - 존재하지 않으면 NOT_FOUND 예외")
-    void update_없음_예외() {
+    void updateThrowsWhenNotFound() {
         when(questionRepository.findById(999L)).thenReturn(Optional.empty());
         UpdateQuestionRequest req = new UpdateQuestionRequest(null, "수정", null);
 
@@ -148,7 +148,7 @@ class QuestionServiceImplTest {
 
     @Test
     @DisplayName("delete - 작성자가 정상 삭제하면 손자 자식 순서로 모두 삭제한다")
-    void delete_정상삭제() {
+    void deleteByAuthorSucceeds() {
         when(questionRepository.findById(10L)).thenReturn(Optional.of(question));
 
         questionService.delete(author, 10L);
@@ -165,7 +165,7 @@ class QuestionServiceImplTest {
 
     @Test
     @DisplayName("delete - 작성자가 아니면 UNAUTHORIZED 예외, 자식/본체 모두 미삭제")
-    void delete_권한없음_예외() {
+    void deleteThrowsWhenUnauthorized() {
         when(questionRepository.findById(10L)).thenReturn(Optional.of(question));
 
         assertThatThrownBy(() -> questionService.delete(other, 10L))
@@ -179,7 +179,7 @@ class QuestionServiceImplTest {
 
     @Test
     @DisplayName("delete - 존재하지 않으면 NOT_FOUND 예외")
-    void delete_없음_예외() {
+    void deleteThrowsWhenNotFound() {
         when(questionRepository.findById(999L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> questionService.delete(author, 999L))
@@ -188,7 +188,7 @@ class QuestionServiceImplTest {
 
     @Test
     @DisplayName("toggleLike - 좋아요가 없으면 새로 추가하고 liked=true/likeCount 반환")
-    void toggleLike_좋아요추가() {
+    void toggleLikeAddsLike() {
         when(questionRepository.findById(10L)).thenReturn(Optional.of(question));
         when(questionLikeRepository.findAll()).thenReturn(List.of());
         when(questionLikeRepository.existsByMemberIdAndQuestionId(other.getId(), 10L)).thenReturn(true);
@@ -204,7 +204,7 @@ class QuestionServiceImplTest {
 
     @Test
     @DisplayName("toggleLike - 이미 좋아요가 있으면 삭제하고 liked=false/likeCount 반환")
-    void toggleLike_좋아요취소() {
+    void toggleLikeRemovesLike() {
         QuestionLike existing = QuestionLike.builder().question(question).member(other).build();
         when(questionRepository.findById(10L)).thenReturn(Optional.of(question));
         when(questionLikeRepository.findAll()).thenReturn(List.of(existing));
@@ -221,7 +221,7 @@ class QuestionServiceImplTest {
 
     @Test
     @DisplayName("toggleLike - 본인 질문이면 QUESTION_SELF_LIKE 예외")
-    void toggleLike_본인질문_예외() {
+    void toggleLikeThrowsOnOwnQuestion() {
         when(questionRepository.findById(10L)).thenReturn(Optional.of(question));
 
         assertThatThrownBy(() -> questionService.toggleLike(author, 10L))
@@ -232,7 +232,7 @@ class QuestionServiceImplTest {
 
     @Test
     @DisplayName("toggleLike - 존재하지 않는 질문이면 NOT_FOUND 예외")
-    void toggleLike_없음_예외() {
+    void toggleLikeThrowsWhenNotFound() {
         when(questionRepository.findById(999L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> questionService.toggleLike(other, 999L))
@@ -241,7 +241,7 @@ class QuestionServiceImplTest {
 
     @Test
     @DisplayName("countMyQuestions - 본인이 작성한 질문 수를 반환한다")
-    void countMyQuestions_정상반환() {
+    void countMyQuestionsReturnsCount() {
         when(questionRepository.countByMemberId(author.getId())).thenReturn(6L);
 
         long result = questionService.countMyQuestions(author);

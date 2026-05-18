@@ -47,7 +47,7 @@ class TechStackControllerTest {
 
     @Test
     @DisplayName("PATCH /api/v1/tech-stacks - 기술 스택 일괄 교체")
-    void 기술스택_교체() throws Exception {
+    void replaceTechStacks() throws Exception {
         ReplaceTechStackRequest req = new ReplaceTechStackRequest(
                 List.of(TechStackName.JAVA, TechStackName.SPRING));
         given(techStackService.replace(any(), any()))
@@ -67,7 +67,7 @@ class TechStackControllerTest {
 
     @Test
     @DisplayName("GET /api/v1/tech-stacks - 내 기술 스택 목록")
-    void 기술스택_목록() throws Exception {
+    void getMyTechStacks() throws Exception {
         given(techStackService.getMyTechStacks(any())).willReturn(List.of());
 
         mockMvc.perform(get(BASE_URL))

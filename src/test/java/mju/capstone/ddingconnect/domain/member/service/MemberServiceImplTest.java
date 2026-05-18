@@ -102,7 +102,7 @@ class MemberServiceImplTest {
 
     @Test
     @DisplayName("getMyProfile - 재학생 프로필을 grade와 함께 반환한다")
-    void getMyProfile_재학생() {
+    void getMyProfileForStudent() {
         Member member = buildStudentMember();
         Student student = Student.builder().id(11L).member(member).grade(3).build();
         when(studentRepository.findByMemberId(1L)).thenReturn(Optional.of(student));
@@ -117,7 +117,7 @@ class MemberServiceImplTest {
 
     @Test
     @DisplayName("getMyProfile - 졸업생 프로필을 회사/경력과 함께 반환한다")
-    void getMyProfile_졸업생() {
+    void getMyProfileForGraduate() {
         Member member = buildGraduateMember();
         Graduate graduate = Graduate.builder().id(22L).member(member)
                 .company("네이버").careerYear(5).businessCardImage("img")
@@ -136,7 +136,7 @@ class MemberServiceImplTest {
 
     @Test
     @DisplayName("updateMyProfile - 재학생이 이름/닉네임/학년을 수정한다")
-    void updateMyProfile_재학생() {
+    void updateMyProfileForStudent() {
         Member member = buildStudentMember();
         Student student = Student.builder().id(11L).member(member).grade(3).build();
         UpdateMemberRequest request = new UpdateMemberRequest("새이름", null, "새닉네임", null, null,
@@ -161,7 +161,7 @@ class MemberServiceImplTest {
 
     @Test
     @DisplayName("updateMyProfile - 졸업생이 직무/회사/경력을 수정한다")
-    void updateMyProfile_졸업생() {
+    void updateMyProfileForGraduate() {
         Member member = buildGraduateMember();
         Graduate graduate = Graduate.builder().id(22L).member(member)
                 .company("네이버").careerYear(5).build();
@@ -185,7 +185,7 @@ class MemberServiceImplTest {
 
     @Test
     @DisplayName("updateMyProfile - 이메일을 새 주소로 변경한다")
-    void updateMyProfile_이메일_변경() {
+    void updateMyProfileChangesEmail() {
         Member member = buildStudentMember();
         Student student = Student.builder().id(11L).member(member).grade(3).build();
         UpdateMemberRequest request = new UpdateMemberRequest(null, "new@mju.ac.kr", null, null, null,
@@ -204,7 +204,7 @@ class MemberServiceImplTest {
 
     @Test
     @DisplayName("updateMyProfile - 이미 사용 중인 이메일로 변경 시 DUPLICATE_EMAIL 예외")
-    void updateMyProfile_이메일_중복_예외() {
+    void updateMyProfileThrowsOnDuplicateEmail() {
         Member member = buildStudentMember();
         UpdateMemberRequest request = new UpdateMemberRequest(null, "taken@mju.ac.kr", null, null, null,
                 null, null, null, null, null, null, null, null, null);
@@ -218,7 +218,7 @@ class MemberServiceImplTest {
 
     @Test
     @DisplayName("updateMyProfile - grade > 4 입력 시 4 로 클램프해서 저장")
-    void updateMyProfile_grade_클램프() {
+    void updateMyProfileClampsGrade() {
         Member member = buildStudentMember();
         Student student = Student.builder().id(11L).member(member).grade(1).build();
         UpdateMemberRequest request = new UpdateMemberRequest(null, null, null, null, null,
@@ -236,7 +236,7 @@ class MemberServiceImplTest {
 
     @Test
     @DisplayName("updateMyProfile - grade < 1 입력 시 MEMBER_INVALID_GRADE 예외")
-    void updateMyProfile_grade_음수_예외() {
+    void updateMyProfileThrowsOnNegativeGrade() {
         Member member = buildStudentMember();
         Student student = Student.builder().id(11L).member(member).grade(2).build();
         UpdateMemberRequest request = new UpdateMemberRequest(null, null, null, null, null,
@@ -250,7 +250,7 @@ class MemberServiceImplTest {
 
     @Test
     @DisplayName("updateMyProfile - grade=0 거부")
-    void updateMyProfile_grade_0_예외() {
+    void updateMyProfileThrowsOnZeroGrade() {
         Member member = buildStudentMember();
         Student student = Student.builder().id(11L).member(member).grade(2).build();
         UpdateMemberRequest request = new UpdateMemberRequest(null, null, null, null, null,
@@ -264,7 +264,7 @@ class MemberServiceImplTest {
 
     @Test
     @DisplayName("updateMyProfile - STUDENT 가 GRADUATE 전용 필드 보내면 MEMBER_FIELD_ROLE_MISMATCH 예외")
-    void updateMyProfile_역할필드_불일치_학생_예외() {
+    void updateMyProfileThrowsWhenStudentSendsGraduateField() {
         Member member = buildStudentMember();
         UpdateMemberRequest request = new UpdateMemberRequest(null, null, null, null, null,
                 null, null, null, null, null, null, null, "카카오", null);
@@ -276,7 +276,7 @@ class MemberServiceImplTest {
 
     @Test
     @DisplayName("updateMyProfile - STUDENT 가 직무(jobType) 보내면 MEMBER_FIELD_ROLE_MISMATCH 예외")
-    void updateMyProfile_역할필드_불일치_jobType_예외() {
+    void updateMyProfileThrowsWhenStudentSendsJobType() {
         Member member = buildStudentMember();
         UpdateMemberRequest request = new UpdateMemberRequest(null, null, null, null, null,
                 null, null, null, null, null, null, JobType.BACKEND, null, null);
@@ -288,7 +288,7 @@ class MemberServiceImplTest {
 
     @Test
     @DisplayName("updateMyProfile - GRADUATE 가 grade 보내면 MEMBER_FIELD_ROLE_MISMATCH 예외")
-    void updateMyProfile_역할필드_불일치_졸업생_예외() {
+    void updateMyProfileThrowsWhenGraduateSendsGrade() {
         Member member = buildGraduateMember();
         UpdateMemberRequest request = new UpdateMemberRequest(null, null, null, null, null,
                 null, null, null, null, 3, null, null, null, null);
@@ -300,7 +300,7 @@ class MemberServiceImplTest {
 
     @Test
     @DisplayName("updateMyProfile - UNKNOWN 이 grade 또는 graduate 필드 보내면 예외")
-    void updateMyProfile_UNKNOWN_예외() {
+    void updateMyProfileThrowsWhenUnknownSendsRoleField() {
         Member member = buildUnknownMember();
         UpdateMemberRequest request = new UpdateMemberRequest(null, null, null, null, null,
                 null, null, null, null, 3, null, null, null, null);
@@ -311,7 +311,7 @@ class MemberServiceImplTest {
 
     @Test
     @DisplayName("withdraw - STUDENT 가 Q/A/Roadmap/CoffeeChat 모두 보유 상태에서 hard delete")
-    void withdraw_STUDENT_정상() {
+    void withdrawStudentHardDeletesAll() {
         Member member = buildStudentMember();
 
         // 본인 작성 Question 1건
@@ -370,7 +370,7 @@ class MemberServiceImplTest {
 
     @Test
     @DisplayName("withdraw - GRADUATE 가 본인 등록 JobPost 도 함께 삭제")
-    void withdraw_GRADUATE_JobPost도_삭제() {
+    void withdrawGraduateAlsoDeletesJobPost() {
         Member member = buildGraduateMember();
         Graduate graduate = Graduate.builder().id(22L).member(member).build();
 
@@ -401,7 +401,7 @@ class MemberServiceImplTest {
 
     @Test
     @DisplayName("withdraw - CoffeeChat 수신자만인 경우도 함께 정리한다")
-    void withdraw_수신자만인_커피챗도_정리() {
+    void withdrawCleansUpReceiverOnlyCoffeeChat() {
         Member member = buildStudentMember();
 
         when(questionRepository.findByMemberId(any())).thenReturn(List.of());
@@ -420,7 +420,7 @@ class MemberServiceImplTest {
 
     @Test
     @DisplayName("withdraw - requester 와 receiver 양쪽으로 잡힌 동일 커피챗은 1번만 처리")
-    void withdraw_중복_커피챗_dedup() {
+    void withdrawDeduplicatesCoffeeChat() {
         Member member = buildStudentMember();
 
         when(questionRepository.findByMemberId(any())).thenReturn(List.of());

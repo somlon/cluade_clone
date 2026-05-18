@@ -85,7 +85,7 @@ class MyPageServiceImplTest {
 
     @Test
     @DisplayName("getMyPage - 재학생: 프로필·활동 통계·기술 스택·관심 직군을 조합하고 jobPosts 는 비운다")
-    void getMyPage_재학생() {
+    void getMyPageForStudent() {
         Member member = studentMember();
         when(memberService.getMyProfile(member)).thenReturn(profileOf(member));
         when(coffeeChatService.countMyAcceptedCoffeeChats(member)).thenReturn(2L);
@@ -112,7 +112,7 @@ class MyPageServiceImplTest {
 
     @Test
     @DisplayName("getMyPage - 졸업생: 등록 구직 공고를 조합하고 targetJobs 는 비운다")
-    void getMyPage_졸업생() {
+    void getMyPageForGraduate() {
         Member member = graduateMember();
         when(memberService.getMyProfile(member)).thenReturn(profileOf(member));
         when(coffeeChatService.countMyAcceptedCoffeeChats(member)).thenReturn(0L);
@@ -136,7 +136,7 @@ class MyPageServiceImplTest {
 
     @Test
     @DisplayName("updateMyPage - 재학생: 프로필·기술 스택·관심 직군 수정을 각 도메인 서비스에 위임한다")
-    void updateMyPage_재학생_전항목_위임() {
+    void updateMyPageDelegatesAllItemsForStudent() {
         Member member = studentMember();
         UpdateMemberRequest profileReq = profileUpdateRequest();
         List<TechStackName> techStacks = List.of(TechStackName.JAVA);
@@ -162,7 +162,7 @@ class MyPageServiceImplTest {
 
     @Test
     @DisplayName("updateMyPage - 졸업생: 구직 공고를 '삭제 먼저, 추가 나중' 순서로 위임한다")
-    void updateMyPage_졸업생_공고_추가삭제_위임() {
+    void updateMyPageDelegatesJobPostAddAndRemoveForGraduate() {
         Member member = graduateMember();
         List<Long> idsToDelete = List.of(100L, 200L);
         List<CreateJobPostRequest> toAdd = List.of(jobPostRequest("네이버"), jobPostRequest("카카오"));
@@ -187,7 +187,7 @@ class MyPageServiceImplTest {
 
     @Test
     @DisplayName("updateMyPage - 모든 항목 미전송(null): 어떤 도메인 수정도 위임하지 않는다")
-    void updateMyPage_미전송_항목_미변경() {
+    void updateMyPageSkipsUnsentItems() {
         Member member = studentMember();
         UpdateMyPageRequest request = new UpdateMyPageRequest(null, null, null, null, null);
 
@@ -204,7 +204,7 @@ class MyPageServiceImplTest {
 
     @Test
     @DisplayName("updateMyPage - 위임 중 하나가 실패하면 예외를 전파하고 이후 위임을 실행하지 않는다(전체 롤백)")
-    void updateMyPage_위임_실패_시_예외전파() {
+    void updateMyPagePropagatesExceptionOnDelegationFailure() {
         Member member = studentMember();
         List<TechStackName> techStacks = List.of(TechStackName.JAVA);
         List<TargetJobCategory> targetJobs = List.of(TargetJobCategory.BACKEND);

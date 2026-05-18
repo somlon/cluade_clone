@@ -51,7 +51,7 @@ class AnswerControllerTest {
 
     @Test
     @DisplayName("POST /api/v1/questions/{qid}/answers - 답변 등록")
-    void 답변_등록() throws Exception {
+    void createAnswer() throws Exception {
         CreateAnswerRequest req = new CreateAnswerRequest("답변");
         given(answerService.create(any(), eq(10L), any()))
                 .willReturn(new AnswerResponse(1L, 10L, 1L, "답변", 0L, false));
@@ -65,7 +65,7 @@ class AnswerControllerTest {
 
     @Test
     @DisplayName("GET /api/v1/questions/{qid}/answers - 답변 목록")
-    void 답변_목록() throws Exception {
+    void getAnswerList() throws Exception {
         given(answerService.getList(any(), eq(10L))).willReturn(List.of());
 
         mockMvc.perform(get(BASE_URL))
@@ -75,7 +75,7 @@ class AnswerControllerTest {
 
     @Test
     @DisplayName("PATCH /api/v1/questions/{qid}/answers/{aid} - 답변 수정")
-    void 답변_수정() throws Exception {
+    void updateAnswer() throws Exception {
         UpdateAnswerRequest req = new UpdateAnswerRequest("수정된 답변");
         given(answerService.update(any(), eq(20L), any()))
                 .willReturn(new AnswerResponse(20L, 10L, 1L, "수정된 답변", 0L, false));
@@ -89,7 +89,7 @@ class AnswerControllerTest {
 
     @Test
     @DisplayName("DELETE /api/v1/questions/{qid}/answers/{aid} - 답변 삭제")
-    void 답변_삭제() throws Exception {
+    void deleteAnswer() throws Exception {
         mockMvc.perform(delete(BASE_URL + "/20"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result").value(SuccessMessage.ANSWER_DELETED));
@@ -98,7 +98,7 @@ class AnswerControllerTest {
 
     @Test
     @DisplayName("POST /api/v1/questions/{qid}/answers/{aid}/like - 답변 좋아요 응답에 liked/likeCount 포함")
-    void 답변_좋아요() throws Exception {
+    void toggleAnswerLike() throws Exception {
         given(answerService.toggleLike(any(), eq(20L)))
                 .willReturn(new LikeToggleResponse(true, 3L));
 
