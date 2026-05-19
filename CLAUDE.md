@@ -13,6 +13,11 @@
 - `docs/agent/data.md` — 데이터 파트(`ddingconnect-data`, FastAPI): 커피챗 매칭·OCR 인증·로드맵 AI 및 백엔드 연동 계약
 - `docs/agent/TODO.md` — 진행 예정 작업. **`@import` 하지 않는다**(자주 바뀌어 자동 로드에서 제외). 사용자가 "to-do 리스트 수행" / "TODO N 작업" 등을 지시하면 `docs/agent/TODO.md` 를 먼저 읽고 그 절차대로 수행한다.
 
+## 레포 구조
+
+- `backend/` — 백엔드 프로젝트(코드·빌드 파일): `src/`, `build.gradle`, `settings.gradle`, `gradlew`, `gradle/`. 빌드·실행은 `cd backend` 후 진행한다 (예: `cd backend && ./gradlew build`).
+- 루트 — `CLAUDE.md`, `docs/`(분리 문서), `.github/`, `.gitignore` 등 메타·문서·설정.
+
 ## 작업 레포 범위 규칙 (필수)
 
 - **기본 작업 레포는 이 레포(`somlon/cluade_clone`) 단 하나다.** 사용자의 별도 지시가 없는 한 모든 코드 변경·브랜치 생성·커밋·푸시·PR 은 `cluade_clone` 에서만 수행한다.

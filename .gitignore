@@ -38,9 +38,9 @@ out/
 
 ### env ###
 .env
-/src/main/generated/
+/backend/src/main/generated/
 
 ### log ###
-/logs
+/backend/logs
 
 .claude

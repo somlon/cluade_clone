@@ -5,6 +5,8 @@
 
 > 루트 `CLAUDE.md` 가 `@import` 로 불러오는 백엔드 상세 문서. 백엔드 구조·도메인 규칙·패턴이 바뀌면 이 파일을 갱신한다 (루트 `CLAUDE.md` 의 '문서 자동 유지관리' 규칙 참조).
 
+> **디렉터리 위치**: 백엔드 프로젝트(코드·빌드 파일)는 레포 루트가 아니라 `backend/` 하위에 있다 — `backend/src/`, `backend/build.gradle`, `backend/gradlew`, `backend/gradle/`, `backend/settings.gradle`. 빌드·실행은 `cd backend` 후 진행한다 (예: `cd backend && ./gradlew build`). 이 문서에서 `src/`·`build.gradle`·`gradle/` 등으로 표기한 경로는 모두 `backend/` 기준이다. 루트에는 `CLAUDE.md`·`docs/`·`.github/`·`.gitignore` 만 남는다.
+
 ## 기술 스택
 
 - Spring Boot 3.5.13 / Java 17 (toolchain)
@@ -185,7 +187,7 @@ mju.capstone.ddingconnect
 
 화면 구성·UI 플로우 관련 작업 시 아래 PNG를 `Read` 도구로 읽어 시각 정보를 확보한 뒤 작업한다. 위 매핑 표만으로 부족한 경우(픽셀 단위 배치, 색상, 컴포넌트 형태, 화면 전이 확인 등)에만 로드하여 토큰 소모를 줄인다.
 
-- `0409.png` — Figma export (레포 루트, 모든 환경에서 접근 가능)
+- `backend/0409.png` — Figma export (`backend/` 하위, 모든 환경에서 접근 가능)
 
 운영 규칙:
 - 텍스트 매핑·도메인 규칙으로 답이 나오면 PNG를 굳이 읽지 않는다 (lazy)
