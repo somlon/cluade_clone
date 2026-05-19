@@ -1,0 +1,51 @@
+# 진행 예정 작업 (To-do)
+
+> 이 파일은 루트 `CLAUDE.md` 가 `@import` 하지 않는다(자주 바뀌어 자동 로드 제외). 사용자가 TODO 관련 명령을 내리면 이 파일을 직접 읽고 진행한다. 완료 후 항목은 이 파일에서 삭제하고 `docs/agent/backend.md` 의 해당 도메인 섹션에 정식 규칙으로 통합한다.
+
+> 사용자가 "to-do 리스트 수행" / "to-do 진행" / "TODO N 작업" 등 유사 명령을 내리면 아래 항목을 **즉시 코드 작성 → 테스트 보강 → CLAUDE.md 갱신 → 커밋/푸시 → PR 생성까지 일사천리로** 수행한다. 결정 사항은 이미 확정돼 있으니 다시 묻지 말고 명시된 디폴트로 진행할 것.
+>
+> 각 항목은 완료(머지) 후 이 섹션에서 삭제하고, 본문 도메인 섹션에 정식 규칙으로 통합 기록한다.
+
+> **관찰 (의도 확인 필요)**: `ErrorStatus.getReason()`/`getReasonHttpStatus()` 가 실패 코드 enum 인데 `ErrorReasonDTO` 를 `.isSuccess(true)` 로 고정 생성한다(`SuccessStatus` 와 대비). 현재 `ApiResponse.onFailure` 가 `isSuccess=false` 를 따로 지정하므로 실제 응답엔 영향 없으나, 오해를 부르는 죽은 설정값이다 — 의도 확인 후 정리 여부 결정.
+
+### TODO C: 회원가입 이메일 도메인 검증 미적용 (PR #22 후속, auth 도메인)
+
+**문제**: `SignupRequest.email` 에 `@Pattern` (`^[a-zA-Z0-9._%+\-]+@mju\.ac\.kr$`) 이 선언돼 있으나, `AuthController.signup` (`AuthController.java:24`) 과 `AuthSwagger.signup` (`AuthSwagger.java:26`) 의 `SignupRequest` 파라미터에 `@Valid` 가 없어 검증이 트리거되지 않음. 같은 컨트롤러의 `sendCode`/`verifyCode` 는 `@Valid` 보유. → 현재 `@mju.ac.kr` 제한이 가입 경로에서 무력화된 상태.
+
+**디폴트 결정**: `signup` 의 `SignupRequest` 파라미터에 `@Valid` 추가. 인터페이스(`AuthSwagger`)·구현(`AuthController`) 양쪽 동기화. 검증 실패는 기존 `MethodArgumentNotValidException` 핸들러가 `_BAD_REQUEST` 로 매핑 (회원 도메인 소셜 링크 검증과 동일 패턴).
+
+**출처**: PR #22 (`ddd4004`) 가 `@Pattern` 만 추가하고 `@Valid` 를 누락.
+
+### TODO D: 이메일 인증 결과가 회원가입에 미반영 (PR #22 후속, auth 도메인)
+
+**문제**: `AuthServiceImpl.signup` (`AuthServiceImpl.java:34-62`) 이 `EmailService`/`RedisUtil` 을 참조하지 않음. `POST /api/v1/auth/verify-code` 통과 여부와 무관하게 가입이 가능 — 인증 안 한 이메일로도 회원가입됨. `EmailServiceImpl.verifyCode` 는 코드 일치 시 Redis 키를 삭제만 하므로 "인증 완료" 상태가 어디에도 남지 않음.
+
+**미확정 (사용자 결정 필요)**: signup 이 인증 통과를 확인하는 방식. 후보 — (a) `verifyCode` 성공 시 `verified:{email}` 플래그를 Redis 에 단기 저장 → `signup` 진입부에서 존재 확인 후 소비, (b) `verifyCode` 가 단기 인증 토큰을 발급해 `signup` 요청에 포함. 방식 확정 전까지 코드 변경 보류.
+
+**출처**: PR #22.
+
+### TODO F: ddingconnect-backend 전 계층 동기화 (cluade_clone 기준, 크로스 레포)
+
+**문제**: `mju-capstone-4/ddingconnect-backend` 가 이 레포(`cluade_clone`) 대비 controller/service/dto 계층과 global 인프라가 대거 누락된 상태. 마지막 동기화 커밋(`fe032d9 chore(db): cluade_clone 기준 DB 계층 동기화`)으로 도메인 엔티티·레포지토리 계층만 따라잡았고, 메인 소스 약 86개·테스트 약 26개 파일이 미반영. 일부 공통 파일은 내용 불일치, 잘못된 패키지 위치 등 구조 이슈 3건도 존재.
+
+**주의 — 크로스 레포**: 이 작업은 `ddingconnect-backend` 에 쓰기 작업을 한다. `## 작업 레포 범위 규칙` 에 따라 실행 전 사용자의 명시적 지시("ddingconnect-backend 에서 작업하라")가 반드시 필요하다 — 지시 없이 자동 실행하지 말 것. 모든 단계의 기준(source of truth)은 `cluade_clone` 이다.
+
+**작업 순서** (컴파일 의존성 순):
+
+1. **global 공통 상수 + ErrorStatus** — `global/common/SuccessMessage`·`ValidationPattern` 신규 추가. `ErrorStatus` 에 누락된 에러코드(Member·CoffeeChat·PostContents·Question·Answer·Roadmap·Alarm, 약 26개) 추가. 이후 전 계층 컴파일의 전제.
+2. **global/alarm 패키지 + sse 정합** — `AlarmController`·`AlarmSwagger`·`AlarmService(+Impl)`·`AlarmResponse`·`RelativeTimeFormatter` 신설. `AlarmType` 을 `global/sse/` → `global/alarm/` 로 이동. `global/sse/AlarmNotificationEvent`·`AlarmNotificationListener` 추가. `SseService`·`SseServiceImpl`·`SseTestController` 의 `AlarmType` import 경로 수정.
+3. **exception handler 8종** — `AlarmHandler`·`AnswerHandler`·`CoffeeChatHandler`·`JobPostHandler`·`QuestionHandler`·`RoadmapHandler`·`TargetJobHandler`·`TechStackHandler` 추가.
+4. **8개 비즈니스 도메인 (dto → service → controller 순)** — coffeechat·interested_job·job_post·member·qna(answer·question)·roadmap·techstack 의 dto/service/serviceImpl/controller/swagger 추가. 함께: `Member.name`·`Graduate.jobType` 필드 엔티티 재동기화. member — 잘못 위치한 `domain/member/domain/MemberController.java` stub 제거 후 `controller/` 정식 버전으로 교체. techstack — `TechStackRepository.existsByMemberIdAndName`(cluade_clone 미존재) 역방향 불일치 처리 방침 결정.
+5. **global/auth 내용 동기화 + 빌드/설정** — auth DTO 3종(`CodeSendRequest`·`SignupRequest`·`VerifyCodeRequest`) 인라인 정규식 → `ValidationPattern` 상수 참조, `AuthServiceImpl` → `SuccessMessage.SIGNUP_SUCCESS`, `JwtAuthenticationFilter` 화이트리스트에 `/swagger-ui.html` 추가. `build.gradle` 의 하드코딩된 `C:/gradle-builds/...` buildDir → `cluade_clone` 외부화 방식으로 교체, `application.yml` 에 `matching.algorithm.base-url` 추가.
+6. **테스트 보강** — 누락된 도메인별 controller/service 테스트(~21개), `global/alarm` 테스트 3종, `AlarmNotificationListenerTest`, `EntityIntegrationTest`, `support/WithMockLoginMember`, `CoffeeChatMatchingTestConstants` 추가. 테스트 리소스 `application.properties`·`logback-test.xml` 추가. 기존 SSE 테스트 3종(`SseControllerTest`·`SseEmitterRepositoryTest`·`SseServiceTest`)의 한글 메서드명 → 영문 camelCase 변경.
+
+**범위 제외**: `ddingconnect-backend` 에만 존재하는 `DdingconnectApplicationTests.java` 삭제는 사용자 지시에 따라 이 TODO 범위에서 제외한다.
+
+**출처**: `cluade_clone` ↔ `ddingconnect-backend` 전체 코드 비교 세션 (png·CLAUDE.md 제외).
+
+### 11개 작업자 노트 (TODO #1~#11 머지 완료 후 보존되는 일반 가이드)
+
+- **브랜치 정책**: 각 TODO 를 **개별 브랜치 + 개별 PR** 로 처리하는 것을 기본으로 한다. 영향 범위가 큰 TODO 는 단독 PR 필수. 같은 도메인 내 작은 변경은 묶어서 1개 PR 도 허용 (작업자 판단). 사용자가 "TODO N 작업" 으로 단일 항목 지목 시 그 항목만 단독 PR.
+- **공통 커밋 메시지 컨벤션**: `feat(<도메인>): ...` / `fix(<도메인>): ...` / `refactor(<도메인>): ...` / `docs(CLAUDE.md): ...` prefix. 마지막 줄에 항상 `https://claude.ai/code/session_...` 포함.
+- **Swagger 검증**: 가능하면 PR 본문 Test plan 에 Swagger 시나리오 체크박스 포함.
+- **테스트 실패 시**: `--no-verify` 등으로 우회 금지. 원인 분석 후 수정.
