@@ -53,6 +53,23 @@
 
 **출처**: 로드맵 백엔드↔데이터 파트 연동 플로우 분석 세션 — 생성 플로우 미사용 API 로 식별, 사용자 지시로 제거 확정.
 
+### TODO H: 로드맵 백엔드↔데이터 파트 연동 — 생성 플로우 완성 (roadmap 도메인, 크로스 파트)
+
+**문제**: 로드맵 생성 플로우(프론트 폼 입력 → AI 생성 → DB 저장 → 상세 조회)가 두 레포에 걸쳐 끊겨 있다. 백엔드 `RoadmapServiceImpl.create()` 는 프론트가 보낸 `content` 문자열을 그대로 저장만 하고 AI 를 호출하지 않으며, 데이터 파트 `POST /api/data/generate` 는 독립적으로 AI 생성 후 자기 코드로 DB 에 저장한다. ① 백엔드→데이터 파트 호출 코드가 없고, ② 저장이 양쪽에서 일어나 이원화되며, ③ `/generate` 응답에 DB row `id` 가 없어 프론트가 상세 조회(`GET /api/v1/roadmaps/{id}`)할 id 를 알 수 없다.
+
+**디폴트 결정 (백엔드 중심)**: 데이터 파트는 AI 생성만 담당하고 저장·조회·인증·알람은 백엔드가 맡는다. `POST /api/v1/roadmaps` 가 입력 6필드 수신 → 데이터 파트 `/generate` 호출 → AI 결과를 `Roadmap.content` 에 저장 → `RoadmapResponse(id, …)` 반환 → 프론트는 그 `id` 로 상세 조회. 이러면 id 갭·DB 이원화가 동시에 해소된다. 백엔드(`cluade_clone`) 작업:
+
+1. **데이터 파트 호출 클라이언트 신규** — `RestClient` 로 `POST {data.base-url}/api/data/generate` 호출. 커피챗 `MatchingAlgorithmClient` 패턴 재사용, base URL 설정값화(`application.yml`). 호출 시 `member.getId()` 를 `X-User-Id` 헤더로 전달.
+2. **`CreateRoadmapRequest` 교체** — `content` → `grade·gpa·major·targetJob·currentSkills·targetCompany` 6필드. `RoadmapSwagger` 의 `@ExampleObject` 동기화.
+3. **`RoadmapServiceImpl.create()` 재구성** — "요청 content 저장" → "데이터 파트 호출 → 응답 결과를 `content` 에 저장". `validateContent` 대상을 응답값으로 변경. 기존 `RoadmapAlarm`·SSE 알람 발행 로직은 유지.
+4. **ENUM 정합성 확인** — `targetJob`/`currentSkills` 값이 데이터 파트 `TargetJobCategory`(11종)·`TechStackName`(24종)과 일치하는지 검증.
+
+**미확정 / 선택**: 입력 6필드를 `Roadmap` 엔티티 컬럼(또는 별도 엔티티)으로 저장할지 여부. 데이터 파트 생성 결과(`content`)에는 입력 원본이 없어, 재생성·입력 이력·수정 화면 프리필이 필요하면 저장, 결과만 보면 되면 미저장 — 제품 요구 확정 후 결정.
+
+**주의 — 크로스 파트**: 데이터 파트(`ddingconnect-data`, 별도 레포)의 `roadmap_router.py` 자체 `db.add/commit` 제거(생성 결과만 반환)가 함께 필요하나, **이 TODO 범위 밖이며 데이터 파트 담당자와 협의** 후 진행한다. `/generate` 의 IP 기준 `3/day` rate limit 은 백엔드가 단일 IP 로 호출하면 전체 사용자가 공유하게 되므로 연동 시 제한 정책 재검토 필요. 두 서비스가 같은 물리 DB 를 보는지도 확인.
+
+**출처**: 로드맵 백엔드↔데이터 연동 플로우 분석 세션 (저장 설계 = 백엔드 중심으로 확정).
+
 ### 11개 작업자 노트 (TODO #1~#11 머지 완료 후 보존되는 일반 가이드)
 
 - **브랜치 정책**: 각 TODO 를 **개별 브랜치 + 개별 PR** 로 처리하는 것을 기본으로 한다. 영향 범위가 큰 TODO 는 단독 PR 필수. 같은 도메인 내 작은 변경은 묶어서 1개 PR 도 허용 (작업자 판단). 사용자가 "TODO N 작업" 으로 단일 항목 지목 시 그 항목만 단독 PR.
