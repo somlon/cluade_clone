@@ -76,7 +76,7 @@ public class MatchingAlgorithmClientImpl implements MatchingAlgorithmClient {
                 memberRepository, graduateRepository, techStackRepository);
     }
 
-    /** 테스트용 — {@link org.springframework.test.web.client.MockRestServiceServer} 바인딩된 RestClient 주입. */
+    /** 테스트용 — MockRestServiceServer(test scope) 바인딩된 RestClient 주입. */
     MatchingAlgorithmClientImpl(
             RestClient restClient,
             int topN,
