@@ -64,7 +64,7 @@
 3. **`RoadmapServiceImpl.create()` 재구성** — "요청 content 저장" → "데이터 파트 호출 → 응답 결과를 `content` 에 저장". `validateContent` 대상을 응답값으로 변경. 기존 `RoadmapAlarm`·SSE 알람 발행 로직은 유지.
 4. **ENUM 정합성 확인** — `targetJob`/`currentSkills` 값이 데이터 파트 `TargetJobCategory`(11종)·`TechStackName`(24종)과 일치하는지 검증.
 
-**미확정 / 선택**: 입력 6필드를 `Roadmap` 엔티티 컬럼(또는 별도 엔티티)으로 저장할지 여부. 데이터 파트 생성 결과(`content`)에는 입력 원본이 없어, 재생성·입력 이력·수정 화면 프리필이 필요하면 저장, 결과만 보면 되면 미저장 — 제품 요구 확정 후 결정.
+**스코프 — 입력 정보 저장 안 함**: 입력 6필드(`grade·gpa·major·targetJob·currentSkills·targetCompany`)는 `Roadmap` 엔티티에 별도 컬럼으로 저장하지 않는다. 사용자는 결과 로드맵만 조회하므로 `Roadmap` 엔티티는 현재 구조(`content` TEXT)를 그대로 유지한다 — 6필드는 데이터 파트 호출 인자로만 사용하고 응답 저장 후 폐기.
 
 **주의 — 크로스 파트**: 데이터 파트(`ddingconnect-data`, 별도 레포)의 `roadmap_router.py` 자체 `db.add/commit` 제거(생성 결과만 반환)가 함께 필요하나, **이 TODO 범위 밖이며 데이터 파트 담당자와 협의** 후 진행한다. `/generate` 의 IP 기준 `3/day` rate limit 은 백엔드가 단일 IP 로 호출하면 전체 사용자가 공유하게 되므로 연동 시 제한 정책 재검토 필요. 두 서비스가 같은 물리 DB 를 보는지도 확인.
 
