@@ -64,41 +64,51 @@ ddingconnect-data/
 
 모든 라우터가 `prefix="/api/data"` 로 등록. 앱 제목 `"DdingConnect Data API"`.
 
-### POST /api/data/coffeechat/match — 커피챗 매칭 점수 (★ 백엔드 핵심 호출)
+### POST /api/data/coffeechat/match — 커피챗 매칭 (★ 백엔드 핵심 호출)
 
 `routers/recommend.py`. **인증·rate limit 없음** (verify/generate 와 달리 `get_current_user` 미적용).
 
-요청 (`MatchRequest`) — 두 명의 정보를 함께 전달:
+요청 (`RecommendInput`) — 신청자(학생)의 폼 6필드:
 
 ```jsonc
 {
-  "requester": {                          // UserInfo
-    "user_id": 1,                         // int
-    "job": "DATA",                        // str (대문자 가정)
-    "tech_stacks": ["PYTHON", "DJANGO"],  // List[str]
-    "goal": "네이버"                       // str
-  },
-  "receiver": { /* UserInfo 동일 구조 */ }
+  "year": "3",                      // 학년 (str, Pydantic str 필수)
+  "gpa": "4.0",
+  "major": "응용소프트웨어학과",
+  "job": "BACKEND",                 // 관심 직무 (대문자 enum 명 가정)
+  "tech_stacks": ["JAVA","SPRING"], // 보유 기술스택 (대문자 enum 명 가정)
+  "goal": "카카오"                   // 목표 기업
 }
 ```
 
-- `UserInfo`: `user_id:int`, `job:str`, `tech_stacks:List[str]`, `goal:str`
-- `MatchRequest`: `requester:UserInfo`, `receiver:UserInfo`
-- `job`/`tech_stacks` 는 그냥 `str`/`List[str]` — **Enum 검증 없음**. 알고리즘은 값이 대문자(`"DATA"`, `"PYTHON"` 등)로 들어온다고 가정한다.
+- 데이터 파트가 내부적으로 `db.query(Graduate).all()` 로 졸업생 후보 풀을 조회, 각각 점수 계산 후 정렬해 **상위 3장** 만 반환한다 — 백엔드는 후보 풀·정렬·top N 로직을 갖지 않는다.
+- 신청자 본인 제외, 매칭 데이터 누락 후보 필터링은 모두 **데이터 파트 책임** (현재 코드 기준 `graduates = db.query(Graduate).all()` 후 점수만 0 되는 식 — 제외 정책은 데이터 파트가 결정).
 
-응답 — Pydantic `response_model` 없이 dict 직접 반환:
+응답 (`RecommendOutput`) — Pydantic 검증된 정형 응답:
 
 ```jsonc
 {
   "status": "success",
-  "match_results": {
-    "jobScore": 50.0,        // float 0~100
-    "ability": 33.3,         // float 0~100 (자카드 유사도)
-    "goal": 0.0,             // float 0 또는 100
-    "totalMatchRate": 33.3   // float, 가중 평균
-  }
+  "top_matches": [
+    {
+      "id": 101,
+      "name": "이선배",
+      "department": "응용소프트웨어학과",
+      "company": "카카오",
+      "job": "BACKEND",
+      "career": "3년차",
+      "location": "위치 미상",
+      "tech_stacks": ["JAVA","SPRING"],
+      "match_score": 86.7              // totalMatchRate 동치
+    }
+    // ... 최대 3장
+  ]
 }
 ```
+
+- `top_matches` 는 `match_score DESC` 로 이미 정렬된 상태.
+- 후보 0건이면 `top_matches: []` 빈 배열. 백엔드는 이를 정상으로 처리.
+- 백엔드는 응답에서 `id` 만 추출해 후속 카드 조립은 라이브 DB(`CandidateProfileAssembler`)로 재처리한다. 응답의 `name`/`department`/... 부가 필드는 받기만 하고 사용하지 않는다(stale 차단).
 
 ### POST /api/data/verify — 재학/졸업증명서 OCR 인증
 
@@ -202,14 +212,14 @@ ddingconnect-data/
 
 `backend.md` 의 커피챗 매칭 섹션(`MatchingAlgorithmClient`)과 실제 `ddingconnect-data` 구현의 정합 상태와 주의점:
 
-- **현 합의 — 백엔드가 후보 풀·정렬·top N 담당**: 데이터 파트는 1대1 페어 점수만 반환하고, 후보 회원 탐색·선별·정렬·top N 선택은 **백엔드**가 한다. 백엔드 `MatchingAlgorithmClientImpl` 가 `MemberRepository.findAllByRole(GRADUATE)` 로 후보 풀을 만들어 후보 N명만큼 `POST /api/data/coffeechat/match` 를 N회 호출하고, 응답 `totalMatchRate` DESC 정렬 후 상위 N(`matching.algorithm.top-n`, 기본 3)명의 회원 ID 리스트를 반환한다.
-- **요청 스키마 = 양방향 페어**: 요청 본문은 `{requester: UserInfo, receiver: UserInfo}` (`UserInfo = {user_id, job, tech_stacks, goal}`, snake_case). 백엔드 record(`MatchingAlgorithmClientImpl.AlgorithmMatchRequest`/`UserInfo`) 가 이 스키마에 맞춰 직렬화.
-- **응답 스키마 = 점수 dict**: 응답은 `{status: "success", match_results: {jobScore, ability, goal, totalMatchRate}}`. 백엔드는 `AlgorithmMatchResponse`/`MatchScores` record 로 받아 `totalMatchRate` 만 정렬 키로 사용, 점수 자체는 응답 DTO 에 노출하지 않는다.
-- **네이밍 혼용 주의**: 요청은 모두 snake_case(`user_id`, `tech_stacks`), 응답 envelope 은 snake_case(`match_results`)인데 점수 dict 는 camelCase 혼용(`jobScore`·`totalMatchRate` camelCase / `ability`·`goal` 소문자). 백엔드는 record 필드명 + `@JsonProperty` 로 명시 매핑.
-- **인증 비대칭**: `coffeechat/match` 만 인증·rate limit 이 없다(`verify`=5/day, `generate`=3/day 는 적용). 백엔드가 단일 IP 로 N회 호출해도 제한 없음 — 단, 후보 풀이 커지면 N 이 늘어 호출 비용·지연이 가산되므로 운영 시 풀 사전 필터(역할/회사명 등) 강화가 필요할 수 있다.
+- **현 합의 — 데이터 파트가 후보 풀·정렬·top N 담당**: 데이터 파트가 자체 DB `db.query(Graduate).all()` 로 졸업생 풀을 가져와 점수 계산·정렬·상위 3장 추출까지 모두 처리한다. 백엔드는 폼 6필드를 1회 전달하고 회원 ID 만 받아 후속 카드 조립을 라이브 DB 로 재처리한다.
+- **요청 스키마 = 6필드 플랫**: 요청 본문은 `{year, gpa, major, job, tech_stacks, goal}` (snake_case). 백엔드 record(`MatchingAlgorithmClientImpl.AlgorithmMatchRequest`) 가 `MatchingRequest` 폼을 변환해 직렬화. `MatchingRequest.grade(Integer)` → `year(String)` 변환은 Pydantic `str` 필수 매핑 정합 목적.
+- **응답 스키마 = top 3 카드 배열**: 응답은 `{status, top_matches: [TopMatchItem, ...]}`. 백엔드는 `AlgorithmMatchResponse`/`TopMatch` record 로 받지만 **`id` 외 부가 필드는 사용하지 않는다** — `CandidateProfileAssembler` 가 라이브 DB 로 카드를 재조립.
+- **`top_matches=[]` 정상 처리**: 후보 0건은 빈 리스트 반환(예외 아님). `top_matches=null` 또는 envelope 자체 누락만 502 변환.
+- **네이밍**: 요청·응답 모두 snake_case 일관(`tech_stacks`, `top_matches`, `match_score`). 백엔드 record 는 camelCase 필드명 + `@JsonProperty` 명시 매핑.
+- **인증 비대칭**: `coffeechat/match` 만 인증·rate limit 이 없다(`verify`=5/day, `generate`=3/day 는 적용). 백엔드도 `X-User-Id` 헤더 미전송 — 데이터 파트가 후보 풀에서 신청자 본인을 제외하려면 백엔드가 추가로 신청자 ID 를 전달해야 하지만, 현재 스키마(`RecommendInput`) 엔 신청자 ID 필드 자체가 없다. 본인 제외 정책은 데이터 파트 후속 작업 대상.
 - **base URL**: 데이터 서버 기본 포트 8000 — 백엔드 `matching.algorithm.base-url` 기본값(`http://localhost:8000`)과 일치.
-- **인증 모델**: 백엔드가 `X-User-Id` 헤더로 신원을 전달하면 이 서비스가 그 ID 로 공용 DB `member` 를 조회만 한다(JWT 검증 아님).
-- **`UserInfo.job` 값 정합**: 백엔드는 요청자(폼) 측에 `form.interestedJob` 을 원본 pass-through, 후보(졸업생) 측엔 `graduate.jobType.name()`(영문 대문자, 예 `BACKEND`) 을 보낸다. 알고리즘 `calculate_job_score` 는 두 문자열 완전 일치 시 100점이므로 두 값의 표기(영문 vs 한글)가 일치해야 100점이 나온다 — 프론트가 enum 명을 그대로 송신하는 것을 전제로 한다.
+- **`job`/`tech_stacks` 값 정합**: 데이터 파트 알고리즘 `calculate_job_score`/`calculate_ability_score` 는 두 문자열 완전 일치 비교(대문자 enum 명 가정). 프론트 폼이 `TargetJobCategory`/`TechStackName` enum 명을 그대로 송신해야 점수가 정상 계산된다. 백엔드는 `tech_stacks` 만 `TechStackName` 화이트리스트로 정규화하고, `job` 은 폼 값 pass-through.
 
 ## 미완성 / 한계 / 노이즈
 
