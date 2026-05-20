@@ -70,6 +70,30 @@
 
 **출처**: 로드맵 백엔드↔데이터 연동 플로우 분석 세션 (저장 설계 = 백엔드 중심으로 확정).
 
+### TODO I: `target_job.key2` 미사용 컬럼 제거 (interested_job 도메인)
+
+**문제**: `TargetJob.key2` (`target_job.key2`, varchar(255)) 는 ERD 잔재 컬럼으로 entity 클래스 헤더 주석에 "(미사용, ERD 잔재)" 로 자가 명시되어 있다. signup·`TargetJobServiceImpl.replace` 등 어디에서도 set 하지 않아 저장값이 항상 null 이며, `TargetJobResponse` 가 record 필드로 응답에 노출하지만 항상 null 만 반환한다. 두 레포(`cluade_clone` / `ddingconnect-backend`) DB 스키마 비교 세션에서 양쪽 모두 동일하게 dead column 으로 식별됨.
+
+**디폴트 결정**: 아래 2개 파일에서 `key2` 관련 코드를 제거한다.
+
+1. `backend/src/main/java/mju/capstone/ddingconnect/domain/interested_job/domain/TargetJob.java`
+   - `@Column(length = 255) private String key2;` 필드 삭제
+   - 클래스 헤더 javadoc 의 `Key2(varchar(255)) → key2 (현재 미사용, ERD 잔재)` 한 줄 삭제
+2. `backend/src/main/java/mju/capstone/ddingconnect/domain/interested_job/dto/response/TargetJobResponse.java`
+   - record 의 `String key2` 파라미터 삭제
+   - javadoc `@param key2 추가 키값` 라인 삭제
+   - `from()` 의 `targetJob.getKey2()` 인자 삭제
+
+호출 측 점검: `TargetJobResponse.from(...)` 외에 record 생성자를 직접 호출하는 곳(`new TargetJobResponse(...)`)이 없는지 확인하고 있다면 정리. `TargetJobControllerTest`/`TargetJobServiceImplTest` 에서 `key2` 단언이 있으면 함께 제거.
+
+문서 동기화: `docs/agent/backend.md` 의 `### 관심 직군 (interested_job)` 섹션 `TargetJob 엔티티는 ... + key2(미사용, ERD 잔재) 로 구성.` 문장에서 `+ key2(미사용, ERD 잔재)` 부분을 삭제.
+
+DB 측은 `application-db.yml` 이 `ddl-auto=create` 라 부팅 시 자동으로 컬럼이 사라진다 — 별도 마이그레이션 작성 불필요. 운영 DB 도입(Flyway/Liquibase) 이후라면 `ALTER TABLE target_job DROP COLUMN key2;` 한 줄을 마이그레이션에 추가.
+
+**주의 — 크로스 레포**: 동일 컬럼이 `mju-capstone-4/ddingconnect-backend` 에도 존재한다. 본 TODO 는 `## 작업 레포 범위 규칙` 에 따라 `cluade_clone` 만 다루며, ddingconnect-backend 측 제거는 TODO F 동기화 시 또는 사용자의 별도 지시("ddingconnect-backend 에서 작업하라")로 진행한다.
+
+**출처**: 두 레포 DB 스키마/기능 비교 세션 — 두 레포 entity 헤더 주석에서 모두 "미사용/ERD 잔재" 로 자가 식별된 컬럼.
+
 ### 11개 작업자 노트 (TODO #1~#11 머지 완료 후 보존되는 일반 가이드)
 
 - **브랜치 정책**: 각 TODO 를 **개별 브랜치 + 개별 PR** 로 처리하는 것을 기본으로 한다. 영향 범위가 큰 TODO 는 단독 PR 필수. 같은 도메인 내 작은 변경은 묶어서 1개 PR 도 허용 (작업자 판단). 사용자가 "TODO N 작업" 으로 단일 항목 지목 시 그 항목만 단독 PR.
