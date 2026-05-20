@@ -94,43 +94,6 @@ DB 측은 `application-db.yml` 이 `ddl-auto=create` 라 부팅 시 자동으로
 
 **출처**: 두 레포 DB 스키마/기능 비교 세션 — 두 레포 entity 헤더 주석에서 모두 "미사용/ERD 잔재" 로 자가 식별된 컬럼.
 
-### TODO K: 커피챗 매칭 요청 스키마 양방향 페어 변환 (coffeechat 도메인, TODO J 후속)
-
-**문제**: `MatchingAlgorithmClientImpl.AlgorithmMatchRequest` 가 단방향(`{requesterId, grade, gpa, major, interestedJob, capability, targetCompany}`) 으로 폼 6필드 + 신청자 ID 만 전송한다. 그러나 데이터 파트(`POST /api/data/coffeechat/match`) 는 양방향 페어 `{requester: UserInfo, receiver: UserInfo}` 를 기대하며 (`UserInfo` = `user_id, job, tech_stacks, goal`), 백엔드가 후보(receiver) 정보를 보내지 않아 알고리즘에 비교 대상 자체가 없다. TODO J(경로 정정) 가 머지돼도 요청 스키마 불일치로 422 가 난다.
-
-**디폴트 결정 (학생 → 졸업생 매칭만 다룸)**: 다음 3단계 구현.
-
-1. **졸업생 후보 풀 조회 쿼리 신규** — `MemberRepository` 에 역할 필터 메서드(예: `findAllByRole(MemberRole.GRADUATE)`) 추가. 신청자 본인 제외. 매칭용 데이터가 비어 있는 후보(`Graduate.jobType` null, `TechStack` 0건, `Graduate.company` blank) 는 풀에서 제외 — 이전 합의("빈 값 후보 제외").
-2. **폼·DB → `UserInfo` 매핑** — 알고리즘 양식 변환:
-   - **요청자(학생) 측 (폼)**: `user_id = requesterId`, `job = form.interestedJob`, `tech_stacks = form.capability` 콤마 split → `List<String>` (`trim` + `TechStackName` 화이트리스트 대문자 정규화), `goal = form.targetCompany`.
-   - **후보(졸업생) 측 (DB)**: `user_id = graduate.member_id`, `job = graduate.jobType.name()`, `tech_stacks = TechStackRepository.findByMemberId(graduate.member_id).stream().map(name).toList()`, `goal = graduate.company`.
-3. **페어별 호출 오케스트레이션** — `AlgorithmMatchRequest` 를 `{requester: UserInfo, receiver: UserInfo}` 양방향 record 로 재설계. 데이터 파트가 1대1 페어만 받으므로 `MatchingAlgorithmClient.topMatches` 내부에서 후보 N명 만큼 `POST /api/data/coffeechat/match` 를 N회 호출 (배치 미지원). 호출 결과(점수)의 정렬·top N 추출은 TODO L 에서 처리.
-
-**범위 — 학생 → 졸업생 방향 한정**: 졸업생 → 학생 매칭(반대 방향) 은 본 TODO 범위 밖이며, 진행 시 별도 TODO 로.
-
-**주의**: 폼 `capability` 가 자유 텍스트라 콤마 split·정규화 견고하지 않다 — `TechStackName` enum 24종에 매칭 안 되는 토큰은 버리는 정책 권장. 매핑 결과가 0개면 알고리즘 ability 점수가 0 으로 떨어지므로, 요청자 측 변환 결과 빈 리스트 시 즉시 400 으로 반환할지 그대로 호출할지 결정 필요.
-
-**문서 동기화**: `backend.md` 의 `### 커피챗` 매칭 알고리즘 연동 설명을 "단방향 → 양방향 페어 + 후보 N회 호출 + 백엔드 정렬" 로 갱신. `data.md` 의 "백엔드 연동 시 주의 — 계약 불일치" 중 "현재 구현 불일치"·"네이밍 불일치"·"엔드포인트 경로(머지 시점 따라)" 항목 정리.
-
-**출처**: 커피챗 매칭 플로우 분석 세션 — TODO J 와 함께 발견된 4건 불일치 중 요청 스키마 1건 분리.
-
-### TODO L: 커피챗 매칭 응답 스키마 점수 → memberIds 변환 (coffeechat 도메인, TODO J 후속)
-
-**문제**: `MatchingAlgorithmClientImpl.AlgorithmMatchResponse` 는 `List<Long> memberIds` 를 기대하지만, 데이터 파트는 한 페어의 점수 dict `{status: "success", match_results: {jobScore, ability, goal, totalMatchRate}}` 를 반환한다. 응답 구조가 다르고 정렬·top N 선택도 데이터 파트가 수행하지 않으므로 백엔드가 직접 정렬해 후보 ID 리스트로 변환해야 한다.
-
-**디폴트 결정**: 다음 2단계 구현.
-
-1. **응답 record 재설계** — `AlgorithmMatchResponse` 를 `{status: String, matchResults: MatchScores}` 로 변경. `MatchScores = {jobScore: double, ability: double, goal: double, totalMatchRate: double}`. 응답 키 네이밍 혼용(`ability`·`goal` 은 소문자, `jobScore`·`totalMatchRate` 는 camelCase) 대응 — 필드별 `@JsonProperty` 명시 권장.
-2. **백엔드 측 정렬·top N 추출** — TODO K 의 페어 호출 루프 결과를 `Map<Long candidateId, Double totalMatchRate>` 로 모은 뒤 `totalMatchRate DESC` 정렬, 상위 N 명의 `candidateId` 만 `List<Long> memberIds` 로 반환. N 은 설정값 `matching.algorithm.top-n`(`application.yml`, 기본 3) 으로 외부화 — 하드코딩 금지 규칙 정합.
-
-**범위**: 응답 매핑 + 정렬·top N 추출만. 점수 자체는 응답 DTO 에 노출하지 않는다(`CoffeeChatMatchingServiceImpl` 가 `memberIds` 만 사용하는 현재 흐름 유지). 점수 0 후보 필터링은 추후 필요 시 추가.
-
-**주의**: TODO K 와 같은 PR 로 묶어도 되고 분리해도 된다 — 둘 다 머지돼야 매칭 결과 화면이 실제 렌더링되므로 함께 진행이 자연스럽다. 작업자 판단.
-
-**문서 동기화**: `backend.md` 의 `### 커피챗` 매칭 알고리즘 연동 설명에 "백엔드가 점수 받아 정렬·top N 선택" 명시.
-
-**출처**: 커피챗 매칭 플로우 분석 세션 — TODO J·K 와 함께 발견된 4건 불일치 중 응답 스키마 1건 분리.
-
 ### 11개 작업자 노트 (TODO #1~#11 머지 완료 후 보존되는 일반 가이드)
 
 - **브랜치 정책**: 각 TODO 를 **개별 브랜치 + 개별 PR** 로 처리하는 것을 기본으로 한다. 영향 범위가 큰 TODO 는 단독 PR 필수. 같은 도메인 내 작은 변경은 묶어서 1개 PR 도 허용 (작업자 판단). 사용자가 "TODO N 작업" 으로 단일 항목 지목 시 그 항목만 단독 PR.

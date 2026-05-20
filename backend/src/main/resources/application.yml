@@ -7,3 +7,4 @@ spring:
 matching:
   algorithm:
     base-url: ${MATCHING_ALGORITHM_BASE_URL:http://localhost:8000}
+    top-n: ${MATCHING_ALGORITHM_TOP_N:3}

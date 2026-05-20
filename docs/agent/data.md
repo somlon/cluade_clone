@@ -200,14 +200,16 @@ ddingconnect-data/
 
 ## 백엔드 연동 시 주의 — 계약 불일치
 
-`backend.md` 의 커피챗 매칭 섹션(`MatchingAlgorithmClient`)이 가정하는 내용과 실제 `ddingconnect-data` 구현이 어긋난다. 백엔드 연동 코드를 확정하기 전 반드시 확인:
+`backend.md` 의 커피챗 매칭 섹션(`MatchingAlgorithmClient`)과 실제 `ddingconnect-data` 구현의 정합 상태와 주의점:
 
-- **올바른 전제 = 후보 ID 리스트 반환**: 커피챗 매칭 알고리즘은 백엔드에 **후보 회원 ID 리스트**를 반환해야 한다 — `backend.md` 의 커피챗 매칭 가정이 맞다. 후보 회원 탐색·선별은 데이터 파트(알고리즘) 책임이다.
-- **현재 구현 불일치**: 실제 `POST /api/data/coffeechat/match` 는 후보 리스트가 아니라, 요청 바디로 받은 두 명(`requester`·`receiver`)의 매칭 점수(`jobScore`/`ability`/`goal`/`totalMatchRate`)만 반환한다. 위 올바른 전제와 어긋난다 — 정렬은 데이터 파트(`ddingconnect-data`) 담당 영역이다.
-- **네이밍 불일치**: 요청은 snake_case(`user_id`, `tech_stacks`), 응답은 camelCase 혼용(`jobScore`·`totalMatchRate` 는 camelCase, `ability`·`goal` 은 소문자). DTO 매핑 시 주의.
-- **인증 비대칭**: `coffeechat/match` 만 인증·rate limit 이 없다(`verify`=5/day, `generate`=3/day 는 적용).
+- **현 합의 — 백엔드가 후보 풀·정렬·top N 담당**: 데이터 파트는 1대1 페어 점수만 반환하고, 후보 회원 탐색·선별·정렬·top N 선택은 **백엔드**가 한다. 백엔드 `MatchingAlgorithmClientImpl` 가 `MemberRepository.findAllByRole(GRADUATE)` 로 후보 풀을 만들어 후보 N명만큼 `POST /api/data/coffeechat/match` 를 N회 호출하고, 응답 `totalMatchRate` DESC 정렬 후 상위 N(`matching.algorithm.top-n`, 기본 3)명의 회원 ID 리스트를 반환한다.
+- **요청 스키마 = 양방향 페어**: 요청 본문은 `{requester: UserInfo, receiver: UserInfo}` (`UserInfo = {user_id, job, tech_stacks, goal}`, snake_case). 백엔드 record(`MatchingAlgorithmClientImpl.AlgorithmMatchRequest`/`UserInfo`) 가 이 스키마에 맞춰 직렬화.
+- **응답 스키마 = 점수 dict**: 응답은 `{status: "success", match_results: {jobScore, ability, goal, totalMatchRate}}`. 백엔드는 `AlgorithmMatchResponse`/`MatchScores` record 로 받아 `totalMatchRate` 만 정렬 키로 사용, 점수 자체는 응답 DTO 에 노출하지 않는다.
+- **네이밍 혼용 주의**: 요청은 모두 snake_case(`user_id`, `tech_stacks`), 응답 envelope 은 snake_case(`match_results`)인데 점수 dict 는 camelCase 혼용(`jobScore`·`totalMatchRate` camelCase / `ability`·`goal` 소문자). 백엔드는 record 필드명 + `@JsonProperty` 로 명시 매핑.
+- **인증 비대칭**: `coffeechat/match` 만 인증·rate limit 이 없다(`verify`=5/day, `generate`=3/day 는 적용). 백엔드가 단일 IP 로 N회 호출해도 제한 없음 — 단, 후보 풀이 커지면 N 이 늘어 호출 비용·지연이 가산되므로 운영 시 풀 사전 필터(역할/회사명 등) 강화가 필요할 수 있다.
 - **base URL**: 데이터 서버 기본 포트 8000 — 백엔드 `matching.algorithm.base-url` 기본값(`http://localhost:8000`)과 일치.
 - **인증 모델**: 백엔드가 `X-User-Id` 헤더로 신원을 전달하면 이 서비스가 그 ID 로 공용 DB `member` 를 조회만 한다(JWT 검증 아님).
+- **`UserInfo.job` 값 정합**: 백엔드는 요청자(폼) 측에 `form.interestedJob` 을 원본 pass-through, 후보(졸업생) 측엔 `graduate.jobType.name()`(영문 대문자, 예 `BACKEND`) 을 보낸다. 알고리즘 `calculate_job_score` 는 두 문자열 완전 일치 시 100점이므로 두 값의 표기(영문 vs 한글)가 일치해야 100점이 나온다 — 프론트가 enum 명을 그대로 송신하는 것을 전제로 한다.
 
 ## 미완성 / 한계 / 노이즈
 
