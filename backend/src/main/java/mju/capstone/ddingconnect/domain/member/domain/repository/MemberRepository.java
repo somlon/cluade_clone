@@ -1,8 +1,10 @@
 package mju.capstone.ddingconnect.domain.member.domain.repository;
 
 import mju.capstone.ddingconnect.domain.member.domain.Member;
+import mju.capstone.ddingconnect.domain.member.domain.MemberRole;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -18,4 +20,6 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
     boolean existsByEmail(String email);
 
     boolean existsByNickname(String nickname);
+
+    List<Member> findAllByRole(MemberRole role);
 }
