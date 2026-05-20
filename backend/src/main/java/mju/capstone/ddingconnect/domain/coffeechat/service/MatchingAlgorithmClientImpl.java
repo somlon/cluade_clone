@@ -13,6 +13,7 @@ import mju.capstone.ddingconnect.domain.techstack.domain.TechStackName;
 import mju.capstone.ddingconnect.domain.techstack.domain.repository.TechStackRepository;
 import mju.capstone.ddingconnect.global.response.code.status.ErrorStatus;
 import mju.capstone.ddingconnect.global.response.exception.handler.CoffeeChatHandler;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -62,6 +63,9 @@ public class MatchingAlgorithmClientImpl implements MatchingAlgorithmClient {
     private final GraduateRepository graduateRepository;
     private final TechStackRepository techStackRepository;
 
+    // 생성자가 2개(운영 + 테스트용)라 Spring 이 자동 선택 못해 빈 생성 시 무인자 생성자를 찾다 실패한다.
+    // Spring 4.3+ 규칙 — 다중 생성자는 @Autowired 로 운영 생성자를 명시해야 한다.
+    @Autowired
     public MatchingAlgorithmClientImpl(
             @Value("${matching.algorithm.base-url}") String baseUrl,
             @Value("${matching.algorithm.top-n}") int topN,
@@ -72,7 +76,7 @@ public class MatchingAlgorithmClientImpl implements MatchingAlgorithmClient {
                 memberRepository, graduateRepository, techStackRepository);
     }
 
-    /** 테스트용 — {@link org.springframework.test.web.client.MockRestServiceServer} 바인딩된 RestClient 주입. */
+    /** 테스트용 — MockRestServiceServer(test scope) 바인딩된 RestClient 주입. */
     MatchingAlgorithmClientImpl(
             RestClient restClient,
             int topN,
