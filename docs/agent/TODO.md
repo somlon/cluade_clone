@@ -94,20 +94,6 @@ DB 측은 `application-db.yml` 이 `ddl-auto=create` 라 부팅 시 자동으로
 
 **출처**: 두 레포 DB 스키마/기능 비교 세션 — 두 레포 entity 헤더 주석에서 모두 "미사용/ERD 잔재" 로 자가 식별된 컬럼.
 
-### TODO J: 커피챗 매칭 알고리즘 엔드포인트 경로 정정 (coffeechat 도메인)
-
-**문제**: `MatchingAlgorithmClientImpl.MATCH_ENDPOINT_PATH` (`MatchingAlgorithmClientImpl.java:33`) 가 `"/match"` 로 하드코딩돼 있어, 실제 데이터 파트(`ddingconnect-data`) 라우트 `POST /api/data/coffeechat/match` 와 불일치한다. 현재 매칭 호출이 **항상 404 로 실패** → `MATCHING_ALGORITHM_FAILED`(502) 로 매핑되어 프론트에 반환됨. 결과적으로 커피챗 매칭 결과 화면(매칭된 선배 리스트)이 한 장도 렌더링되지 않는 상태.
-
-**디폴트 결정**: `MatchingAlgorithmClientImpl.java:33` 의 `MATCH_ENDPOINT_PATH = "/match"` 를 `"/api/data/coffeechat/match"` 로 변경. 같은 파일 클래스 javadoc(`23-26`)·필드 위 `TODO(타 파트 협의)` 주석(`32`) 도 함께 정리 — 경로 항목 한정으로 "확정됨" 처리. `backend.md` 의 `### 커피챗` 의 "타 파트 협의 미확정" 표기에서 경로 항목 제거(요청/응답 스키마 항목만 남김). `data.md` 의 "백엔드 연동 시 주의 — 계약 불일치" 의 "엔드포인트 경로" 항목도 제거.
-
-**범위 — 경로 1줄 정정만**: 호출 contract 는 경로 외에도 어긋난 부분이 더 있으나(아래) 이번 TODO 는 가장 단순·확정 가능한 경로 1건만 다룬다. 나머지는 별도 TODO 로 분리해 점진 진행:
-- (별도) 요청 스키마 — 백엔드 단방향(`{requesterId + 폼6필드}`) → 데이터 파트 양방향 페어(`{requester: UserInfo, receiver: UserInfo}` per pair) 변환. 후보 풀 조회(`MemberRepository` 역할별 필터 메서드 신규)·페어별 호출 오케스트레이션·필드 매핑(`Graduate.jobType.name()` → `job`, `TechStackRepository.findByMemberId` → `tech_stacks`, `Graduate.company` → `goal`, 폼 `capability` 문자열 → `List<String>` 파싱) 필요.
-- (별도) 응답 스키마 — 백엔드 `List<Long> memberIds` 기대 vs 데이터 파트 `{status, match_results: 점수}` 반환. 백엔드가 점수 받아 정렬·top N `memberIds` 추출하는 방식으로 변경.
-
-**주의**: 경로만 정정해도 매칭이 동작하지는 않는다(요청/응답 스키마 정합이 별도). 이 항목 머지 후에도 `MATCHING_ALGORITHM_FAILED` 자체는 여전히 발생할 수 있다 — 정합 작업이 완료돼야 사진의 매칭 결과 화면이 실제로 렌더링된다.
-
-**출처**: 커피챗 매칭 플로우 분석 세션 (사진 화면 ↔ 백엔드↔`ddingconnect-data` 호출 contract 정합성 점검 중, 4건 불일치 발견 후 즉시 적용 가능한 1건 분리).
-
 ### TODO K: 커피챗 매칭 요청 스키마 양방향 페어 변환 (coffeechat 도메인, TODO J 후속)
 
 **문제**: `MatchingAlgorithmClientImpl.AlgorithmMatchRequest` 가 단방향(`{requesterId, grade, gpa, major, interestedJob, capability, targetCompany}`) 으로 폼 6필드 + 신청자 ID 만 전송한다. 그러나 데이터 파트(`POST /api/data/coffeechat/match`) 는 양방향 페어 `{requester: UserInfo, receiver: UserInfo}` 를 기대하며 (`UserInfo` = `user_id, job, tech_stacks, goal`), 백엔드가 후보(receiver) 정보를 보내지 않아 알고리즘에 비교 대상 자체가 없다. TODO J(경로 정정) 가 머지돼도 요청 스키마 불일치로 422 가 난다.

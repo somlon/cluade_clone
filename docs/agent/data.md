@@ -202,7 +202,6 @@ ddingconnect-data/
 
 `backend.md` 의 커피챗 매칭 섹션(`MatchingAlgorithmClient`)이 가정하는 내용과 실제 `ddingconnect-data` 구현이 어긋난다. 백엔드 연동 코드를 확정하기 전 반드시 확인:
 
-- **엔드포인트 경로**: 실제는 `POST /api/data/coffeechat/match`. 백엔드 문서의 추정 경로 `/match` 와 다름.
 - **올바른 전제 = 후보 ID 리스트 반환**: 커피챗 매칭 알고리즘은 백엔드에 **후보 회원 ID 리스트**를 반환해야 한다 — `backend.md` 의 커피챗 매칭 가정이 맞다. 후보 회원 탐색·선별은 데이터 파트(알고리즘) 책임이다.
 - **현재 구현 불일치**: 실제 `POST /api/data/coffeechat/match` 는 후보 리스트가 아니라, 요청 바디로 받은 두 명(`requester`·`receiver`)의 매칭 점수(`jobScore`/`ability`/`goal`/`totalMatchRate`)만 반환한다. 위 올바른 전제와 어긋난다 — 정렬은 데이터 파트(`ddingconnect-data`) 담당 영역이다.
 - **네이밍 불일치**: 요청은 snake_case(`user_id`, `tech_stacks`), 응답은 camelCase 혼용(`jobScore`·`totalMatchRate` 는 camelCase, `ability`·`goal` 은 소문자). DTO 매핑 시 주의.

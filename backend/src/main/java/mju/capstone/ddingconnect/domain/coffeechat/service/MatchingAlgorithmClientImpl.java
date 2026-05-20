@@ -18,19 +18,20 @@ import java.util.List;
  * [매칭 알고리즘 클라이언트 구현체 — RestClient]
  *
  * base URL 은 설정값 {@code matching.algorithm.base-url} 에서 주입한다(하드코딩 금지).
+ * 엔드포인트 경로는 데이터 파트({@code ddingconnect-data}) 라우트
+ * {@code POST /api/data/coffeechat/match} 에 결합한다.
  * 호출 실패·타임아웃·비정상 응답은 모두 {@link ErrorStatus#MATCHING_ALGORITHM_FAILED} 로 변환한다.
  *
- * <p><b>타 파트 협의 미확정</b>: 알고리즘 엔드포인트 경로와 요청/응답 JSON 스키마는
+ * <p><b>타 파트 협의 미확정</b>: 요청/응답 JSON 스키마는
  * 아직 확정되지 않았다. 현재는 호출 골격만 두며, 스키마 확정 후
- * {@code MATCH_ENDPOINT_PATH}·{@code AlgorithmMatchRequest}·{@code AlgorithmMatchResponse}
+ * {@code AlgorithmMatchRequest}·{@code AlgorithmMatchResponse}
  * 의 매핑만 채우면 된다.
  */
 @Slf4j
 @Component
 public class MatchingAlgorithmClientImpl implements MatchingAlgorithmClient {
 
-    // TODO(타 파트 협의): 알고리즘 매칭 엔드포인트 경로 확정 필요. base URL 뒤에 결합된다.
-    private static final String MATCH_ENDPOINT_PATH = "/match";
+    private static final String MATCH_ENDPOINT_PATH = "/api/data/coffeechat/match";
 
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(3);
     private static final Duration READ_TIMEOUT = Duration.ofSeconds(5);
