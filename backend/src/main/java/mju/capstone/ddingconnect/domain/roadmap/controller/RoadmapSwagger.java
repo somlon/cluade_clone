@@ -55,11 +55,12 @@ public interface RoadmapSwagger {
 
 
     @Operation(
-            summary = "로드맵 목록 조회",
-            description = "등록된 모든 로드맵 목록을 조회합니다."
+            summary = "내 로드맵 목록 조회",
+            description = "로그인한 회원이 생성한 로드맵 목록을 최신순(createdAt 내림차순)으로 조회합니다."
     )
     @GetMapping
-    ApiResponse<List<RoadmapResponse>> getRoadmaps();
+    ApiResponse<List<RoadmapResponse>> getRoadmaps(
+            @Parameter(hidden = true) @LoginMember Member member);
 
 
 

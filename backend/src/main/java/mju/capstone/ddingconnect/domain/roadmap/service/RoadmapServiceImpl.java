@@ -70,8 +70,8 @@ public class RoadmapServiceImpl implements RoadmapService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<RoadmapResponse> getList() {
-        return roadmapRepository.findAll()
+    public List<RoadmapResponse> getList(Member member) {
+        return roadmapRepository.findByMemberIdOrderByCreatedAtDesc(member.getId())
                 .stream().map(RoadmapResponse::from).toList();
     }
 

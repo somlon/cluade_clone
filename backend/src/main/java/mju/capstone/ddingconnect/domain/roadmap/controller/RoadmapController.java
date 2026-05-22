@@ -28,10 +28,11 @@ public class RoadmapController implements RoadmapSwagger {
         return ApiResponse.onSuccess(roadmapService.create(memberId, request));
     }
 
-    /** 로드맵 목록 조회 (Read) */
+    /** 로드맵 목록 조회 (Read) — 로그인 회원이 생성한 로드맵만 최신순 반환 */
     @GetMapping
-    public ApiResponse<List<RoadmapResponse>> getRoadmaps() {
-        return ApiResponse.onSuccess(roadmapService.getList());
+    public ApiResponse<List<RoadmapResponse>> getRoadmaps(
+            @Parameter(hidden = true) @LoginMember Member member) {
+        return ApiResponse.onSuccess(roadmapService.getList(member));
     }
 
     /** 로드맵 상세 조회 (Read - 로드맵 카드를 클릭했을 때 AI가 생성한 JSON 로드맵 전체 내용 반환) */

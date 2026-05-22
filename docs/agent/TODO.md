@@ -43,16 +43,6 @@
 
 **출처**: `cluade_clone` ↔ `ddingconnect-backend` 전체 코드 비교 세션 (png·CLAUDE.md 제외).
 
-### TODO G: 로드맵 전체 목록 조회 API(`getRoadmaps`) 제거 (roadmap 도메인)
-
-**문제**: `RoadmapController.getRoadmaps` (`GET /api/v1/roadmaps`) 와 호출 체인 `RoadmapService.getList` / `RoadmapServiceImpl.getList` 가 `roadmapRepository.findAll()` 로 **전 회원의 로드맵을 무조건 전부** 반환한다 — `@LoginMember` 인증·회원 스코프 필터·페이징 없음. 로드맵 플로우(프론트 폼 입력 → 데이터 파트 AI 생성 → `Roadmap.content` 저장 → 상세 조회)는 등록(`createRoadmap`)·상세 조회(`getRoadmap`)만 사용하며 `getRoadmaps` 는 어느 단계에서도 호출되지 않는다. `backend.md` 화면 매핑에도 "전체 로드맵 목록" 화면이 없다 (마이페이지는 `countMyRoadmaps` 로 개수만 표시).
-
-**디폴트 결정**: 아래 4곳을 제거한다 — `RoadmapController.getRoadmaps` 엔드포인트, `RoadmapSwagger.getRoadmaps`, `RoadmapService.getList`, `RoadmapServiceImpl.getList`. `RoadmapRepository` 는 손대지 않는다(`getList` 가 쓰던 `findAll` 은 JpaRepository 기본 메서드). `RoadmapControllerTest` 에 목록 조회 케이스가 있으면 함께 정리하고, 본문 도메인 문서(`backend.md` 로드맵 섹션)의 CRUD 설명을 4종 → 3종으로 갱신.
-
-**주의**: 제거 전 프론트에 `GET /api/v1/roadmaps` 호출부가 없는지 최종 확인. 본인 로드맵 목록 화면이 추후 필요하면 `findAll` 이 아닌 `findByMemberId` 기반 **회원 스코프 + `@LoginMember`** 조회로 신설할 것 — 전체 무인증 노출 API 형태로 부활 금지.
-
-**출처**: 로드맵 백엔드↔데이터 파트 연동 플로우 분석 세션 — 생성 플로우 미사용 API 로 식별, 사용자 지시로 제거 확정.
-
 ### TODO I: `target_job.key2` 미사용 컬럼 제거 (interested_job 도메인)
 
 **문제**: `TargetJob.key2` (`target_job.key2`, varchar(255)) 는 ERD 잔재 컬럼으로 entity 클래스 헤더 주석에 "(미사용, ERD 잔재)" 로 자가 명시되어 있다. signup·`TargetJobServiceImpl.replace` 등 어디에서도 set 하지 않아 저장값이 항상 null 이며, `TargetJobResponse` 가 record 필드로 응답에 노출하지만 항상 null 만 반환한다. 두 레포(`cluade_clone` / `ddingconnect-backend`) DB 스키마 비교 세션에서 양쪽 모두 동일하게 dead column 으로 식별됨.

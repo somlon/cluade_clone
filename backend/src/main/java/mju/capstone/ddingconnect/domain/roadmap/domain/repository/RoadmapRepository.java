@@ -13,5 +13,8 @@ public interface RoadmapRepository extends JpaRepository<Roadmap, Long> {
 
     List<Roadmap> findByMemberId(Long memberId);
 
+    /** 회원이 생성한 로드맵을 최신순(createdAt 내림차순)으로 조회 — 마이 로드맵 목록 화면용 */
+    List<Roadmap> findByMemberIdOrderByCreatedAtDesc(Long memberId);
+
     long countByMemberId(Long memberId);
 }

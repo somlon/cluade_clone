@@ -120,13 +120,14 @@ class RoadmapServiceImplTest {
     }
 
     @Test
-    @DisplayName("getList - 로드맵 목록을 반환한다")
-    void getListReturnsList() {
-        when(roadmapRepository.findAll()).thenReturn(List.of(roadmap));
+    @DisplayName("getList - 본인이 생성한 로드맵만 최신순으로 반환한다")
+    void getListReturnsMyRoadmaps() {
+        when(roadmapRepository.findByMemberIdOrderByCreatedAtDesc(MEMBER_ID)).thenReturn(List.of(roadmap));
 
-        List<RoadmapResponse> result = roadmapService.getList();
+        List<RoadmapResponse> result = roadmapService.getList(author);
 
         assertThat(result).hasSize(1);
+        assertThat(result.get(0).memberId()).isEqualTo(MEMBER_ID);
     }
 
     @Test

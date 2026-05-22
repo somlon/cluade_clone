@@ -16,7 +16,8 @@ public interface RoadmapService {
      */
     RoadmapResponse create(Long memberId, CreateRoadmapRequest request);
 
-    List<RoadmapResponse> getList();
+    /** 로그인 회원이 생성한 로드맵 목록을 최신순으로 조회한다. */
+    List<RoadmapResponse> getList(Member member);
 
     RoadmapResponse getOne(Long roadmapId);
 
