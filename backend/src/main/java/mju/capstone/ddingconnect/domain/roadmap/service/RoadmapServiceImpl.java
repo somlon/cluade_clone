@@ -2,6 +2,7 @@ package mju.capstone.ddingconnect.domain.roadmap.service;
 
 import lombok.RequiredArgsConstructor;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
+import mju.capstone.ddingconnect.domain.member.domain.repository.MemberRepository;
 import mju.capstone.ddingconnect.domain.roadmap.domain.Roadmap;
 import mju.capstone.ddingconnect.domain.roadmap.domain.RoadmapAlarm;
 import mju.capstone.ddingconnect.domain.roadmap.domain.repository.RoadmapAlarmRepository;
@@ -9,6 +10,7 @@ import mju.capstone.ddingconnect.domain.roadmap.domain.repository.RoadmapReposit
 import mju.capstone.ddingconnect.domain.roadmap.dto.request.CreateRoadmapRequest;
 import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapResponse;
 import mju.capstone.ddingconnect.global.response.code.status.ErrorStatus;
+import mju.capstone.ddingconnect.global.response.exception.handler.MemberHandler;
 import mju.capstone.ddingconnect.global.response.exception.handler.RoadmapHandler;
 import mju.capstone.ddingconnect.global.sse.AlarmNotificationEvent;
 import mju.capstone.ddingconnect.global.alarm.AlarmType;
@@ -27,16 +29,23 @@ public class RoadmapServiceImpl implements RoadmapService {
 
     private final RoadmapRepository roadmapRepository;
     private final RoadmapAlarmRepository roadmapAlarmRepository;
+    private final MemberRepository memberRepository;
+    private final RoadmapAiClient roadmapAiClient;
     private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional
-    public RoadmapResponse create(Member member, CreateRoadmapRequest request) {
-        validateContent(request.content());
+    public RoadmapResponse create(Long memberId, CreateRoadmapRequest request) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new MemberHandler(ErrorStatus.MEMBER_NOT_FOUND));
+
+        // 데이터 파트가 AI 로드맵 생성을 담당하고, 백엔드는 그 결과 JSON 만 저장한다.
+        String content = roadmapAiClient.generate(request, memberId);
+        validateContent(content);
 
         Roadmap roadmap = Roadmap.builder()
                 .member(member)
-                .content(request.content())
+                .content(content)
                 .build();
         Roadmap saved = roadmapRepository.save(roadmap);
 
@@ -52,6 +61,7 @@ public class RoadmapServiceImpl implements RoadmapService {
         return RoadmapResponse.from(saved);
     }
 
+    /** 데이터 파트 AI 응답 본문 검증 — null/blank 면 INVALID_CONTENT. */
     private void validateContent(String content) {
         if (content == null || content.isBlank()) {
             throw new RoadmapHandler(ErrorStatus.ROADMAP_INVALID_CONTENT);

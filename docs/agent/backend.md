@@ -151,15 +151,19 @@ mju.capstone.ddingconnect
   - `Question` 삭제 (`QuestionServiceImpl.delete`): 손자(`AnswerAlarm`, `AnswerLike`) → `Answer` → `QuestionLike` → `Question` 순. 손자는 2-level 경로(`@Modifying @Query`) 로 일괄 삭제. `QuestionServiceImpl` 가 `AnswerRepository/AnswerAlarmRepository/AnswerLikeRepository` 를 직접 주입받는 도메인 간 약결합 허용 (각 답변별 소유자가 다를 수 있어 `AnswerService.delete` 위임은 부적합).
 
 ### 로드맵 (roadmap)
-- 흐름: 데이터 파트가 화면 폼(학년/학점/전공/관심 직무/보유 역량/목표 기업) 입력값으로 AI 호출 → 결과 텍스트만 백엔드가 저장. **AI 호출 자체는 백엔드 미포함** (Spring 측에 OpenAI/HTTP 클라이언트 의존성 없음).
-- `Roadmap.content`: MySQL `TEXT` 컬럼 (`@Column(columnDefinition = "TEXT")`) — 일반 문자열을 그대로 저장. 내부 형식 강제 없음 (JSON·평문 무관). 본문이 255자를 넘을 수 있어 `VARCHAR` 가 아닌 `TEXT`.
-- 등록(`POST /api/v1/roadmaps`) 시 `RoadmapServiceImpl.validateContent()`로 사전 검증:
-  - null / blank → `ROADMAP_INVALID_CONTENT` (HTTP 400)
-  - 그 외 비어 있지 않은 모든 문자열 통과 (content 내부 형식 미강제)
+- **흐름 (백엔드 중심, 커피챗 패턴)**: 프론트가 입력 폼 6필드 + `memberId` 를 백엔드 생성 API 로 전송 → 백엔드가 데이터 파트 `POST /api/data/generate` 를 호출해 AI 로드맵 생성 → AI 결과 JSON 을 백엔드 자체 DB `Roadmap.content` 에 저장 → `RoadmapResponse(id, …)` 반환 → 프론트는 그 `id` 로 상세 조회(`GET /api/v1/roadmaps/{roadmapId}`). 데이터 파트는 **AI 생성만** 담당하고 저장·조회·알람은 백엔드가 맡는다.
+- **DB 미공유**: 백엔드 DB 와 데이터 파트 DB(`ddingconnect.db`)는 별개다. 데이터 파트가 자체 DB 에 저장하는 row 는 백엔드와 무관하며, 백엔드 상세 조회·알람은 백엔드 DB 의 `Roadmap` row 기준이다.
+- **데이터 파트 호출 클라이언트 (`RoadmapAiClient` / `RoadmapAiClientImpl`)**: 커피챗 `MatchingAlgorithmClient` 와 동일한 얇은 클라이언트 패턴. `RestClient` 로 `POST {data.base-url}/api/data/generate?member_id={id}` 1회 호출 — 회원 식별자는 `member_id` **URL 쿼리 파라미터**로 전달(데이터 파트 시그니처 정합, `X-User-Id` 헤더 아님). 요청 body 는 데이터 파트 `RoadmapRequest` 스키마(6필드 플랫, snake_case `{grade, gpa, major, target_job, current_skills, target_company}`) — `targetJob`/`currentSkills` enum 은 Jackson 이 enum 명으로 직렬화하고, `currentSkills` 가 null 이면 빈 배열로 보낸다. 응답은 데이터 파트 `RoadmapResponse` JSON 을 `String` 으로 그대로 받아 `Roadmap.content` 에 저장(카드 형식 파싱 없음 — 데이터 파트가 `response_model` 로 정형화 보장). base URL 은 설정값 `data.base-url`(env `DATA_BASE_URL`, 기본 `http://localhost:8000`). 호출 실패·타임아웃·HTTP 오류는 모두 502 (`ROADMAP_AI_GENERATION_FAILED`). AI(OpenAI) 생성이 수십 초 걸릴 수 있어 read 타임아웃은 60초로 커피챗 클라이언트(5초)보다 길게 둔다.
+- **`CreateRoadmapRequest` = 입력 폼 6필드**: `grade`(`Integer`) · `gpa`(`Double`) · `major` · `targetJob`(`TargetJobCategory`) · `currentSkills`(`List<TechStackName>`) · `targetCompany`. `targetJob`/`currentSkills` 가 enum 타입이라 데이터 파트 `TargetJobCategory`(11종)·`TechStackName`(24종)과 값이 정합하며, Jackson 역직렬화가 알 수 없는 값을 400 으로 거른다.
+- **생성 엔드포인트 회원 식별 (`POST /api/v1/roadmaps?memberId={id}`)**: 생성 API 는 `@LoginMember` 가 아닌 `memberId` **URL 쿼리 파라미터**로 회원을 받는다. `RoadmapServiceImpl.create` 가 `memberRepository.findById` 로 회원을 조회하며 미존재 시 `MEMBER_NOT_FOUND`(404). 삭제·마이페이지 통계(`delete`/`countMyRoadmaps`)는 기존대로 `@LoginMember Member` 사용.
+- **`RoadmapServiceImpl.create` 플로우**: 회원 조회 → `RoadmapAiClient.generate` 데이터 파트 호출 → `validateContent` 로 AI 응답 검증(null/blank → `ROADMAP_INVALID_CONTENT` 400) → `Roadmap.content` 저장 → `RoadmapAlarm` 저장 + `AlarmNotificationEvent` 발행(본인=생성자 1건). 단일 `@Transactional` — 외부 HTTP 호출을 트랜잭션 안에 포함하지만, 알람 row 와 본체 저장의 원자성(공통 알람 규칙)을 위해 유지한다.
+- `Roadmap.content`: MySQL `TEXT` 컬럼 (`@Column(columnDefinition = "TEXT")`) — 데이터 파트 AI 가 생성한 `RoadmapResponse` JSON 문자열을 그대로 저장. 본문이 255자를 넘을 수 있어 `VARCHAR` 가 아닌 `TEXT`.
+- **상세 조회 (`GET /api/v1/roadmaps/{roadmapId}`)**: `RoadmapServiceImpl.getOne` 이 저장된 `Roadmap.content`(AI 생성 JSON)를 `RoadmapResponse.content` 로 그대로 반환. 미존재 시 `ROADMAP_NOT_FOUND`(404).
+- **입력 6필드 미저장**: 현재 결정은 결과 `content` 만 저장하고 입력 폼 원본은 저장하지 않는다. 재생성·입력 이력·수정 화면 프리필이 필요해지면 별도 컬럼/엔티티 추가 검토 — 제품 요구 확정 후 결정.
 - update API 미지원 (재생성 = 새 create + 기존 delete)
 - 삭제는 소유자(member.id 일치)만 가능 (`ROADMAP_UNAUTHORIZED`)
 - **삭제 캐스케이드 (서비스 레벨)**: `RoadmapServiceImpl.delete` 에서 `RoadmapAlarm` 먼저 `deleteByRoadmapId` 로 정리 → `Roadmap` 삭제. `RoadmapAlarm.roadmap` 이 `nullable = false` FK 라 정리 없이는 MySQL FK constraint 위반.
-- Swagger 기본 예시값은 일반 문자열(`{ "content": "string" }`)로 지정되어 있음 (`RoadmapSwagger.createRoadmap`의 `@ExampleObject`) — Try it out 즉시 200 통과
+- **데이터 파트 rate limit 주의**: 데이터 파트 `/generate` 의 rate limit 은 `member_id` 를 URL 쿼리로만 받고 limiter 키로 쓰지 않아 IP 기준으로 동작 → 백엔드가 단일 IP 로 호출하면 전체 사용자가 한도를 공유한다. 회원별 제한이 필요하면 limiter 키 용도로 `X-User-Id` 헤더 병행 전송을 검토(범위 밖).
 
 ## 공통 패턴
 

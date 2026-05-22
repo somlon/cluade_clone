@@ -221,6 +221,16 @@ ddingconnect-data/
 - **base URL**: 데이터 서버 기본 포트 8000 — 백엔드 `matching.algorithm.base-url` 기본값(`http://localhost:8000`)과 일치.
 - **`job`/`tech_stacks` 값 정합**: 데이터 파트 알고리즘 `calculate_job_score`/`calculate_ability_score` 는 두 문자열 완전 일치 비교(대문자 enum 명 가정). 프론트 폼이 `TargetJobCategory`/`TechStackName` enum 명을 그대로 송신해야 점수가 정상 계산된다. 백엔드는 `tech_stacks` 만 `TechStackName` 화이트리스트로 정규화하고, `job` 은 폼 값 pass-through.
 
+### 로드맵 생성 연동 (`/api/data/generate`)
+
+`backend.md` 의 로드맵 섹션(`RoadmapAiClient` / `RoadmapAiClientImpl`)과 데이터 파트 `POST /api/data/generate` 의 연동 계약:
+
+- **역할 분담**: 데이터 파트는 AI 로드맵 생성만 담당하고 저장·상세 조회·알람은 백엔드가 맡는다(커피챗과 동일한 백엔드 중심 패턴). 백엔드 DB 와 데이터 파트 DB(`ddingconnect.db`)는 공유하지 않는 별개 DB.
+- **회원 식별 = `member_id` URL 쿼리**: 백엔드는 `POST /api/data/generate?member_id={id}` 로 호출한다 — 회원 식별자를 `X-User-Id` 헤더가 아닌 URL 쿼리 파라미터로 전달. 위 `### POST /api/data/generate` 엔드포인트 섹션은 `X-User-Id` 헤더 인증으로 기술돼 있으나, 백엔드 구현·연동 계약은 `member_id` URL 쿼리 방식이다 — 데이터 파트 `main` 재분석 시 위 섹션을 정합 갱신할 것.
+- **요청 스키마**: 본문은 데이터 파트 `RoadmapRequest` 6필드(`{grade, gpa, major, target_job, current_skills, target_company}`, snake_case). 백엔드 record(`RoadmapAiClientImpl.RoadmapGenerationRequest`)가 `CreateRoadmapRequest` 를 변환해 직렬화하며, `target_job`/`current_skills` 는 enum 명으로 직렬화된다(`currentSkills` 가 null 이면 빈 배열).
+- **응답 처리**: 백엔드는 데이터 파트 `RoadmapResponse` JSON 을 파싱 없이 `String` 으로 받아 백엔드 `Roadmap.content` 에 그대로 저장하고, 상세 조회 시 그 문자열을 그대로 반환한다(stale 가능성 없음 — 백엔드 DB 가 source of truth).
+- **rate limit**: `/generate` 는 `member_id` 를 URL 쿼리로만 받고 limiter 키로 쓰지 않아 IP 기준으로 동작 → 백엔드가 단일 IP 로 호출하면 전체 사용자가 한도를 공유한다. 회원별 제한이 필요하면 `X-User-Id` 헤더 병행 전송 검토(범위 밖).
+
 ## 미완성 / 한계 / 노이즈
 
 - 매칭 알고리즘은 룰 기반 PoC 수준 — `goal` 문자열 완전 일치 의존(오타·표기차에 취약), 임베딩·카테고리화 미구현.

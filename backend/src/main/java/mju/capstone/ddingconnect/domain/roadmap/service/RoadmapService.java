@@ -8,7 +8,13 @@ import java.util.List;
 
 public interface RoadmapService {
 
-    RoadmapResponse create(Member member, CreateRoadmapRequest request);
+    /**
+     * 입력 폼 6필드로 데이터 파트 AI 를 호출해 로드맵을 생성·저장한다.
+     *
+     * @param memberId 로드맵을 생성할 회원 ID (URL 로 전달)
+     * @param request  로드맵 입력 폼 6필드
+     */
+    RoadmapResponse create(Long memberId, CreateRoadmapRequest request);
 
     List<RoadmapResponse> getList();
 
