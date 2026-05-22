@@ -95,6 +95,54 @@ DB 측은 `application-db.yml` 이 `ddl-auto=create` 라 부팅 시 자동으로
 
 **출처**: `cluade_clone` ↔ `ddingconnect-backend` 커피챗 도메인 비교 세션.
 
+### TODO K: ddingconnect-backend 로드맵 도메인 동기화 (roadmap 도메인, 크로스 레포)
+
+**문제**: `mju-capstone-4/ddingconnect-backend` 의 로드맵 도메인이 이 레포(`cluade_clone`) 보다 뒤처져 있다. 두 레포 로드맵 비교 결과(`cluade_clone` `main` d0d4f2e ↔ `ddingconnect-backend` `develop`(=`main`, 로드맵 동일)) — 로드맵 관련 소스 7개가 내용 불일치, 데이터 파트 AI 연동 클라이언트 2개와 로드맵 테스트 3개가 ddingconnect-backend 에 전무하다. 현재 ddingconnect-backend 로드맵은 `content` 문자열을 그대로 받아 저장하는 초기 버전이라, 데이터 파트(`ddingconnect-data`)의 AI 로드맵 생성(`POST /api/data/generate`)과 연동돼 있지 않다.
+
+**주의 — 크로스 레포**: 이 작업은 `ddingconnect-backend` 에 쓰기 작업을 한다. `## 작업 레포 범위 규칙` 에 따라 실행 전 사용자의 명시적 지시("ddingconnect-backend 에서 작업하라")가 반드시 필요하다 — 지시 없이 자동 실행하지 말 것. 기준(source of truth)은 `cluade_clone` 이다.
+
+**디폴트 결정**: `cluade_clone` 로드맵 도메인을 기준으로 아래 14개 파일을 `ddingconnect-backend` 에 반영한다. 경로는 ddingconnect-backend 기준 `src/{main,test}/java/mju/capstone/ddingconnect/` 이하(resources 만 별도 표기).
+
+신규 추가 — 데이터 파트 AI 연동 클라이언트 (2):
+
+1. `domain/roadmap/service/RoadmapAiClient.java` — 로드맵 AI 생성 클라이언트 인터페이스. `generate(form, memberId)` 단일 메서드.
+2. `domain/roadmap/service/RoadmapAiClientImpl.java` — `RestClient` 구현체. `POST {data.base-url}/api/data/generate?member_id={id}` 호출, 데이터 파트 `RoadmapRequest` 스키마(6필드 플랫 snake_case) body 전송, 응답 JSON 을 파싱 없이 문자열로 반환. connect 3초/read 60초 타임아웃(AI 생성이 수십 초 소요), 실패 시 `ROADMAP_AI_GENERATION_FAILED`(502). 커피챗 `MatchingAlgorithmClient` 와 동일한 얇은 클라이언트 패턴. `MockRestServiceServer` 용 package-private 생성자 포함.
+
+소스 수정 — 로드맵 도메인 (7):
+
+3. `domain/roadmap/dto/request/CreateRoadmapRequest.java` — 단일 `content` 필드 → 입력 폼 6필드(`grade`·`gpa`·`major`·`targetJob`(`TargetJobCategory`)·`currentSkills`(`List<TechStackName>`)·`targetCompany`)로 교체.
+4. `domain/roadmap/dto/response/RoadmapResponse.java` — `createdAt`(`LocalDateTime`) 필드 추가. 마이 로드맵 목록 날짜 표시용, `from()` 매핑도 함께 수정.
+5. `domain/roadmap/service/RoadmapService.java` — `create(Member, …)` → `create(Long memberId, …)`, `getList()` → `getList(Member member)` 시그니처 변경.
+6. `domain/roadmap/service/RoadmapServiceImpl.java` — `MemberRepository`·`RoadmapAiClient` 주입. `create`: memberId 로 회원 조회(미존재 `MEMBER_NOT_FOUND`) → AI 호출 → content 검증(null/blank → `ROADMAP_INVALID_CONTENT`) → 저장 → 알람 발행. `getList`: `findByMemberIdOrderByCreatedAtDesc` 로 회원 스코프 최신순 조회.
+7. `domain/roadmap/controller/RoadmapController.java` — `create` 는 `@RequestParam Long memberId` 수신(기존 `@LoginMember` 제거), `getList` 는 `@LoginMember Member` 수신.
+8. `domain/roadmap/controller/RoadmapSwagger.java` — 변경된 시그니처에 맞춰 Swagger 설명·요청 예시(6필드 입력 폼)로 갱신.
+9. `domain/roadmap/domain/repository/RoadmapRepository.java` — `findByMemberIdOrderByCreatedAtDesc(Long memberId)` 쿼리 메서드 추가.
+
+소스 수정 — 공통/설정 (2):
+
+10. `global/response/code/status/ErrorStatus.java` — `// Roadmap` 블록에 `ROADMAP_AI_GENERATION_FAILED(HttpStatus.BAD_GATEWAY, "ROADMAP502", "로드맵 AI 생성에 실패했습니다.")` 한 줄 추가.
+11. `src/main/resources/application.yml` — `data.base-url: ${DATA_BASE_URL:http://localhost:8000}` 설정 블록 추가(기존 `matching.algorithm.base-url` 과 형제).
+
+테스트 신규 추가 — ddingconnect-backend 에 로드맵 테스트가 전무 (3):
+
+12. `domain/roadmap/controller/RoadmapControllerTest.java` — 컨트롤러 4 케이스(create/list/detail/delete).
+13. `domain/roadmap/service/RoadmapAiClientImplTest.java` — AI 클라이언트 5 케이스(`MockRestServiceServer` 기반).
+14. `domain/roadmap/service/RoadmapServiceImplTest.java` — 서비스 11 케이스.
+
+수정 불필요(두 레포 내용 동일): `domain/roadmap/domain/Roadmap.java`, `domain/roadmap/domain/RoadmapAlarm.java`, `domain/roadmap/domain/repository/RoadmapAlarmRepository.java`, `global/response/exception/handler/RoadmapHandler.java`.
+
+의존성·주의:
+
+- `RestClient` 는 Spring Boot 3.5 기본 제공 — `build.gradle` 변경 불필요(커피챗 `MatchingAlgorithmClient` 가 같은 패턴 사용 중).
+- `RoadmapControllerTest` 가 쓰는 `support/WithMockLoginMember` 는 `develop` 에 이미 존재(커피챗 작업 시 추가) — `main` 기준 작업 시 함께 가져와야 한다.
+- `CreateRoadmapRequest` 의 `targetJob`/`currentSkills` enum 값은 데이터 파트 enum(직군 11종/기술스택 24종)과 일치해야 한다.
+- **API 변경(프론트 영향)**: `POST /api/v1/roadmaps` 가 `content` 단일 body → `?memberId=` 쿼리 + 6필드 body 로 바뀐다. 프론트 연동 동기화 필요.
+- 반영 후 `./gradlew test` 로 검증한다.
+
+**TODO F 와의 관계**: TODO F(ddingconnect-backend 전 계층 동기화)의 로드맵 부분을 최신 비교로 재확인·구체화한 슬라이스다. 로드맵만 우선 동기화하려면 이 TODO K 를, 전 도메인을 일괄 동기화하려면 TODO F 를 따른다 — TODO J(커피챗)와 동일 성격.
+
+**출처**: `cluade_clone` ↔ `ddingconnect-backend` 로드맵 도메인 비교 세션 (`cluade_clone` `main` d0d4f2e ↔ `ddingconnect-backend` `develop`/`main`).
+
 ### 11개 작업자 노트 (TODO #1~#11 머지 완료 후 보존되는 일반 가이드)
 
 - **브랜치 정책**: 각 TODO 를 **개별 브랜치 + 개별 PR** 로 처리하는 것을 기본으로 한다. 영향 범위가 큰 TODO 는 단독 PR 필수. 같은 도메인 내 작은 변경은 묶어서 1개 PR 도 허용 (작업자 판단). 사용자가 "TODO N 작업" 으로 단일 항목 지목 시 그 항목만 단독 PR.
