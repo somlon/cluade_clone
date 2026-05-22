@@ -30,7 +30,7 @@ import java.util.List;
  *
  * 커피챗 매칭 흐름:
  * 1) 요청자가 카카오 오픈채팅 링크를 포함해 커피챗 요청 (status=PENDING)
- *    → 수신자에게 "요청 도착" 알람 1건 발행
+ *    → 수신자에게 "요청 도착" 알람 + 요청자에게 "신청 접수" 알람 각 1건 발행
  * 2) 수신자가 수락(ACCEPTED) → 양쪽(요청자/수신자)에 카카오 링크 포함 알람 2건 발행
  *    수신자가 거절(REJECTED) → 요청자에게만 거절 알람 1건 발행
  */
@@ -40,6 +40,8 @@ public class CoffeeChatServiceImpl implements CoffeeChatService {
 
     // 테스트도 동일 상수를 참조하므로 package-private 노출
     static final String PENDING_CONTENT_FORMAT = "%s %s님이 커피챗을 요청했어요!";
+    // 신청자에게 보내는 "신청 접수" 확인 알람 — content 에 수신자 학과/닉네임 포함. 테스트도 참조하므로 package-private
+    static final String REQUEST_SENT_CONTENT_FORMAT = "%s %s님에게 커피챗을 신청했어요!";
     private static final String ACCEPTED_CONTENT_PREFIX = "커피챗 요청이 수락되었습니다. 카카오톡 오픈채팅 링크: ";
     private static final String REJECTED_CONTENT = "커피챗 요청이 거절되었습니다.";
 
@@ -110,6 +112,19 @@ public class CoffeeChatServiceImpl implements CoffeeChatService {
                 .build());
         eventPublisher.publishEvent(new AlarmNotificationEvent(
                 receiver, AlarmType.COFFEE_CHAT, pendingContent));
+
+        // [알람 발행] 신청자에게 "신청 접수" 확인 알람 1건
+        // content 에 수신자 학과/닉네임을 포함해 누구에게 신청했는지 식별 가능하게 함
+        String requestSentContent = String.format(REQUEST_SENT_CONTENT_FORMAT,
+                receiver.getDepartment(), receiver.getNickname());
+        coffeeChatAlarmRepository.save(CoffeeChatAlarm.builder()
+                .coffeeChat(saved)
+                .member(member)
+                .content(requestSentContent)
+                .isRead(false)
+                .build());
+        eventPublisher.publishEvent(new AlarmNotificationEvent(
+                member, AlarmType.COFFEE_CHAT, requestSentContent));
 
         return CoffeeChatResponse.from(saved);
     }

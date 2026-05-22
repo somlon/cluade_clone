@@ -63,7 +63,7 @@ class CoffeeChatServiceImplTest {
     }
 
     @Test
-    @DisplayName("create - 학생→졸업생 요청 시 수신자에게 알람 1건 발행, content 에 요청자 학과/닉네임 포함")
+    @DisplayName("create - 학생→졸업생 요청 시 수신자(요청 도착)·요청자(신청 접수) 양쪽에 알람 1건씩 발행")
     void createPublishesAlarmWithDynamicContent() {
         CreateCoffeeChatRequest req = new CreateCoffeeChatRequest(graduateReceiver.getId(), "https://link");
         when(memberRepository.findById(graduateReceiver.getId())).thenReturn(Optional.of(graduateReceiver));
@@ -71,26 +71,37 @@ class CoffeeChatServiceImplTest {
 
         CoffeeChatResponse response = coffeeChatService.create(studentRequester, req);
 
-        String expectedContent = String.format(CoffeeChatServiceImpl.PENDING_CONTENT_FORMAT,
+        String expectedReceiverContent = String.format(CoffeeChatServiceImpl.PENDING_CONTENT_FORMAT,
                 studentRequester.getDepartment(), studentRequester.getNickname());
+        String expectedRequesterContent = String.format(CoffeeChatServiceImpl.REQUEST_SENT_CONTENT_FORMAT,
+                graduateReceiver.getDepartment(), graduateReceiver.getNickname());
 
         assertThat(response.id()).isEqualTo(10L);
         assertThat(response.status()).isEqualTo(CoffeeChatStatus.PENDING);
 
+        // 수신자에게 "요청 도착", 요청자에게 "신청 접수" 알람 각 1건 (총 2건)
         ArgumentCaptor<CoffeeChatAlarm> captor = ArgumentCaptor.forClass(CoffeeChatAlarm.class);
-        verify(coffeeChatAlarmRepository, times(1)).save(captor.capture());
-        CoffeeChatAlarm alarm = captor.getValue();
-        assertThat(alarm.getMember().getId()).isEqualTo(graduateReceiver.getId());
-        assertThat(alarm.getIsRead()).isFalse();
-        assertThat(alarm.getContent()).isEqualTo(expectedContent);
+        verify(coffeeChatAlarmRepository, times(2)).save(captor.capture());
+        List<CoffeeChatAlarm> alarms = captor.getAllValues();
+        assertThat(alarms).allSatisfy(a -> assertThat(a.getIsRead()).isFalse());
 
-        // 커밋 후 SSE 푸시용 이벤트가 수신자 대상으로 1건 발행된다 (content 동적)
+        CoffeeChatAlarm receiverAlarm = alarms.stream()
+                .filter(a -> a.getMember().getId().equals(graduateReceiver.getId()))
+                .findFirst().orElseThrow();
+        assertThat(receiverAlarm.getContent()).isEqualTo(expectedReceiverContent);
+
+        CoffeeChatAlarm requesterAlarm = alarms.stream()
+                .filter(a -> a.getMember().getId().equals(studentRequester.getId()))
+                .findFirst().orElseThrow();
+        assertThat(requesterAlarm.getContent()).isEqualTo(expectedRequesterContent);
+
+        // 커밋 후 SSE 푸시용 이벤트도 수신자·요청자 양쪽 대상으로 2건 발행된다
         ArgumentCaptor<AlarmNotificationEvent> eventCaptor = ArgumentCaptor.forClass(AlarmNotificationEvent.class);
-        verify(eventPublisher, times(1)).publishEvent(eventCaptor.capture());
-        AlarmNotificationEvent event = eventCaptor.getValue();
-        assertThat(event.receiver().getId()).isEqualTo(graduateReceiver.getId());
-        assertThat(event.type()).isEqualTo(AlarmType.COFFEE_CHAT);
-        assertThat(event.content()).isEqualTo(expectedContent);
+        verify(eventPublisher, times(2)).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getAllValues()).extracting(e -> e.receiver().getId())
+                .containsExactlyInAnyOrder(studentRequester.getId(), graduateReceiver.getId());
+        assertThat(eventCaptor.getAllValues()).allSatisfy(e ->
+                assertThat(e.type()).isEqualTo(AlarmType.COFFEE_CHAT));
     }
 
     @Test
@@ -106,7 +117,8 @@ class CoffeeChatServiceImplTest {
 
         coffeeChatService.create(graduateRequester, req);
 
-        verify(coffeeChatAlarmRepository).save(any(CoffeeChatAlarm.class));
+        // 수신자(요청 도착)·요청자(신청 접수) 양쪽에 알람 1건씩
+        verify(coffeeChatAlarmRepository, times(2)).save(any(CoffeeChatAlarm.class));
     }
 
     @Test
