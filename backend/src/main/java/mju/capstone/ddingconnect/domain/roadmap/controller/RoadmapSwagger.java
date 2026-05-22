@@ -20,24 +20,30 @@ public interface RoadmapSwagger {
 
     @Operation(
             summary = "로드맵 등록",
-            description = "AI가 생성한 로드맵을 등록합니다. 로그인된 회원만 호출할 수 있습니다. " +
-                    "content는 일반 문자열로 저장되며, 비어 있지 않은 문자열이면 형식 제한 없이 허용됩니다."
+            description = "입력 폼 6필드와 회원 ID(memberId)를 받아 데이터 파트 AI 로 로드맵을 생성·저장합니다. " +
+                    "응답으로 받은 로드맵 ID 로 상세 조회(GET /api/v1/roadmaps/{roadmapId})를 호출하면 생성 결과를 볼 수 있습니다."
     )
     @PostMapping
     ApiResponse<RoadmapResponse> createRoadmap(
-            @Parameter(hidden = true) @LoginMember Member member,
+            @Parameter(description = "로드맵을 생성할 회원 ID", required = true)
+            @RequestParam Long memberId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                    description = "로드맵 등록 정보 (content는 일반 문자열)",
+                    description = "로드맵 생성 입력 폼 (6필드)",
                     required = true,
                     content = @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = CreateRoadmapRequest.class),
                             examples = @ExampleObject(
-                                    name = "AI 생성 로드맵 예시",
-                                    summary = "일반 문자열 기본값",
+                                    name = "로드맵 생성 입력 예시",
+                                    summary = "입력 폼 6필드",
                                     value = """
                                             {
-                                              "content": "string"
+                                              "grade": 3,
+                                              "gpa": 4.0,
+                                              "major": "응용소프트웨어학과",
+                                              "targetJob": "BACKEND",
+                                              "currentSkills": ["JAVA", "SPRING"],
+                                              "targetCompany": "카카오"
                                             }
                                             """
                             )
@@ -60,7 +66,7 @@ public interface RoadmapSwagger {
 
     @Operation(
             summary = "로드맵 상세 조회",
-            description = "로드맵 카드를 클릭했을 때 AI가 생성한 로드맵 전체 내용을 반환합니다."
+            description = "로드맵 ID 로 저장된 로드맵을 조회합니다. content 는 데이터 파트 AI 가 생성한 로드맵 JSON 문자열로, 저장된 값을 그대로 반환합니다."
     )
     @GetMapping("/{roadmapId}")
     ApiResponse<RoadmapResponse> getRoadmap(

@@ -53,26 +53,6 @@
 
 **출처**: 로드맵 백엔드↔데이터 파트 연동 플로우 분석 세션 — 생성 플로우 미사용 API 로 식별, 사용자 지시로 제거 확정.
 
-### TODO H: 로드맵 백엔드↔데이터 파트 연동 — 생성·상세 조회 플로우 완성 (roadmap 도메인)
-
-**문제**: 로드맵 생성 플로우(프론트 폼 입력 → AI 생성 → DB 저장 → 상세 조회)가 두 레포에 걸쳐 끊겨 있다. 백엔드 `RoadmapServiceImpl.create()` 는 프론트가 보낸 `content` 문자열을 그대로 저장만 하고 AI 를 호출하지 않으며, 백엔드→데이터 파트 호출 코드가 없다. 데이터 파트 `POST /api/data/generate` 를 프론트가 직접 호출하면 AI 로드맵은 생성되지만 백엔드 `Roadmap` row(= 상세 조회용 `id`)·`RoadmapAlarm`·SSE 가 생기지 않는다.
-
-**디폴트 결정 (백엔드 중심, 커피챗 패턴)**: 데이터 파트는 AI 생성만 담당하고 저장·조회·알람은 백엔드가 맡는다. 백엔드 생성 API 가 입력 6필드 + member.id 수신 → 데이터 파트 `/generate` 호출 → AI 결과를 백엔드 자체 DB `Roadmap.content` 에 저장 → `RoadmapResponse(id, …)` 반환 → 프론트는 그 `id` 로 백엔드 상세 조회(`GET /api/v1/roadmaps/{id}`). **DB 미공유** — 백엔드 DB 와 데이터 파트 DB(`ddingconnect.db`)는 별개이며, 데이터 파트가 자체 DB 에 저장하는 row 는 백엔드와 무관하게 별도 존재한다(상세 조회·알람은 백엔드 DB 기준). 베이스 브랜치 — 백엔드 `develop`, 데이터 파트 `main`. 백엔드(`cluade_clone`) 작업:
-
-1. **데이터 파트 호출 클라이언트 신규** — `RestClient` 로 `POST {data.base-url}/api/data/generate?member_id={id}` 호출. 커피챗 `MatchingAlgorithmClient` 패턴 재사용, base URL 설정값화(`application.yml`). 회원 식별자는 `?member_id=` URL 쿼리 파라미터로 전달한다 — 데이터 파트 `main` 브랜치 시그니처와 정합(`X-User-Id` 헤더 아님). 요청 body 는 데이터 파트 `RoadmapRequest` 스키마(snake_case 6필드).
-2. **`CreateRoadmapRequest` 교체** — `content` → `grade·gpa·major·targetJob·currentSkills·targetCompany` 6필드. `RoadmapSwagger` 의 `@ExampleObject` 동기화.
-3. **생성 엔드포인트 회원 식별** — `RoadmapController` 생성 API 가 member.id 를 URL 로 받아 `memberRepository.findById` 로 `Member` 를 조회한다(`@LoginMember` 미사용). 조회 실패는 회원 미존재 에러로 처리.
-4. **`RoadmapServiceImpl.create()` 재구성** — "요청 content 저장" → "회원 조회 → 데이터 파트 호출 → 응답 결과를 `Roadmap.content` 에 저장". `validateContent` 대상을 응답값으로 변경. 기존 `RoadmapAlarm`·SSE 알람 발행 로직은 그대로 유지.
-5. **상세 조회 반환 확인** — `GET /api/v1/roadmaps/{roadmapId}` → `RoadmapServiceImpl.getOne()` 이 저장된 `Roadmap.content`(AI 생성 결과 JSON)를 그대로 반환하는지 검증. 코드 변경은 거의 없고 `RoadmapSwagger` 상세 조회 설명만 갱신.
-6. **ENUM 정합성 확인** — `targetJob`/`currentSkills` 값이 데이터 파트 `TargetJobCategory`(11종)·`TechStackName`(24종)과 일치하는지 검증.
-7. **테스트** — `RoadmapService`/`RoadmapController`/호출 클라이언트 테스트 추가·수정.
-
-**미확정 / 선택**: 입력 6필드를 `Roadmap` 엔티티 컬럼(또는 별도 엔티티)으로 저장할지 여부. 현재 결정은 결과 `content` 만 저장(입력 원본 미저장). 재생성·입력 이력·수정 화면 프리필이 필요해지면 추가 — 제품 요구 확정 후 결정.
-
-**주의**: 데이터 파트는 `main` 브랜치가 이미 요건(`member_id` URL 쿼리 + 입력 DTO body → AI 생성 → 자체 DB 저장 → `RoadmapResponse` 반환)을 충족하므로 **이 TODO 는 백엔드만 변경**한다. 데이터 파트 `/generate` 의 rate limit(`@limiter.limit("5/day")`)은 `member_id` 를 URL 쿼리로 받고 `X-User-Id` 헤더는 받지 않아 limiter 가 IP 기준으로 동작 → 백엔드가 단일 IP 로 호출하면 전체 사용자가 한도를 공유한다. 회원별 제한이 필요하면 limiter 키 용도로 `X-User-Id` 헤더 병행 전송을 검토(범위 밖).
-
-**출처**: 로드맵 백엔드↔데이터 연동 플로우 분석 세션 — 회원 식별(member.id URL)·DB 미공유·데이터 파트 무변경·베이스 브랜치(백엔드 develop / 데이터 main) 확정 반영.
-
 ### TODO I: `target_job.key2` 미사용 컬럼 제거 (interested_job 도메인)
 
 **문제**: `TargetJob.key2` (`target_job.key2`, varchar(255)) 는 ERD 잔재 컬럼으로 entity 클래스 헤더 주석에 "(미사용, ERD 잔재)" 로 자가 명시되어 있다. signup·`TargetJobServiceImpl.replace` 등 어디에서도 set 하지 않아 저장값이 항상 null 이며, `TargetJobResponse` 가 record 필드로 응답에 노출하지만 항상 null 만 반환한다. 두 레포(`cluade_clone` / `ddingconnect-backend`) DB 스키마 비교 세션에서 양쪽 모두 동일하게 dead column 으로 식별됨.

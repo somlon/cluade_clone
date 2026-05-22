@@ -7,3 +7,6 @@ spring:
 matching:
   algorithm:
     base-url: ${MATCHING_ALGORITHM_BASE_URL:http://localhost:8000}
+
+data:
+  base-url: ${DATA_BASE_URL:http://localhost:8000}
