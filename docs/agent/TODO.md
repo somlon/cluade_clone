@@ -53,22 +53,25 @@
 
 **출처**: 로드맵 백엔드↔데이터 파트 연동 플로우 분석 세션 — 생성 플로우 미사용 API 로 식별, 사용자 지시로 제거 확정.
 
-### TODO H: 로드맵 백엔드↔데이터 파트 연동 — 생성 플로우 완성 (roadmap 도메인, 크로스 파트)
+### TODO H: 로드맵 백엔드↔데이터 파트 연동 — 생성·상세 조회 플로우 완성 (roadmap 도메인)
 
-**문제**: 로드맵 생성 플로우(프론트 폼 입력 → AI 생성 → DB 저장 → 상세 조회)가 두 레포에 걸쳐 끊겨 있다. 백엔드 `RoadmapServiceImpl.create()` 는 프론트가 보낸 `content` 문자열을 그대로 저장만 하고 AI 를 호출하지 않으며, 데이터 파트 `POST /api/data/generate` 는 독립적으로 AI 생성 후 자기 코드로 DB 에 저장한다. ① 백엔드→데이터 파트 호출 코드가 없고, ② 저장이 양쪽에서 일어나 이원화되며, ③ `/generate` 응답에 DB row `id` 가 없어 프론트가 상세 조회(`GET /api/v1/roadmaps/{id}`)할 id 를 알 수 없다.
+**문제**: 로드맵 생성 플로우(프론트 폼 입력 → AI 생성 → DB 저장 → 상세 조회)가 두 레포에 걸쳐 끊겨 있다. 백엔드 `RoadmapServiceImpl.create()` 는 프론트가 보낸 `content` 문자열을 그대로 저장만 하고 AI 를 호출하지 않으며, 백엔드→데이터 파트 호출 코드가 없다. 데이터 파트 `POST /api/data/generate` 를 프론트가 직접 호출하면 AI 로드맵은 생성되지만 백엔드 `Roadmap` row(= 상세 조회용 `id`)·`RoadmapAlarm`·SSE 가 생기지 않는다.
 
-**디폴트 결정 (백엔드 중심)**: 데이터 파트는 AI 생성만 담당하고 저장·조회·인증·알람은 백엔드가 맡는다. `POST /api/v1/roadmaps` 가 입력 6필드 수신 → 데이터 파트 `/generate` 호출 → AI 결과를 `Roadmap.content` 에 저장 → `RoadmapResponse(id, …)` 반환 → 프론트는 그 `id` 로 상세 조회. 이러면 id 갭·DB 이원화가 동시에 해소된다. 백엔드(`cluade_clone`) 작업:
+**디폴트 결정 (백엔드 중심, 커피챗 패턴)**: 데이터 파트는 AI 생성만 담당하고 저장·조회·알람은 백엔드가 맡는다. 백엔드 생성 API 가 입력 6필드 + member.id 수신 → 데이터 파트 `/generate` 호출 → AI 결과를 백엔드 자체 DB `Roadmap.content` 에 저장 → `RoadmapResponse(id, …)` 반환 → 프론트는 그 `id` 로 백엔드 상세 조회(`GET /api/v1/roadmaps/{id}`). **DB 미공유** — 백엔드 DB 와 데이터 파트 DB(`ddingconnect.db`)는 별개이며, 데이터 파트가 자체 DB 에 저장하는 row 는 백엔드와 무관하게 별도 존재한다(상세 조회·알람은 백엔드 DB 기준). 베이스 브랜치 — 백엔드 `develop`, 데이터 파트 `main`. 백엔드(`cluade_clone`) 작업:
 
-1. **데이터 파트 호출 클라이언트 신규** — `RestClient` 로 `POST {data.base-url}/api/data/generate` 호출. 커피챗 `MatchingAlgorithmClient` 패턴 재사용, base URL 설정값화(`application.yml`). 호출 시 `member.getId()` 를 `X-User-Id` 헤더로 전달.
+1. **데이터 파트 호출 클라이언트 신규** — `RestClient` 로 `POST {data.base-url}/api/data/generate?member_id={id}` 호출. 커피챗 `MatchingAlgorithmClient` 패턴 재사용, base URL 설정값화(`application.yml`). 회원 식별자는 `?member_id=` URL 쿼리 파라미터로 전달한다 — 데이터 파트 `main` 브랜치 시그니처와 정합(`X-User-Id` 헤더 아님). 요청 body 는 데이터 파트 `RoadmapRequest` 스키마(snake_case 6필드).
 2. **`CreateRoadmapRequest` 교체** — `content` → `grade·gpa·major·targetJob·currentSkills·targetCompany` 6필드. `RoadmapSwagger` 의 `@ExampleObject` 동기화.
-3. **`RoadmapServiceImpl.create()` 재구성** — "요청 content 저장" → "데이터 파트 호출 → 응답 결과를 `content` 에 저장". `validateContent` 대상을 응답값으로 변경. 기존 `RoadmapAlarm`·SSE 알람 발행 로직은 유지.
-4. **ENUM 정합성 확인** — `targetJob`/`currentSkills` 값이 데이터 파트 `TargetJobCategory`(11종)·`TechStackName`(24종)과 일치하는지 검증.
+3. **생성 엔드포인트 회원 식별** — `RoadmapController` 생성 API 가 member.id 를 URL 로 받아 `memberRepository.findById` 로 `Member` 를 조회한다(`@LoginMember` 미사용). 조회 실패는 회원 미존재 에러로 처리.
+4. **`RoadmapServiceImpl.create()` 재구성** — "요청 content 저장" → "회원 조회 → 데이터 파트 호출 → 응답 결과를 `Roadmap.content` 에 저장". `validateContent` 대상을 응답값으로 변경. 기존 `RoadmapAlarm`·SSE 알람 발행 로직은 그대로 유지.
+5. **상세 조회 반환 확인** — `GET /api/v1/roadmaps/{roadmapId}` → `RoadmapServiceImpl.getOne()` 이 저장된 `Roadmap.content`(AI 생성 결과 JSON)를 그대로 반환하는지 검증. 코드 변경은 거의 없고 `RoadmapSwagger` 상세 조회 설명만 갱신.
+6. **ENUM 정합성 확인** — `targetJob`/`currentSkills` 값이 데이터 파트 `TargetJobCategory`(11종)·`TechStackName`(24종)과 일치하는지 검증.
+7. **테스트** — `RoadmapService`/`RoadmapController`/호출 클라이언트 테스트 추가·수정.
 
-**미확정 / 선택**: 입력 6필드를 `Roadmap` 엔티티 컬럼(또는 별도 엔티티)으로 저장할지 여부. 데이터 파트 생성 결과(`content`)에는 입력 원본이 없어, 재생성·입력 이력·수정 화면 프리필이 필요하면 저장, 결과만 보면 되면 미저장 — 제품 요구 확정 후 결정.
+**미확정 / 선택**: 입력 6필드를 `Roadmap` 엔티티 컬럼(또는 별도 엔티티)으로 저장할지 여부. 현재 결정은 결과 `content` 만 저장(입력 원본 미저장). 재생성·입력 이력·수정 화면 프리필이 필요해지면 추가 — 제품 요구 확정 후 결정.
 
-**주의 — 크로스 파트**: 데이터 파트(`ddingconnect-data`, 별도 레포)의 `roadmap_router.py` 자체 `db.add/commit` 제거(생성 결과만 반환)가 함께 필요하나, **이 TODO 범위 밖이며 데이터 파트 담당자와 협의** 후 진행한다. `/generate` 의 IP 기준 `3/day` rate limit 은 백엔드가 단일 IP 로 호출하면 전체 사용자가 공유하게 되므로 연동 시 제한 정책 재검토 필요. 두 서비스가 같은 물리 DB 를 보는지도 확인.
+**주의**: 데이터 파트는 `main` 브랜치가 이미 요건(`member_id` URL 쿼리 + 입력 DTO body → AI 생성 → 자체 DB 저장 → `RoadmapResponse` 반환)을 충족하므로 **이 TODO 는 백엔드만 변경**한다. 데이터 파트 `/generate` 의 rate limit(`@limiter.limit("5/day")`)은 `member_id` 를 URL 쿼리로 받고 `X-User-Id` 헤더는 받지 않아 limiter 가 IP 기준으로 동작 → 백엔드가 단일 IP 로 호출하면 전체 사용자가 한도를 공유한다. 회원별 제한이 필요하면 limiter 키 용도로 `X-User-Id` 헤더 병행 전송을 검토(범위 밖).
 
-**출처**: 로드맵 백엔드↔데이터 연동 플로우 분석 세션 (저장 설계 = 백엔드 중심으로 확정).
+**출처**: 로드맵 백엔드↔데이터 연동 플로우 분석 세션 — 회원 식별(member.id URL)·DB 미공유·데이터 파트 무변경·베이스 브랜치(백엔드 develop / 데이터 main) 확정 반영.
 
 ### TODO I: `target_job.key2` 미사용 컬럼 제거 (interested_job 도메인)
 
