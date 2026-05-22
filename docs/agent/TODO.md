@@ -94,6 +94,34 @@ DB 측은 `application-db.yml` 이 `ddl-auto=create` 라 부팅 시 자동으로
 
 **출처**: 두 레포 DB 스키마/기능 비교 세션 — 두 레포 entity 헤더 주석에서 모두 "미사용/ERD 잔재" 로 자가 식별된 컬럼.
 
+### TODO J: ddingconnect-backend 커피챗 도메인 동기화 (coffeechat 도메인, 크로스 레포)
+
+**문제**: `mju-capstone-4/ddingconnect-backend` 의 커피챗 도메인이 이 레포(`cluade_clone`) 보다 뒤처져 있다. 두 레포 커피챗 비교 결과(`cluade_clone` `main` 365ccc9 ↔ `ddingconnect-backend` `main`(=`develop`, 동일)) — 커피챗 도메인 소스 23개 중 2개가 내용 불일치, 커피챗 테스트 6개가 ddingconnect-backend 에 전무하다.
+
+**주의 — 크로스 레포**: 이 작업은 `ddingconnect-backend` 에 쓰기 작업을 한다. `## 작업 레포 범위 규칙` 에 따라 실행 전 사용자의 명시적 지시("ddingconnect-backend 에서 작업하라")가 반드시 필요하다 — 지시 없이 자동 실행하지 말 것. 기준(source of truth)은 `cluade_clone` 이다.
+
+**디폴트 결정**: `cluade_clone` 커피챗 도메인을 기준으로 아래 8개 파일을 `ddingconnect-backend` 에 반영한다. 경로는 ddingconnect-backend 기준 `src/{main,test}/java/mju/capstone/ddingconnect/domain/coffeechat/` 이하.
+
+소스 수정 (2):
+
+1. `service/CoffeeChatServiceImpl.java` — 커피챗 신청(생성, PENDING) 시 신청자에게 "신청 접수" 확인 알람 1건 추가 발행 (현재는 수신자 "요청 도착" 알람만 발행). `REQUEST_SENT_CONTENT_FORMAT` 상수 + `CoffeeChatAlarm` 저장 + `AlarmNotificationEvent` 발행 추가. (cluade_clone PR #65)
+2. `service/MatchingAlgorithmClientImpl.java` — 매칭 알고리즘 클라이언트를 데이터 파트(`ddingconnect-data`) 실제 스키마로 재정렬. 현재 ddingconnect-backend 는 TODO 스켈레톤(엔드포인트 `/match`, 응답 `memberIds`) 상태 → 확정본(엔드포인트 `/api/data/coffeechat/match`, 요청 6필드 플랫 snake_case `{year,gpa,major,job,tech_stacks,goal}` + `tech_stacks` 의 `TechStackName` 화이트리스트 정규화, 응답 `top_matches` envelope 에서 `id` 추출)으로 교체. `MockRestServiceServer` 용 package-private 생성자 포함. (cluade_clone PR #64)
+
+테스트 신규 추가 (6) — ddingconnect-backend 에 커피챗 테스트가 전무:
+
+3. `CoffeeChatMatchingTestConstants.java`
+4. `controller/CoffeeChatControllerTest.java`
+5. `controller/CoffeeChatMatchingControllerTest.java`
+6. `service/CoffeeChatServiceImplTest.java`
+7. `service/CoffeeChatMatchingServiceImplTest.java`
+8. `service/MatchingAlgorithmClientImplTest.java`
+
+나머지 커피챗 소스 21개(컨트롤러·엔티티·DTO·`CoffeeChatHandler` 등)와 `MemberRepository.java`·`application.yml` 은 두 레포 동일 — 수정 불필요. 반영 후 `./gradlew test` 로 검증한다.
+
+**TODO F 와의 관계**: TODO F(ddingconnect-backend 전 계층 동기화)의 커피챗 부분을 최신 비교로 재확인·축소한 슬라이스다. 커피챗만 우선 동기화하려면 이 TODO J 를, 전 도메인을 일괄 동기화하려면 TODO F 를 따른다.
+
+**출처**: `cluade_clone` ↔ `ddingconnect-backend` 커피챗 도메인 비교 세션.
+
 ### 11개 작업자 노트 (TODO #1~#11 머지 완료 후 보존되는 일반 가이드)
 
 - **브랜치 정책**: 각 TODO 를 **개별 브랜치 + 개별 PR** 로 처리하는 것을 기본으로 한다. 영향 범위가 큰 TODO 는 단독 PR 필수. 같은 도메인 내 작은 변경은 묶어서 1개 PR 도 허용 (작업자 판단). 사용자가 "TODO N 작업" 으로 단일 항목 지목 시 그 항목만 단독 PR.
