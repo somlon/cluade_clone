@@ -22,6 +22,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -40,6 +41,7 @@ class RoadmapControllerTest {
     private static final String BASE_URL = "/api/v1/roadmaps";
     private static final Long MEMBER_ID = 1L;
     private static final String GENERATED_CONTENT = "{\"roadmap_title\":\"백엔드 로드맵\"}";
+    private static final LocalDateTime CREATED_AT = LocalDateTime.of(2026, 5, 23, 10, 30, 45);
 
     @Autowired MockMvc mockMvc;
     @Autowired ObjectMapper objectMapper;
@@ -57,7 +59,7 @@ class RoadmapControllerTest {
         CreateRoadmapRequest req = new CreateRoadmapRequest(3, 4.0, "응용소프트웨어학과",
                 TargetJobCategory.BACKEND, List.of(TechStackName.JAVA, TechStackName.SPRING), "카카오");
         given(roadmapService.create(eq(MEMBER_ID), any()))
-                .willReturn(new RoadmapResponse(1L, MEMBER_ID, GENERATED_CONTENT));
+                .willReturn(new RoadmapResponse(1L, MEMBER_ID, GENERATED_CONTENT, CREATED_AT));
 
         mockMvc.perform(post(BASE_URL)
                         .param("memberId", String.valueOf(MEMBER_ID))
@@ -71,19 +73,26 @@ class RoadmapControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/v1/roadmaps - 로드맵 목록")
+    @DisplayName("GET /api/v1/roadmaps - 본인이 생성한 로드맵 목록 (createdAt 포함)")
     void getRoadmapList() throws Exception {
-        given(roadmapService.getList()).willReturn(List.of());
+        given(roadmapService.getList(any()))
+                .willReturn(List.of(new RoadmapResponse(2L, MEMBER_ID, GENERATED_CONTENT, CREATED_AT)));
 
         mockMvc.perform(get(BASE_URL))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result").isArray());
+                .andExpect(jsonPath("$.result").isArray())
+                .andExpect(jsonPath("$.result[0].id").value(2L))
+                .andExpect(jsonPath("$.result[0].memberId").value(MEMBER_ID))
+                .andExpect(jsonPath("$.result[0].createdAt").exists());
+
+        verify(roadmapService).getList(any());
     }
 
     @Test
     @DisplayName("GET /api/v1/roadmaps/{id} - 로드맵 상세")
     void getRoadmapDetail() throws Exception {
-        given(roadmapService.getOne(1L)).willReturn(new RoadmapResponse(1L, MEMBER_ID, GENERATED_CONTENT));
+        given(roadmapService.getOne(1L))
+                .willReturn(new RoadmapResponse(1L, MEMBER_ID, GENERATED_CONTENT, CREATED_AT));
 
         mockMvc.perform(get(BASE_URL + "/1"))
                 .andExpect(status().isOk())

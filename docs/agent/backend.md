@@ -159,6 +159,7 @@ mju.capstone.ddingconnect
 - **`RoadmapServiceImpl.create` 플로우**: 회원 조회 → `RoadmapAiClient.generate` 데이터 파트 호출 → `validateContent` 로 AI 응답 검증(null/blank → `ROADMAP_INVALID_CONTENT` 400) → `Roadmap.content` 저장 → `RoadmapAlarm` 저장 + `AlarmNotificationEvent` 발행(본인=생성자 1건). 단일 `@Transactional` — 외부 HTTP 호출을 트랜잭션 안에 포함하지만, 알람 row 와 본체 저장의 원자성(공통 알람 규칙)을 위해 유지한다.
 - `Roadmap.content`: MySQL `TEXT` 컬럼 (`@Column(columnDefinition = "TEXT")`) — 데이터 파트 AI 가 생성한 `RoadmapResponse` JSON 문자열을 그대로 저장. 본문이 255자를 넘을 수 있어 `VARCHAR` 가 아닌 `TEXT`.
 - **상세 조회 (`GET /api/v1/roadmaps/{roadmapId}`)**: `RoadmapServiceImpl.getOne` 이 저장된 `Roadmap.content`(AI 생성 JSON)를 `RoadmapResponse.content` 로 그대로 반환. 미존재 시 `ROADMAP_NOT_FOUND`(404).
+- **목록 조회 (`GET /api/v1/roadmaps`)**: `@LoginMember` 회원이 생성한 로드맵만 `RoadmapRepository.findByMemberIdOrderByCreatedAtDesc` 로 **최신순** 반환 — 마이 "생성된 로드맵" 목록 화면용. 전 회원 `findAll` 노출이 아니라 회원 스코프 + 인증 필수(화이트리스트 아님). `RoadmapResponse` 는 `id`·`memberId`·`content`·`createdAt` 4필드 — 목록 항목의 날짜는 `createdAt`, 제목은 `content`(JSON) 내 `roadmap_title` 로 표시(목록 전용 경량 DTO·제목 필드는 두지 않음). `createdAt` 은 `BaseEntity` 감사 컬럼을 `RoadmapResponse` 가 노출하는 것이며 생성·상세 응답에도 함께 포함된다.
 - **입력 6필드 미저장**: 현재 결정은 결과 `content` 만 저장하고 입력 폼 원본은 저장하지 않는다. 재생성·입력 이력·수정 화면 프리필이 필요해지면 별도 컬럼/엔티티 추가 검토 — 제품 요구 확정 후 결정.
 - update API 미지원 (재생성 = 새 create + 기존 delete)
 - 삭제는 소유자(member.id 일치)만 가능 (`ROADMAP_UNAUTHORIZED`)
