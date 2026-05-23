@@ -24,23 +24,6 @@
 
 **출처**: PR #22.
 
-### TODO L: 마이페이지 통합 수정 — 역할별 엔드포인트/DTO 분리 (member 도메인)
-
-**문제**: `backend/src/main/java/mju/capstone/ddingconnect/domain/member/dto/request/UpdateMyPageRequest.java` 가 STUDENT 전용(`targetJobs`)과 GRADUATE 전용(`jobPostsToAdd`·`jobPostIdsToDelete`) 필드를 단일 record 에 혼재해 들고 있어, 클라이언트가 본인 역할과 무관한 필드를 채워 보내도 사후 단계(`JobPostServiceImpl.create` 의 `POST_CONTENTS_NOT_GRADUATE`)에서만 거부된다. 동일 record 안의 `UpdateMemberRequest` 는 `grade`(STUDENT)/`businessCardImage·jobType·company·careerYear`(GRADUATE) 혼재이고 이 부분은 `MemberServiceImpl.validateRoleFields` 가 사전 차단하지만, mypage 통합 수정 경로의 `jobPostsToAdd/Delete` 에는 동일 가드가 없다 — 일관성·DX 양쪽 모두 결함.
-
-**디폴트 결정**: 엔드포인트와 DTO 를 역할별로 분리한다.
-
-- 엔드포인트: `PATCH /api/v1/members/mypage/student`, `PATCH /api/v1/members/mypage/graduate`. 기존 `PATCH /api/v1/members/mypage` 는 deprecate 마킹 후 점진 제거.
-- 컨트롤러 진입부에서 `member.getRole()` 과 엔드포인트가 불일치하면 즉시 `MEMBER_FIELD_ROLE_MISMATCH` 반환 (UNKNOWN 도 거부).
-- 신규 DTO: `UpdateStudentMyPageRequest(profile, techStacks, targetJobs)`, `UpdateGraduateMyPageRequest(profile, techStacks, jobPostsToAdd, jobPostIdsToDelete)`. 그 안의 프로필 부분은 `UpdateStudentProfileRequest`(공통 + `grade`) / `UpdateGraduateProfileRequest`(공통 + `businessCardImage`·`jobType`·`company`·`careerYear`) 로 분리해 각 역할 필드만 노출.
-- `MyPageService.updateMyPage` 를 역할별 메서드 2개로 오버로드 — STUDENT 경로엔 jobPost 분기 자체가 없고, GRADUATE 경로엔 targetJob 분기가 없다. 단일 `@Transactional` 안에서 위임하는 기존 원자성 규약은 유지.
-
-**수정 파일**: `backend/src/main/java/mju/capstone/ddingconnect/domain/member/controller/MemberController.java`, `member/controller/MemberSwagger.java`, `member/service/MyPageService.java`, `member/service/MyPageServiceImpl.java`. 신규 DTO 4개(`member/dto/request/` 아래). 기존 `UpdateMyPageRequest.java`·`UpdateMemberRequest.java` 는 호환성 위해 한동안 유지 후 정리. 관련 테스트 함께 갱신(`MemberControllerTest`·`MyPageServiceImplTest`).
-
-**연관**: TODO N·O·Q 의 multipart 업로드 엔드포인트(`/profile-image`·`/portfolio`·`/business-card`)가 이 역할별 검증 패턴 위에서 동작 — 본 TODO 가 선행되면 이후 작업의 분기 코드를 줄일 수 있다. TODO R 의 `jobPostsToAdd` 타입(`CreateJobPostLinkRequest`)과도 정합.
-
-**출처**: 재학생/졸업생 마이페이지 화면 + `ddingconnect-backend` `develop`(e985b05) 코드 비교 세션.
-
 ### TODO M: 나의 활동 페이지 API — 커피챗/로드맵/Q&A 본인 활동 조회 (member·coffeechat·qna 도메인)
 
 **문제**: 마이페이지 상단 통계 카드(`MyPageResponse.ActivityStats` 의 `coffeeChatCount`·`roadmapCount`·`questionCount`)를 클릭하면 "나의 활동" 페이지로 진입해 본인 활동 **목록**을 보여줘야 하나, 현재 백엔드는 카운트만 제공하고 본인 스코프 목록 조회 API 가 없다. 단, 로드맵은 `RoadmapServiceImpl.getList` 가 이미 `findByMemberIdOrderByCreatedAtDesc` 로 본인 글만 반환하므로 그대로 재사용 가능.
@@ -143,10 +126,9 @@
 
 R-1. **링크 전용 등록 경로 신설**:
 
-- 신규 엔드포인트 `POST /api/v1/job-posts/link`
-- 신규 DTO `CreateJobPostLinkRequest(String detailUrl)` — `@NotBlank` + URL 형식 `@Pattern` 검증
-- 서비스 동작: `PostContents.builder().detailUrl(...).build()` (다른 필드 null) 저장 → `GraduateJobPost` 매핑 생성. **알람 발행 분기 스킵**(jobType 이 null 이므로 관심직무 매칭 불가)
-- TODO L 의 `UpdateGraduateMyPageRequest.jobPostsToAdd` 도 동일 DTO 로 통일 권장 — 이후 변경 비용 절감
+- ~~신규 DTO `CreateJobPostLinkRequest(String detailUrl)`~~ — **TODO L 작업 시 선행 신설 완료** (`job_post/dto/request/CreateJobPostLinkRequest.java`, `@NotBlank` + `^https?://.+` `@Pattern`).
+- ~~서비스 동작~~ — **TODO L 작업 시 `JobPostService.createFromLink` 선행 신설 완료** (`PostContents.builder().detailUrl(...).build()` 저장 → `GraduateJobPost` 매핑 + 알람 분기 스킵). `UpdateGraduateMyPageRequest.jobPostsToAdd` 가 이미 이 메서드에 위임 중.
+- 신규 엔드포인트 `POST /api/v1/job-posts/link` — 본 TODO R 작업의 잔여 항목. `JobPostController`/`JobPostSwagger` 에 메서드 추가 + 기존 서비스 메서드(`createFromLink`)에 위임.
 
 R-2. **`JobPostServiceImpl.create` jobType null 가드**:
 

@@ -2,9 +2,13 @@ package mju.capstone.ddingconnect.domain.member.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import mju.capstone.ddingconnect.domain.interested_job.domain.TargetJobCategory;
+import mju.capstone.ddingconnect.domain.job_post.dto.request.CreateJobPostLinkRequest;
 import mju.capstone.ddingconnect.domain.member.domain.MemberRole;
+import mju.capstone.ddingconnect.domain.member.dto.request.UpdateGraduateMyPageRequest;
+import mju.capstone.ddingconnect.domain.member.dto.request.UpdateGraduateProfileRequest;
 import mju.capstone.ddingconnect.domain.member.dto.request.UpdateMemberRequest;
-import mju.capstone.ddingconnect.domain.member.dto.request.UpdateMyPageRequest;
+import mju.capstone.ddingconnect.domain.member.dto.request.UpdateStudentMyPageRequest;
+import mju.capstone.ddingconnect.domain.member.dto.request.UpdateStudentProfileRequest;
 import mju.capstone.ddingconnect.domain.member.dto.response.MemberResponse;
 import mju.capstone.ddingconnect.domain.member.dto.response.MyPageResponse;
 import mju.capstone.ddingconnect.domain.member.service.MemberService;
@@ -121,13 +125,15 @@ class MemberControllerTest {
                 .andExpect(jsonPath("$.result.activity.questionCount").value(5));
     }
 
+    // ── 재학생 마이페이지 통합 수정 ─────────────────────────────────────
+
     @Test
-    @DisplayName("PATCH /api/v1/members/mypage - 마이페이지 통합 수정")
-    void updateMyPage() throws Exception {
-        UpdateMemberRequest profile = new UpdateMemberRequest(null, null, "새닉네임", null, null,
-                null, null, null, null, null, null, null, null, null);
-        UpdateMyPageRequest req = new UpdateMyPageRequest(
-                profile, List.of(TechStackName.JAVA), List.of(TargetJobCategory.BACKEND), null, null);
+    @DisplayName("PATCH /api/v1/members/mypage/student - 재학생 마이페이지 통합 수정")
+    void updateStudentMyPage() throws Exception {
+        UpdateStudentProfileRequest profile = new UpdateStudentProfileRequest(
+                null, null, "새닉네임", null, null, null, null, null, null, 3);
+        UpdateStudentMyPageRequest req = new UpdateStudentMyPageRequest(
+                profile, List.of(TechStackName.JAVA), List.of(TargetJobCategory.BACKEND));
 
         MemberResponse updated = new MemberResponse(1L, "test@mju.ac.kr", null, "새닉네임",
                 "60201234", "컴퓨터공학과", null, null, null, null, 0L,
@@ -136,9 +142,9 @@ class MemberControllerTest {
                 updated,
                 new MyPageResponse.ActivityStats(2L, 1L, 5L),
                 List.of(), List.of(), List.of());
-        given(myPageService.updateMyPage(any(), any())).willReturn(res);
+        given(myPageService.updateStudentMyPage(any(), any())).willReturn(res);
 
-        mockMvc.perform(patch(BASE_URL + "/mypage")
+        mockMvc.perform(patch(BASE_URL + "/mypage/student")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
@@ -147,36 +153,83 @@ class MemberControllerTest {
     }
 
     @Test
-    @DisplayName("PATCH /api/v1/members/mypage - 프로필 형식 오류 시 400")
-    void updateMyPageValidationFailure() throws Exception {
+    @DisplayName("PATCH /api/v1/members/mypage/student - 프로필 형식 오류 시 400")
+    void updateStudentMyPageValidationFailure() throws Exception {
         // githubLink 가 github.com URL 형식이 아니므로 @Valid 가 profile 로 cascade 되어 검증 실패
-        UpdateMemberRequest invalidProfile = new UpdateMemberRequest(null, null, null, null, null,
-                "invalid-link", null, null, null, null, null, null, null, null);
-        UpdateMyPageRequest req = new UpdateMyPageRequest(invalidProfile, null, null, null, null);
+        UpdateStudentProfileRequest invalidProfile = new UpdateStudentProfileRequest(
+                null, null, null, null, null, "invalid-link", null, null, null, null);
+        UpdateStudentMyPageRequest req = new UpdateStudentMyPageRequest(invalidProfile, null, null);
 
-        mockMvc.perform(patch(BASE_URL + "/mypage")
+        mockMvc.perform(patch(BASE_URL + "/mypage/student")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.isSuccess").value(false));
-        verify(myPageService, never()).updateMyPage(any(), any());
+        verify(myPageService, never()).updateStudentMyPage(any(), any());
     }
 
     @Test
-    @DisplayName("PATCH /api/v1/members/mypage - 비인증 요청은 거부되어 서비스에 도달하지 않는다")
-    void updateMyPageUnauthenticated() throws Exception {
+    @DisplayName("PATCH /api/v1/members/mypage/student - 비인증 요청은 거부되어 서비스에 도달하지 않는다")
+    void updateStudentMyPageUnauthenticated() throws Exception {
         // @LoginMember 해석은 SecurityContext 인증 정보에 의존한다 — 인증을 비운다.
         WithMockLoginMember.clear();
-        UpdateMyPageRequest req = new UpdateMyPageRequest(null, null, null, null, null);
+        UpdateStudentMyPageRequest req = new UpdateStudentMyPageRequest(null, null, null);
 
-        // SecurityConfig 가 anyRequest().permitAll() 이라 인증은 LoginMemberArgumentResolver 가
-        // 강제한다. 미인증이면 resolver 가 BadCredentialsException 을 던지고, 컨트롤러 본문(서비스
-        // 위임) 진입 전에 발생한다. 이 예외는 전역 핸들러가 500 으로 매핑한다(401 아님).
-        mockMvc.perform(patch(BASE_URL + "/mypage")
+        mockMvc.perform(patch(BASE_URL + "/mypage/student")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.isSuccess").value(false));
-        verify(myPageService, never()).updateMyPage(any(), any());
+        verify(myPageService, never()).updateStudentMyPage(any(), any());
+    }
+
+    // ── 졸업생 마이페이지 통합 수정 ─────────────────────────────────────
+
+    @Test
+    @DisplayName("PATCH /api/v1/members/mypage/graduate - 졸업생 마이페이지 통합 수정")
+    void updateGraduateMyPage() throws Exception {
+        WithMockLoginMember.loginAsGraduate();
+
+        UpdateGraduateProfileRequest profile = new UpdateGraduateProfileRequest(
+                null, null, "새닉네임", null, null, null, null, null, null,
+                null, null, "카카오", 3);
+        UpdateGraduateMyPageRequest req = new UpdateGraduateMyPageRequest(
+                profile, List.of(TechStackName.JAVA),
+                List.of(new CreateJobPostLinkRequest("https://jobs.example.com/1")),
+                List.of(100L));
+
+        MemberResponse updated = new MemberResponse(2L, "g@mju.ac.kr", null, "새닉네임",
+                "60201234", "컴퓨터공학과", null, null, null, null, 0L,
+                MemberRole.GRADUATE, null, null, null, "카카오", 3);
+        MyPageResponse res = new MyPageResponse(
+                updated,
+                new MyPageResponse.ActivityStats(0L, 0L, 0L),
+                List.of(), List.of(), List.of());
+        given(myPageService.updateGraduateMyPage(any(), any())).willReturn(res);
+
+        mockMvc.perform(patch(BASE_URL + "/mypage/graduate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.profile.nickname").value("새닉네임"))
+                .andExpect(jsonPath("$.result.profile.company").value("카카오"));
+    }
+
+    @Test
+    @DisplayName("PATCH /api/v1/members/mypage/graduate - 잘못된 공고 링크 형식이면 400")
+    void updateGraduateMyPageInvalidLink() throws Exception {
+        WithMockLoginMember.loginAsGraduate();
+        UpdateGraduateMyPageRequest req = new UpdateGraduateMyPageRequest(
+                null, null,
+                // detailUrl 이 http(s):// 로 시작하지 않아 @Pattern 위반
+                List.of(new CreateJobPostLinkRequest("not-a-url")),
+                null);
+
+        mockMvc.perform(patch(BASE_URL + "/mypage/graduate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.isSuccess").value(false));
+        verify(myPageService, never()).updateGraduateMyPage(any(), any());
     }
 }
