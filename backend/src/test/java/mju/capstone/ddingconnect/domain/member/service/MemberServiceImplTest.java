@@ -442,12 +442,91 @@ class MemberServiceImplTest {
         verify(coffeeChatRepository, times(1)).delete(dual);
     }
 
-    // ── 졸업생 명함 이미지 업로드 (updateBusinessCard) ───────────────
+    // ── 프로필 사진 업로드 (updateProfileImage) ──────────────────────
 
     private MockMultipartFile pngImage(long sizeBytes) {
         byte[] content = new byte[(int) sizeBytes];
-        return new MockMultipartFile("image", "card.png", "image/png", content);
+        return new MockMultipartFile("image", "profile.png", "image/png", content);
     }
+
+    @Test
+    @DisplayName("updateProfileImage - 기존 이미지 없으면 S3 업로드 후 Member.profileImage 갱신, deleteImage 미호출")
+    void updateProfileImageWithoutExisting() {
+        Member member = buildStudentMember(); // profileImage = null
+        MockMultipartFile image = pngImage(1024L);
+        String newUrl = "https://bucket.s3.region.amazonaws.com/profile-xyz.png";
+
+        when(s3Service.uploadImage(image)).thenReturn(newUrl);
+        when(studentRepository.findByMemberId(1L)).thenReturn(Optional.empty());
+
+        MemberResponse response = memberService.updateProfileImage(member, image);
+
+        verify(s3Service, never()).deleteImage(any());
+        verify(s3Service).uploadImage(image);
+
+        ArgumentCaptor<Member> captor = ArgumentCaptor.forClass(Member.class);
+        verify(memberRepository).save(captor.capture());
+        assertThat(captor.getValue().getProfileImage()).isEqualTo(newUrl);
+        assertThat(response.profileImage()).isEqualTo(newUrl);
+    }
+
+    @Test
+    @DisplayName("updateProfileImage - 기존 이미지가 있으면 deleteImage 후 uploadImage 호출 (순서 보장)")
+    void updateProfileImageReplacesExisting() {
+        Member member = Member.builder().id(1L).email("s@mju.ac.kr").role(MemberRole.STUDENT)
+                .profileImage("https://bucket.s3.region.amazonaws.com/old.png").build();
+        MockMultipartFile image = pngImage(2048L);
+        String newUrl = "https://bucket.s3.region.amazonaws.com/new.png";
+
+        when(s3Service.uploadImage(image)).thenReturn(newUrl);
+        when(studentRepository.findByMemberId(1L)).thenReturn(Optional.empty());
+
+        memberService.updateProfileImage(member, image);
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(s3Service);
+        order.verify(s3Service).deleteImage("https://bucket.s3.region.amazonaws.com/old.png");
+        order.verify(s3Service).uploadImage(image);
+    }
+
+    @Test
+    @DisplayName("updateProfileImage - null/빈 파일은 _FILE_UPLOAD_FAILED 로 거부")
+    void updateProfileImageRejectsEmpty() {
+        Member member = buildStudentMember();
+        MockMultipartFile empty = new MockMultipartFile("image", "p.png", "image/png", new byte[0]);
+
+        assertThatThrownBy(() -> memberService.updateProfileImage(member, empty))
+                .isInstanceOf(S3Handler.class)
+                .matches(e -> ((S3Handler) e).getErrorReasonHttpStatus().getCode()
+                        .equals(ErrorStatus._FILE_UPLOAD_FAILED.getCode()));
+
+        verify(s3Service, never()).uploadImage(any());
+    }
+
+    @Test
+    @DisplayName("updateProfileImage - 허용 외 content-type 은 _FILE_TYPE_NOT_ALLOWED 로 거부")
+    void updateProfileImageRejectsBadContentType() {
+        Member member = buildStudentMember();
+        MockMultipartFile bad = new MockMultipartFile("image", "f.gif", "image/gif", new byte[]{1, 2, 3});
+
+        assertThatThrownBy(() -> memberService.updateProfileImage(member, bad))
+                .isInstanceOf(S3Handler.class)
+                .matches(e -> ((S3Handler) e).getErrorReasonHttpStatus().getCode()
+                        .equals(ErrorStatus._FILE_TYPE_NOT_ALLOWED.getCode()));
+    }
+
+    @Test
+    @DisplayName("updateProfileImage - 크기 초과(5MB 초과)는 _FILE_TOO_LARGE 로 거부")
+    void updateProfileImageRejectsOversized() {
+        Member member = buildStudentMember();
+        MockMultipartFile big = pngImage(MemberServiceImpl.PROFILE_IMAGE_MAX_BYTES + 1);
+
+        assertThatThrownBy(() -> memberService.updateProfileImage(member, big))
+                .isInstanceOf(S3Handler.class)
+                .matches(e -> ((S3Handler) e).getErrorReasonHttpStatus().getCode()
+                        .equals(ErrorStatus._FILE_TOO_LARGE.getCode()));
+    }
+
+    // ── 졸업생 명함 이미지 업로드 (updateBusinessCard) ───────────────
 
     @Test
     @DisplayName("updateBusinessCard - 기존 명함 없으면 S3 업로드 후 Graduate.businessCardImage 갱신")

@@ -3,8 +3,10 @@ package mju.capstone.ddingconnect.domain.job_post.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import mju.capstone.ddingconnect.domain.job_post.domain.CareerType;
 import mju.capstone.ddingconnect.domain.job_post.domain.JobType;
+import mju.capstone.ddingconnect.domain.job_post.dto.request.CreateJobPostLinkRequest;
 import mju.capstone.ddingconnect.domain.job_post.dto.request.CreateJobPostRequest;
 import mju.capstone.ddingconnect.domain.job_post.dto.request.UpdateJobPostRequest;
+import mju.capstone.ddingconnect.domain.job_post.dto.response.GraduatePostResponse;
 import mju.capstone.ddingconnect.domain.job_post.dto.response.JobPostResponse;
 import mju.capstone.ddingconnect.domain.job_post.service.JobPostService;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMemberArgumentResolver;
@@ -118,5 +120,70 @@ class JobPostControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result").value(SuccessMessage.JOB_POST_DELETED));
         verify(jobPostService).delete(any(), eq(1L));
+    }
+
+    // ── TODO R: 링크 등록 + 분리 조회 ─────────────────────────────────
+
+    @Test
+    @DisplayName("POST /api/v1/job-post/link - 링크 전용 등록을 createFromLink 에 위임")
+    void createJobPostLink() throws Exception {
+        CreateJobPostLinkRequest req = new CreateJobPostLinkRequest("https://example.com/jobs/1");
+        JobPostResponse res = new JobPostResponse(50L, null, null, null, null, null, null, null,
+                "https://example.com/jobs/1", java.util.List.of());
+        given(jobPostService.createFromLink(any(), any())).willReturn(res);
+
+        mockMvc.perform(post(BASE_URL + "/link")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.id").value(50L))
+                .andExpect(jsonPath("$.result.detailUrl").value("https://example.com/jobs/1"));
+
+        verify(jobPostService).createFromLink(any(), any());
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/job-post/link - 잘못된 URL 형식은 400 으로 거부")
+    void createJobPostLinkRejectsBadUrl() throws Exception {
+        CreateJobPostLinkRequest req = new CreateJobPostLinkRequest("not-a-url");
+
+        mockMvc.perform(post(BASE_URL + "/link")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.isSuccess").value(false));
+        verify(jobPostService, org.mockito.Mockito.never()).createFromLink(any(), any());
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/job-post/graduates - 선배 공고 카드 리스트 위임")
+    void getGraduatePosts() throws Exception {
+        given(jobPostService.getGraduatePosts()).willReturn(java.util.List.of(
+                new GraduatePostResponse(100L, "네이버", null, null, null, JobType.BACKEND,
+                        null, null, null, java.util.List.of(),
+                        1L, "선배닉", "응용소프트웨어학과", JobType.BACKEND, 5)));
+
+        mockMvc.perform(get(BASE_URL + "/graduates"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result[0].id").value(100L))
+                .andExpect(jsonPath("$.result[0].graduateMemberId").value(1L))
+                .andExpect(jsonPath("$.result[0].graduateNickname").value("선배닉"))
+                .andExpect(jsonPath("$.result[0].graduateCareerYear").value(5));
+
+        verify(jobPostService).getGraduatePosts();
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/job-post/crawled - 일반 공고 리스트 위임")
+    void getCrawledJobPosts() throws Exception {
+        given(jobPostService.getCrawledPosts()).willReturn(java.util.List.of(
+                new JobPostResponse(200L, "크롤링", null, null, null, null, null, null, null, java.util.List.of())));
+
+        mockMvc.perform(get(BASE_URL + "/crawled"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result[0].id").value(200L))
+                .andExpect(jsonPath("$.result[0].companyName").value("크롤링"));
+
+        verify(jobPostService).getCrawledPosts();
     }
 }

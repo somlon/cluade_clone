@@ -79,6 +79,14 @@ public class MemberController implements MemberSwagger {
         return ApiResponse.onSuccess(myPageService.updateGraduateMyPage(member, request));
     }
 
+    /** 프로필 사진 업로드/교체 (Update) — multipart/form-data */
+    @PatchMapping(value = "/me/profile-image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<MemberResponse> updateProfileImage(
+            @Parameter(hidden = true) @LoginMember Member member,
+            @RequestPart("image") MultipartFile image) {
+        return ApiResponse.onSuccess(memberService.updateProfileImage(member, image));
+    }
+
     /** 졸업생 명함 이미지 업로드/교체 (Update) — GRADUATE 전용, multipart/form-data */
     @PatchMapping(value = "/me/business-card", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<MemberResponse> updateBusinessCard(

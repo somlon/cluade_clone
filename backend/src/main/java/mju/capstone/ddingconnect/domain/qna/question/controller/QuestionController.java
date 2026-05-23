@@ -37,6 +37,13 @@ public class QuestionController implements QuestionSwagger {
         return ApiResponse.onSuccess(questionService.getList(member));
     }
 
+    /** 나의 활동 페이지 — 본인 작성 질문 목록 (Read) */
+    @GetMapping("/me")
+    public ApiResponse<List<QuestionResponse>> getMyQuestions(
+            @Parameter(hidden = true) @LoginMember Member member) {
+        return ApiResponse.onSuccess(questionService.getMyQuestions(member));
+    }
+
     /** 질문 상세 조회 (Read - 질문 카드를 클릭했을 때 본문 + 답변 화면 진입 시 호출, 조회수 +1 증가) */
     @GetMapping("/{questionId}")
     public ApiResponse<QuestionResponse> getQuestion(

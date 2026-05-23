@@ -122,4 +122,24 @@ class QuestionControllerTest {
                 .andExpect(jsonPath("$.result.liked").value(true))
                 .andExpect(jsonPath("$.result.likeCount").value(5));
     }
+
+    @Test
+    @DisplayName("GET /api/v1/questions/me - 본인 작성 질문 목록 위임")
+    void getMyQuestions() throws Exception {
+        given(questionService.getMyQuestions(any()))
+                .willReturn(List.of(
+                        new QuestionResponse(11L, 1L, QuestionCategory.TECHNICAL, "내 글 1", "c", 0, 0L, 0L, false),
+                        new QuestionResponse(12L, 1L, QuestionCategory.GENERAL, "내 글 2", "c", 0, 0L, 0L, false)));
+
+        mockMvc.perform(get(BASE_URL + "/me"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result").isArray())
+                .andExpect(jsonPath("$.result.length()").value(2))
+                .andExpect(jsonPath("$.result[0].id").value(11L))
+                .andExpect(jsonPath("$.result[1].id").value(12L));
+
+        verify(questionService).getMyQuestions(any());
+        // 전체 목록 엔드포인트는 호출되지 않는다
+        verify(questionService, never()).getList(any());
+    }
 }

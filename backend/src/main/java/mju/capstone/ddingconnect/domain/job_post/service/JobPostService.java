@@ -3,6 +3,7 @@ package mju.capstone.ddingconnect.domain.job_post.service;
 import mju.capstone.ddingconnect.domain.job_post.dto.request.CreateJobPostLinkRequest;
 import mju.capstone.ddingconnect.domain.job_post.dto.request.CreateJobPostRequest;
 import mju.capstone.ddingconnect.domain.job_post.dto.request.UpdateJobPostRequest;
+import mju.capstone.ddingconnect.domain.job_post.dto.response.GraduatePostResponse;
 import mju.capstone.ddingconnect.domain.job_post.dto.response.JobPostResponse;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 
@@ -34,4 +35,16 @@ public interface JobPostService {
 
     /** 본인(졸업생)이 등록한 구직 공고 목록 */
     List<JobPostResponse> getMyJobPosts(Member member);
+
+    /**
+     * 선배가 올린 공고 목록 (GraduateJobPost 매핑이 존재하는 PostContents).
+     * 등록자(졸업생) 의 닉네임/학과/직무/경력을 함께 응답하기 위해 별도 DTO 반환.
+     */
+    List<GraduatePostResponse> getGraduatePosts();
+
+    /**
+     * 일반 공고 목록 (GraduateJobPost 매핑이 없는 PostContents — 크롤링 적재 등).
+     * 응답 DTO 는 기존 JobPostResponse 재사용.
+     */
+    List<JobPostResponse> getCrawledPosts();
 }

@@ -59,13 +59,19 @@ mju.capstone.ddingconnect
 - **`Student.grade` 검증 (`MemberServiceImpl.sanitizeGrade`)**: `grade < 1` → 400 (`MEMBER_INVALID_GRADE`). `grade > 4` → 4 로 클램프 (`Math.min(raw, 4)`)해서 저장. `null` 은 기존값 유지.
 - **역할 외 필드 거부 (`MemberServiceImpl.validateRoleFields`)**: 단일 `UpdateMemberRequest` 에 STUDENT/GRADUATE 양쪽 필드가 다 있어, 본인 역할 외 필드를 non-null 로 보내면 즉시 400 (`MEMBER_FIELD_ROLE_MISMATCH`). STUDENT → graduate 필드 거부, GRADUATE → grade 거부, UNKNOWN → 양쪽 다 거부. 공통 필드만 보내는 건 항상 통과.
 - **이름·이메일 수정 + 졸업생 직무**: 기본 정보의 '이름'(`Member.name`)·'이메일'(`Member.email`)은 STUDENT/GRADUATE 공통 수정 항목 — `UpdateMemberRequest`·`MemberResponse` 에 포함. `email` 변경은 `@mju.ac.kr` 패턴(`ValidationPattern.MJU_EMAIL_REGEX`) 검증 + 본인 제외 중복 검사(`DUPLICATE_EMAIL`)를 거친다(변경 시 재인증 요구는 아직 없음 — 가입 이메일 인증 방식 확정 후 별도 도입 예정). 졸업생 '직무'(`Graduate.jobType`)는 자유 텍스트가 아니라 구직 공고 직무 필터용 `JobType` enum 을 재사용한다.
+- **프로필 사진 멀티파트 업로드 (`PATCH /api/v1/members/me/profile-image`)**: 마이페이지 상단 프로필 사진(동그라미)을 업로드/교체하는 전용 엔드포인트. `@RequestPart("image") MultipartFile`. `MemberServiceImpl.updateProfileImage` 가 (1) content-type 화이트리스트(`image/png`·`image/jpeg`·`image/webp`) + 5MB 크기 검증 → (2) 기존 `Member.profileImage` 가 있으면 `s3Service.deleteImage(oldUrl)` 로 S3 cleanup → (3) `s3Service.uploadImage(image)` 로 새 URL 획득 → (4) `Member.profileImage` 만 갱신해 저장 → 갱신된 `MemberResponse` 반환. 검증 실패는 신규 `ErrorStatus._FILE_TYPE_NOT_ALLOWED`/`_FILE_TOO_LARGE` 로 400 거부. 회원가입 증명서 흐름(`AuthServiceImpl.signup`)이 이미 사용 중인 `S3Service.uploadImage` 를 그대로 재사용한다(이미지 전용 패턴). `UpdateMemberRequest.profileImage`(String) 경로는 그대로 유지하지만 사용자 입력은 본 multipart 엔드포인트로 일원화.
 - **졸업생 명함 이미지 업로드 (`PATCH /api/v1/members/me/business-card`, GRADUATE 전용)**: 졸업생 마이페이지의 명함 영역에 사진을 업로드/교체하는 전용 엔드포인트. `@RequestPart("image") MultipartFile`. `MemberServiceImpl.updateBusinessCard` 가 (1) `member.getRole() == GRADUATE` 진입 가드(STUDENT/UNKNOWN 모두 `MEMBER_FIELD_ROLE_MISMATCH`) → (2) content-type 화이트리스트(`image/png`·`image/jpeg`·`image/webp`) + 5MB 검증 → (3) `Graduate` 조회 후 기존 `businessCardImage` 가 있으면 `s3Service.deleteImage(old)` → (4) `s3Service.uploadImage(image)` → (5) `Graduate.businessCardImage` 만 갱신해 저장 (다른 GRADUATE 전용 필드는 보존) → 갱신된 `MemberResponse` 반환. 검증 실패는 `ErrorStatus._FILE_TYPE_NOT_ALLOWED`/`_FILE_TOO_LARGE` 로 400. 프로필 이미지(`updateProfileImage`)와 동일한 멀티파트 S3 업로드 패턴을 공유한다.
 
 ### 마이페이지 (member)
 - **`GET /api/v1/members/mypage`** — 마이페이지 화면을 1회 호출로 렌더링하기 위한 통합 조회. 컨트롤러는 `MemberController`, 서비스는 `MyPageService(Impl)`.
+- **나의 활동 페이지 (`MyActivityController` + 도메인별 분산)**: 마이페이지 활동 통계 카드를 클릭해 진입하는 '나의 활동' 페이지는 도메인별 본인 스코프 목록을 별도 엔드포인트로 노출한다. 도메인별 배치:
+  - **로드맵** — `GET /api/v1/roadmaps` 재사용(이미 본인 글 최신순 반환, 백엔드 변경 0). 프론트가 같은 엔드포인트를 호출.
+  - **Q&A** — `GET /api/v1/questions/me` (`QuestionController.getMyQuestions` → `QuestionService.getMyQuestions`). 내부적으로 `questionRepository.findByMemberId(memberId)` 로 본인 글만 조회하고 기존 `toResponse(q, member)` 로 좋아요/답변 카운트·`likedByMe` 까지 일관 매핑. 전체 목록(`GET /api/v1/questions`, `getList(member)`)은 절대 수정하지 않는다 — Q&A 게시판은 전체 질문을 보여줘야 하므로 별도 엔드포인트로 분리.
+  - **커피챗** — `GET /api/v1/members/me/activity/coffeechats` (`MyActivityController.getMyCoffeeChats` → `CoffeeChatService.getMyActivities`). 응답 DTO 가 상대방(파트너) 정보 위주(`CoffeeChatPartnerResponse`)라 기존 `CoffeeChatController` 의 본인 시점 응답(`CoffeeChatResponse`)과 분리하기 위해 별도 컨트롤러 신설. 신규 컨트롤러는 base `/api/v1/members` 로 회원 도메인 패키지에 둔다(나의 활동 = 마이페이지 후속 화면).
 - **애그리게이터 패턴**: `MyPageServiceImpl` 은 레포지토리를 직접 주입하지 않고, 항목별 도메인 서비스(`MemberService`/`TechStackService`/`TargetJobService`/`CoffeeChatService`/`RoadmapService`/`QuestionService`/`JobPostService`)를 in-process 로 호출해 한 응답으로 조합한다. 모놀리식 내 HTTP 자기호출이 아니라 서비스 계층 직접 호출.
 - 응답 `MyPageResponse` = `profile`(`MemberResponse` 재사용) + `activity`(활동 통계) + `techStacks` + `targetJobs`(재학생 항목) + `jobPosts`(졸업생 항목).
 - **활동 통계 `ActivityStats`**: 커피챗 수 = 본인이 요청자/수신자로 참여한 `ACCEPTED` 상태 합산(`CoffeeChatService.countMyAcceptedCoffeeChats`), 로드맵 수 = 본인 생성(`RoadmapService.countMyRoadmaps`), 질문 수 = 본인 작성(`QuestionService.countMyQuestions`).
+- **`roadmapCount` 는 STUDENT 전용** (`MyPageServiceImpl.buildResponse`): 졸업생 마이페이지 카드에는 로드맵 항목 자체가 없으므로 `member.getRole() == MemberRole.STUDENT` 일 때만 `roadmapService.countMyRoadmaps(member)` 를 호출하고, GRADUATE/UNKNOWN 은 호출 없이 `0L` 고정. `ActivityStats.roadmapCount` 의 타입은 그대로 `long` 유지(0 사용, nullable 변환 안 함) — 응답 contract 변화 0건.
 - `targetJobs` 는 `STUDENT`, `jobPosts` 는 `GRADUATE` 역할에서만 채워지고 그 외 역할에선 빈 리스트. `jobPosts` 는 `JobPostService.getMyJobPosts` (졸업생 매핑이 없으면 빈 리스트).
 - 마이페이지용 항목별 조회 메서드(`countMy*`, `getMyJobPosts`)는 각 도메인 서비스에 추가돼 향후 단건 화면에서도 재사용 가능. 별도 공개 엔드포인트는 아직 두지 않고 마이페이지 1개만 노출.
 - **역할별 수정 엔드포인트 2개** — 마이페이지 편집은 역할별로 분리돼 있다. 컨트롤러는 `MemberController`, 서비스는 `MyPageService.updateStudentMyPage` / `updateGraduateMyPage`.
@@ -88,11 +94,19 @@ mju.capstone.ddingconnect
 ### 구직 공고 (job_post)
 - **졸업생만 등록 가능** (`MemberRole.GRADUATE` 검증, `POST_CONTENTS_NOT_GRADUATE`)
 - `PostContents` (공고 본문) + `GraduateJobPost` (졸업생-공고 매핑)으로 분리
+- **등록 경로 2가지**:
+  - **11필드 본문 등록** (`POST /api/v1/job-post`): 회사명/직무/마감일 등 본문을 모두 받는 기존 경로. `CreateJobPostRequest` 사용.
+  - **링크 전용 등록** (`POST /api/v1/job-post/link`, GRADUATE 전용): '나의 공고 올리기' 모달에서 `detailUrl` 만 입력해 등록. `CreateJobPostLinkRequest` (`@NotBlank` + `^https?://.+`) → `JobPostService.createFromLink` 가 `PostContents.builder().detailUrl(...).build()` 저장 + `GraduateJobPost` 매핑. `jobType=null` 이라 알람 분기 스킵. 마이페이지 통합 수정(`UpdateGraduateMyPageRequest.jobPostsToAdd`)도 같은 서비스 메서드를 위임.
+- **선배/일반 공고 분리 조회**: 구직 정보 화면이 선배 공고와 일반 공고를 시각적으로 분리 표시하므로 두 엔드포인트로 분리. 분리 기준은 `GraduateJobPost` **매핑 존재 여부** (데이터 모델 변경 없이 가능).
+  - `GET /api/v1/job-post/graduates` — 매핑 존재(선배 등록). `JobPostService.getGraduatePosts` → `graduateJobPostRepository.findAll()` → `GraduatePostResponse.from(mapping)` 매핑. 응답 DTO `GraduatePostResponse` 는 본문 10필드 + 등록자(`Graduate.member.nickname`·`department` + `Graduate.jobType`·`careerYear`) 카드용 정보 포함.
+  - `GET /api/v1/job-post/crawled` — 매핑 없음(크롤링 등). `JobPostService.getCrawledPosts` → `graduateJobPostRepository.findDistinctPostContentsIds()` 로 선배 매핑된 id 추출 → `postContentsRepository.findByIdNotIn(graduatePostIds)` 로 제외. 매핑이 0건이면 `findAll()` 로 폴백(IN 빈 컬렉션 SQL 오류 회피). 응답은 기존 `JobPostResponse` 재사용.
+  - `GET /api/v1/job-post` (전체) 는 호환성 유지(deprecate 후보).
 - 수정/삭제는 매핑 테이블 통해 소유자 확인
 - `PostContents.jobType` enum 은 공고의 직무 속성. 구직 정보 화면의 **직무 필터** 용도 (`JobType` enum)
 - **선호 언어는 다중 입력** (`PostContents.preferredLanguages`, `List<String>`): `@ElementCollection` + `@CollectionTable(name = "post_contents_preferred_language", joinColumns = post_contents_id)` 로 별도 컬렉션 테이블에 매핑 — 공고 카드에서 언어별 칩으로 표시. `Create/UpdateJobPostRequest`·`JobPostResponse` 모두 `List<String>`. `update` 는 null-coalescing(요청 리스트가 null 이면 기존값 유지). 컬렉션 테이블 행은 `PostContents` 삭제 시 Hibernate 가 자동 정리하므로 서비스 레벨 수동 캐스케이드 대상 아님.
 - **삭제 캐스케이드 (서비스 레벨)**: `PostContents` 삭제 시 자식 행을 **서비스 코드에서 명시적으로 먼저 삭제** (`JobPostServiceImpl.delete`). 순서 = `JobAlarm` → `GraduateJobPost` → `PostContents`. 이유: `GraduateJobPost.postContents`, `JobAlarm.postContents` 가 `nullable = false` FK 인데 JPA cascade 설정이 없어, 부모만 지우면 영속성 컨텍스트의 자식이 transient 부모를 참조하게 되어 `TransientObjectException` 으로 터짐. 알람도 함께 hard delete 정책 (사용자의 알람 이력은 손실되지만, 공고가 사라진 상태의 dangling 알람을 막음).
 - **update 시 jobType 변경 알람 디스패치 (`JobPostServiceImpl.update`)**: `oldJobType != newJobType` 일 때, 이 공고의 기존 `JobAlarm` 수신자 (= prev) 와 새 `jobType` 매칭 학생 (= curr) 의 차집합을 계산해 두 종류 알람을 발행. **Removed = prev − curr** → `"관심 직군에서 벗어난 공고로 변경되었습니다."`, **Added = curr − prev** → `"관심 직무에 새로운 공고가 등록되었습니다."`. 기존 알람 row 는 보존(삭제·갱신 X). 등록 졸업생 본인 항상 제외. prev 집합 정의는 이 공고(`postContentsId`)에 연결된 `JobAlarm` row 만 본다 (다른 알람 타입/다른 공고는 무관).
+- **`create` 의 `jobType` null 가드 (`JobPostServiceImpl.create`)**: 알람 분기 진입 직전에 `if (saved.getJobType() == null) return JobPostResponse.from(saved);` 단락. 링크 전용 등록 경로(`createFromLink`)는 이 분기를 거치지 않지만, 향후 update 등 다른 경로에서 `jobType=null` 인 row 가 알람 분기로 들어올 경우의 NPE(`TargetJobCategory.valueOf(null)`) 를 차단한다.
 
 ### 관심 직군 (interested_job)
 - 학생 마이페이지의 **관심 직군 칩** — 회원 ↔ `TargetJobCategory` enum 단순 매핑. `PostContents`(구직 공고)와는 FK 관계 **없음**.
@@ -116,6 +130,7 @@ mju.capstone.ddingconnect
   - REJECTED: 요청자에게만 1건 (content 정적)
 - 삭제(취소)는 요청자만 가능
 - **삭제 캐스케이드 (서비스 레벨)**: `CoffeeChatServiceImpl.delete` 에서 `CoffeeChatAlarm` 먼저 `deleteByCoffeeChatId` 로 정리 → `CoffeeChat` 삭제. `CoffeeChatAlarm.coffeeChat` 가 `nullable = false` FK 라 정리 없이는 MySQL FK constraint 위반.
+- **나의 활동 커피챗 목록 (`CoffeeChatService.getMyActivities`)**: 마이페이지 '커피챗 수' 카드를 클릭해 진입하는 '나의 활동/커피챗' 화면 백엔드. `findByRequesterId(memberId)` + `findByReceiverId(memberId)` 결과를 합쳐 `CoffeeChat.id` 기준 중복 제거(같은 row 가 양쪽에 들어오는 안전 가드)한 뒤, 각 커피챗마다 본인 아닌 쪽(상대방)을 추출해 `CoffeeChatPartnerResponse` 로 조립. 상대방 부가 정보(`TargetJob` 관심직무 + `TechStack` 기술스택)는 `TargetJobRepository.findByMemberId` / `TechStackRepository.findByMemberId` 로 조회 — 타 도메인 레포를 직접 주입받는 패턴은 QnA·매칭 조립 선례와 동일. `status` 는 PENDING/ACCEPTED/REJECTED 모두 포함하고 화면에서 필터링한다.
 - **커피챗 매칭 플로우 (`CoffeeChatMatchingController` / `CoffeeChatMatchingService(Impl)`)**: Figma 매칭 화면(정보 입력 → 결과 리스트 → 상대 상세)의 백엔드. 신규 컨트롤러는 base `/api/v1/coffeechat` 로 기존 `CoffeeChatController` 와 메서드 경로가 달라 충돌 없음. 엔드포인트 3개:
   - `POST /api/v1/coffeechat/matching` — 매칭 폼 6필드(`MatchingRequest`) 수신 → 알고리즘 호출 → 후보 카드 리스트(`MatchedCandidateResponse`). 후보 없으면 빈 리스트.
   - `GET /api/v1/coffeechat/matching/{memberId}` — 매칭 상대 상세(`MatchedCandidateDetailResponse`). "내 매칭 결과였는지"는 검증하지 않음.
@@ -148,6 +163,7 @@ mju.capstone.ddingconnect
 - **답변 등록은 졸업생 + 질문 작성자 본인** (`AnswerServiceImpl.create`): 기본은 졸업생만 답변 가능하나, **본인이 작성한 질문글에 한해 학생(STUDENT)도 답변 허용**. 검증식 = `member.getRole() != GRADUATE && !question.getMember().getId().equals(member.getId())` 일 때만 403 (`ANSWER_NOT_GRADUATE`). 도메인 의도 = Q&A 답변은 멘토(졸업생)가 학생 질문에 답하는 흐름이되, 질문자 본인의 자문자답은 예외 허용. `Question` 조회를 역할 검증보다 **먼저** 수행하므로 존재하지 않는 questionId 는 403 이 아닌 404 (`QUESTION_NOT_FOUND`)가 먼저 발생. 본인 질문 본인 답변 시 알람 미발행 분기는 그대로 동작. 수정/삭제는 기존 작성자 권한만 검증 (역할 제한 X).
 - 좋아요: `QuestionLike`, `AnswerLike` (복합키 `AnswerLikeId`), toggle 방식. **본인이 작성한 글에는 좋아요 불가** (`QuestionServiceImpl.toggleLike` / `AnswerServiceImpl.toggleLike` 진입부에서 작성자 == 호출자 체크. 위반 시 400 `QUESTION_SELF_LIKE` / `ANSWER_SELF_LIKE`).
 - **카운트·내 좋아요 여부**는 응답 DTO 에 포함 (`QuestionResponse.likeCount`/`likedByMe`/`answerCount`, `AnswerResponse.likeCount`/`likedByMe`). 매 GET 시 `countBy*` / `existsByMemberIdAnd*` 쿼리 호출 (캐시 컬럼 미도입). 모든 Q&A GET API (`getList`, `getOne`, `Answer.getList`) 가 `Member` 를 받아 `likedByMe` 채움.
+- **나의 활동 — 본인 질문 목록 (`GET /api/v1/questions/me`)**: `QuestionController.getMyQuestions` → `QuestionService.getMyQuestions` → `questionRepository.findByMemberId(memberId)` 로 본인 글만 조회. 응답 매핑은 기존 `toResponse(q, member)` 재사용 → `likeCount`/`answerCount`/`likedByMe` 일관 처리. **전체 목록 `getList(member)` 는 절대 수정하지 않는다** — Q&A 게시판은 전체 질문을 보여줘야 하므로 별도 엔드포인트로 분리. 마이페이지 '질문 수' 카드를 클릭해 진입하는 '나의 활동/Q&A' 화면용.
 - 좋아요 토글 응답: `LikeToggleResponse(liked, likeCount)` — 토글 후 새 상태·카운트 즉시 반환. 프론트 추가 GET 불필요.
 - 작성자만 수정/삭제
 - **삭제 캐스케이드 (서비스 레벨)**:
@@ -164,6 +180,7 @@ mju.capstone.ddingconnect
 - `Roadmap.content`: MySQL `TEXT` 컬럼 (`@Column(columnDefinition = "TEXT")`) — 데이터 파트 AI 가 생성한 `RoadmapResponse` JSON 문자열을 그대로 저장. 본문이 255자를 넘을 수 있어 `VARCHAR` 가 아닌 `TEXT`.
 - **상세 조회 (`GET /api/v1/roadmaps/{roadmapId}`)**: `RoadmapServiceImpl.getOne` 이 저장된 `Roadmap.content`(AI 생성 JSON)를 `RoadmapResponse.content` 로 그대로 반환. 미존재 시 `ROADMAP_NOT_FOUND`(404).
 - **목록 조회 (`GET /api/v1/roadmaps`)**: `@LoginMember` 회원이 생성한 로드맵만 `RoadmapRepository.findByMemberIdOrderByCreatedAtDesc` 로 **최신순** 반환 — 마이 "생성된 로드맵" 목록 화면용. 전 회원 `findAll` 노출이 아니라 회원 스코프 + 인증 필수(화이트리스트 아님). `RoadmapResponse` 는 `id`·`memberId`·`content`·`createdAt` 4필드 — 목록 항목의 날짜는 `createdAt`, 제목은 `content`(JSON) 내 `roadmap_title` 로 표시(목록 전용 경량 DTO·제목 필드는 두지 않음). `createdAt` 은 `BaseEntity` 감사 컬럼을 `RoadmapResponse` 가 노출하는 것이며 생성·상세 응답에도 함께 포함된다.
+- **목록 조회 GRADUATE 차단 가드 (`RoadmapController.getRoadmaps`)**: 졸업생 마이페이지/나의 활동에는 로드맵 탭 자체가 없으므로 `member.getRole() == MemberRole.GRADUATE` 면 진입부에서 `MemberHandler(MEMBER_FIELD_ROLE_MISMATCH)` 로 400 거부. 프론트가 호출하지 않더라도 서버 일관성을 위해 차단한다. 단건 조회(`GET /api/v1/roadmaps/{roadmapId}`)는 다른 사람 로드맵 공유 화면을 위해 가드 없이 유지 — 가드는 목록에만 적용.
 - **입력 6필드 미저장**: 현재 결정은 결과 `content` 만 저장하고 입력 폼 원본은 저장하지 않는다. 재생성·입력 이력·수정 화면 프리필이 필요해지면 별도 컬럼/엔티티 추가 검토 — 제품 요구 확정 후 결정.
 - update API 미지원 (재생성 = 새 create + 기존 delete)
 - 삭제는 소유자(member.id 일치)만 가능 (`ROADMAP_UNAUTHORIZED`)
