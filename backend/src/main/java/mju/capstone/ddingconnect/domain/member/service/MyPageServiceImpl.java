@@ -5,12 +5,13 @@ import mju.capstone.ddingconnect.domain.coffeechat.service.CoffeeChatService;
 import mju.capstone.ddingconnect.domain.interested_job.dto.request.ReplaceTargetJobRequest;
 import mju.capstone.ddingconnect.domain.interested_job.dto.response.TargetJobResponse;
 import mju.capstone.ddingconnect.domain.interested_job.service.TargetJobService;
-import mju.capstone.ddingconnect.domain.job_post.dto.request.CreateJobPostRequest;
+import mju.capstone.ddingconnect.domain.job_post.dto.request.CreateJobPostLinkRequest;
 import mju.capstone.ddingconnect.domain.job_post.dto.response.JobPostResponse;
 import mju.capstone.ddingconnect.domain.job_post.service.JobPostService;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.domain.member.domain.MemberRole;
-import mju.capstone.ddingconnect.domain.member.dto.request.UpdateMyPageRequest;
+import mju.capstone.ddingconnect.domain.member.dto.request.UpdateGraduateMyPageRequest;
+import mju.capstone.ddingconnect.domain.member.dto.request.UpdateStudentMyPageRequest;
 import mju.capstone.ddingconnect.domain.member.dto.response.MemberResponse;
 import mju.capstone.ddingconnect.domain.member.dto.response.MyPageResponse;
 import mju.capstone.ddingconnect.domain.qna.question.service.QuestionService;
@@ -18,6 +19,8 @@ import mju.capstone.ddingconnect.domain.roadmap.service.RoadmapService;
 import mju.capstone.ddingconnect.domain.techstack.dto.request.ReplaceTechStackRequest;
 import mju.capstone.ddingconnect.domain.techstack.dto.response.TechStackResponse;
 import mju.capstone.ddingconnect.domain.techstack.service.TechStackService;
+import mju.capstone.ddingconnect.global.response.code.status.ErrorStatus;
+import mju.capstone.ddingconnect.global.response.exception.handler.MemberHandler;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,19 +50,20 @@ public class MyPageServiceImpl implements MyPageService {
     }
 
     /**
-     * 마이페이지 통합 수정.
-     * 항목별로 분해해 각 도메인의 기존 수정 API 에 위임하고, 수정 후 최신 마이페이지를 반환한다.
-     * 단일 @Transactional 안에서 모든 위임이 실행되므로 일부라도 실패하면 전체가 롤백된다('수정 완료' 원자성).
-     * 위임 메서드는 모두 @Transactional(전파 REQUIRED)이라 이 트랜잭션에 참여한다.
+     * 재학생 마이페이지 통합 수정.
+     * 진입 가드 — STUDENT 가 아니면 MEMBER_FIELD_ROLE_MISMATCH(UNKNOWN 도 거부).
+     * 단일 @Transactional 안에서 위임 도메인 메서드(REQUIRED 전파)가 모두 참여 → 부분 저장 없음.
      * 각 항목은 null 이면 변경하지 않는다(부분 수정).
      */
     @Override
     @Transactional
-    public MyPageResponse updateMyPage(Member member, UpdateMyPageRequest request) {
-        // updateMyProfile 이 반환한 MemberResponse 를 그대로 응답에 쓴다.
-        // 전달된 member 객체는 수정으로 갱신되지 않아, 다시 조회하면 공통 필드가 stale 하기 때문.
+    public MyPageResponse updateStudentMyPage(Member member, UpdateStudentMyPageRequest request) {
+        if (member.getRole() != MemberRole.STUDENT) {
+            throw new MemberHandler(ErrorStatus.MEMBER_FIELD_ROLE_MISMATCH);
+        }
+
         MemberResponse profile = request.profile() != null
-                ? memberService.updateMyProfile(member, request.profile())
+                ? memberService.updateMyProfile(member, request.profile().toUpdateMemberRequest())
                 : memberService.getMyProfile(member);
 
         if (request.techStacks() != null) {
@@ -70,15 +74,38 @@ public class MyPageServiceImpl implements MyPageService {
             targetJobService.replace(member, new ReplaceTargetJobRequest(request.targetJobs()));
         }
 
-        // 졸업생 구직 공고는 삭제 후 추가. 졸업생 권한·소유자 검증은 위임 메서드(JobPostService)가 수행한다.
+        return buildResponse(member, profile);
+    }
+
+    /**
+     * 졸업생 마이페이지 통합 수정.
+     * 진입 가드 — GRADUATE 가 아니면 MEMBER_FIELD_ROLE_MISMATCH(UNKNOWN 도 거부).
+     * 단일 @Transactional 안에서 위임 도메인 메서드(REQUIRED 전파)가 모두 참여 → 부분 저장 없음.
+     * jobPostIdsToDelete 를 먼저, jobPostsToAdd 를 나중에 처리.
+     */
+    @Override
+    @Transactional
+    public MyPageResponse updateGraduateMyPage(Member member, UpdateGraduateMyPageRequest request) {
+        if (member.getRole() != MemberRole.GRADUATE) {
+            throw new MemberHandler(ErrorStatus.MEMBER_FIELD_ROLE_MISMATCH);
+        }
+
+        MemberResponse profile = request.profile() != null
+                ? memberService.updateMyProfile(member, request.profile().toUpdateMemberRequest())
+                : memberService.getMyProfile(member);
+
+        if (request.techStacks() != null) {
+            techStackService.replace(member, new ReplaceTechStackRequest(request.techStacks()));
+        }
+
         if (request.jobPostIdsToDelete() != null) {
             for (Long jobPostId : request.jobPostIdsToDelete()) {
                 jobPostService.delete(member, jobPostId);
             }
         }
         if (request.jobPostsToAdd() != null) {
-            for (CreateJobPostRequest toAdd : request.jobPostsToAdd()) {
-                jobPostService.create(member, toAdd);
+            for (CreateJobPostLinkRequest toAdd : request.jobPostsToAdd()) {
+                jobPostService.createFromLink(member, toAdd);
             }
         }
 
@@ -87,7 +114,7 @@ public class MyPageServiceImpl implements MyPageService {
 
     /**
      * profile 을 제외한 마이페이지 구성 요소(활동 통계/기술 스택/역할별 항목)를 조회해 한 응답으로 조합한다.
-     * getMyPage(조회)와 updateMyPage(수정 후 최신 조회)가 공유한다.
+     * getMyPage(조회)와 updateStudent/GraduateMyPage(수정 후 최신 조회)가 공유한다.
      */
     private MyPageResponse buildResponse(Member member, MemberResponse profile) {
         MyPageResponse.ActivityStats activity = new MyPageResponse.ActivityStats(

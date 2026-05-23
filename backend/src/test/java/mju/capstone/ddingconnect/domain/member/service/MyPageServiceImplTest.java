@@ -5,13 +5,15 @@ import mju.capstone.ddingconnect.domain.interested_job.domain.TargetJobCategory;
 import mju.capstone.ddingconnect.domain.interested_job.dto.request.ReplaceTargetJobRequest;
 import mju.capstone.ddingconnect.domain.interested_job.dto.response.TargetJobResponse;
 import mju.capstone.ddingconnect.domain.interested_job.service.TargetJobService;
-import mju.capstone.ddingconnect.domain.job_post.dto.request.CreateJobPostRequest;
+import mju.capstone.ddingconnect.domain.job_post.dto.request.CreateJobPostLinkRequest;
 import mju.capstone.ddingconnect.domain.job_post.dto.response.JobPostResponse;
 import mju.capstone.ddingconnect.domain.job_post.service.JobPostService;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.domain.member.domain.MemberRole;
-import mju.capstone.ddingconnect.domain.member.dto.request.UpdateMemberRequest;
-import mju.capstone.ddingconnect.domain.member.dto.request.UpdateMyPageRequest;
+import mju.capstone.ddingconnect.domain.member.dto.request.UpdateGraduateMyPageRequest;
+import mju.capstone.ddingconnect.domain.member.dto.request.UpdateGraduateProfileRequest;
+import mju.capstone.ddingconnect.domain.member.dto.request.UpdateStudentMyPageRequest;
+import mju.capstone.ddingconnect.domain.member.dto.request.UpdateStudentProfileRequest;
 import mju.capstone.ddingconnect.domain.member.dto.response.MemberResponse;
 import mju.capstone.ddingconnect.domain.member.dto.response.MyPageResponse;
 import mju.capstone.ddingconnect.domain.qna.question.service.QuestionService;
@@ -20,6 +22,8 @@ import mju.capstone.ddingconnect.domain.techstack.domain.TechStackName;
 import mju.capstone.ddingconnect.domain.techstack.dto.request.ReplaceTechStackRequest;
 import mju.capstone.ddingconnect.domain.techstack.dto.response.TechStackResponse;
 import mju.capstone.ddingconnect.domain.techstack.service.TechStackService;
+import mju.capstone.ddingconnect.global.response.code.status.ErrorStatus;
+import mju.capstone.ddingconnect.global.response.exception.handler.MemberHandler;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,6 +40,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -65,23 +70,34 @@ class MyPageServiceImplTest {
                 .role(MemberRole.GRADUATE).build();
     }
 
+    private Member unknownMember() {
+        return Member.builder().id(3L).email("u@mju.ac.kr").nickname("미정")
+                .role(MemberRole.UNKNOWN).build();
+    }
+
     private MemberResponse profileOf(Member member) {
         return new MemberResponse(member.getId(), member.getEmail(), null, member.getNickname(),
                 null, null, null, null, null, null, 0L, member.getRole(),
                 null, null, null, null, null);
     }
 
-    /** 닉네임만 바꾸는 프로필 수정 요청 (나머지 필드는 미전송). */
-    private UpdateMemberRequest profileUpdateRequest() {
-        return new UpdateMemberRequest(null, null, "변경된닉네임", null, null,
-                null, null, null, null, null, null, null, null, null);
+    /** 닉네임만 바꾸는 STUDENT 프로필 수정 요청 (나머지 필드는 미전송). */
+    private UpdateStudentProfileRequest studentProfileUpdate() {
+        return new UpdateStudentProfileRequest(null, null, "변경된닉네임", null, null,
+                null, null, null, null, null);
     }
 
-    /** 회사명만 채운 구직 공고 등록 요청. */
-    private CreateJobPostRequest jobPostRequest(String companyName) {
-        return new CreateJobPostRequest(null, null, null, null, null,
-                null, null, null, null, null, companyName);
+    /** 닉네임만 바꾸는 GRADUATE 프로필 수정 요청 (나머지 필드는 미전송). */
+    private UpdateGraduateProfileRequest graduateProfileUpdate() {
+        return new UpdateGraduateProfileRequest(null, null, "변경된닉네임", null, null,
+                null, null, null, null, null, null, null, null);
     }
+
+    private CreateJobPostLinkRequest linkRequest(String url) {
+        return new CreateJobPostLinkRequest(url);
+    }
+
+    // ── 조회 (getMyPage) ──────────────────────────────────────────────
 
     @Test
     @DisplayName("getMyPage - 재학생: 프로필·활동 통계·기술 스택·관심 직군을 조합하고 jobPosts 는 비운다")
@@ -132,97 +148,188 @@ class MyPageServiceImplTest {
         verify(targetJobService, never()).getMyTargetJobs(member);
     }
 
-    // ── 통합 수정 (updateMyPage) ──────────────────────────────────────
+    // ── 재학생 통합 수정 (updateStudentMyPage) ───────────────────────
 
     @Test
-    @DisplayName("updateMyPage - 재학생: 프로필·기술 스택·관심 직군 수정을 각 도메인 서비스에 위임한다")
-    void updateMyPageDelegatesAllItemsForStudent() {
+    @DisplayName("updateStudentMyPage - 프로필·기술 스택·관심 직군 수정을 각 도메인 서비스에 위임한다")
+    void updateStudentMyPageDelegatesAllItems() {
         Member member = studentMember();
-        UpdateMemberRequest profileReq = profileUpdateRequest();
+        UpdateStudentProfileRequest profileReq = studentProfileUpdate();
         List<TechStackName> techStacks = List.of(TechStackName.JAVA);
         List<TargetJobCategory> targetJobs = List.of(TargetJobCategory.BACKEND);
-        UpdateMyPageRequest request =
-                new UpdateMyPageRequest(profileReq, techStacks, targetJobs, null, null);
+        UpdateStudentMyPageRequest request =
+                new UpdateStudentMyPageRequest(profileReq, techStacks, targetJobs);
 
         MemberResponse updatedProfile = profileOf(member);
-        when(memberService.updateMyProfile(member, profileReq)).thenReturn(updatedProfile);
+        when(memberService.updateMyProfile(any(), any())).thenReturn(updatedProfile);
 
-        MyPageResponse response = myPageService.updateMyPage(member, request);
+        MyPageResponse response = myPageService.updateStudentMyPage(member, request);
 
         // 프로필 응답은 수정 API(updateMyProfile)가 반환한 값을 그대로 싣는다
         assertThat(response.profile()).isSameAs(updatedProfile);
+        // 어댑터 변환된 UpdateMemberRequest 로 위임된다 — 시그니처만 확인
+        verify(memberService).updateMyProfile(any(), any());
         verify(techStackService).replace(member, new ReplaceTechStackRequest(techStacks));
         verify(targetJobService).replace(member, new ReplaceTargetJobRequest(targetJobs));
         // profile 이 non-null 이면 조회(getMyProfile)가 아닌 수정(updateMyProfile)을 탄다
         verify(memberService, never()).getMyProfile(member);
-        // 재학생 요청엔 졸업생 공고 항목이 없다
-        verify(jobPostService, never()).delete(any(), any());
-        verify(jobPostService, never()).create(any(), any());
+        // 재학생 경로엔 졸업생 공고 분기 자체가 없다
+        verifyNoInteractions(jobPostService);
     }
 
     @Test
-    @DisplayName("updateMyPage - 졸업생: 구직 공고를 '삭제 먼저, 추가 나중' 순서로 위임한다")
-    void updateMyPageDelegatesJobPostAddAndRemoveForGraduate() {
-        Member member = graduateMember();
-        List<Long> idsToDelete = List.of(100L, 200L);
-        List<CreateJobPostRequest> toAdd = List.of(jobPostRequest("네이버"), jobPostRequest("카카오"));
-        // profile·techStacks·targetJobs 는 미전송(null) — 졸업생 공고만 변경
-        UpdateMyPageRequest request =
-                new UpdateMyPageRequest(null, null, null, toAdd, idsToDelete);
+    @DisplayName("updateStudentMyPage - 모든 항목 미전송(null): 어떤 도메인 수정도 위임하지 않는다")
+    void updateStudentMyPageSkipsUnsentItems() {
+        Member member = studentMember();
+        UpdateStudentMyPageRequest request = new UpdateStudentMyPageRequest(null, null, null);
 
         when(memberService.getMyProfile(member)).thenReturn(profileOf(member));
 
-        myPageService.updateMyPage(member, request);
+        myPageService.updateStudentMyPage(member, request);
+
+        verify(memberService, never()).updateMyProfile(any(), any());
+        verify(techStackService, never()).replace(any(), any());
+        verify(targetJobService, never()).replace(any(), any());
+        verifyNoInteractions(jobPostService);
+    }
+
+    @Test
+    @DisplayName("updateStudentMyPage - GRADUATE 회원이 호출하면 MEMBER_FIELD_ROLE_MISMATCH 로 거부한다")
+    void updateStudentMyPageRejectsGraduate() {
+        Member member = graduateMember();
+        UpdateStudentMyPageRequest request = new UpdateStudentMyPageRequest(null, null, null);
+
+        assertThatThrownBy(() -> myPageService.updateStudentMyPage(member, request))
+                .isInstanceOf(MemberHandler.class)
+                .matches(e -> ((MemberHandler) e).getErrorReasonHttpStatus().getCode()
+                        .equals(ErrorStatus.MEMBER_FIELD_ROLE_MISMATCH.getCode()));
+
+        verifyNoInteractions(memberService, techStackService, targetJobService, jobPostService);
+    }
+
+    @Test
+    @DisplayName("updateStudentMyPage - UNKNOWN 회원이 호출하면 MEMBER_FIELD_ROLE_MISMATCH 로 거부한다")
+    void updateStudentMyPageRejectsUnknown() {
+        Member member = unknownMember();
+        UpdateStudentMyPageRequest request = new UpdateStudentMyPageRequest(null, null, null);
+
+        assertThatThrownBy(() -> myPageService.updateStudentMyPage(member, request))
+                .isInstanceOf(MemberHandler.class);
+
+        verifyNoInteractions(memberService, techStackService, targetJobService, jobPostService);
+    }
+
+    @Test
+    @DisplayName("updateStudentMyPage - 위임 중 하나가 실패하면 예외를 전파한다(전체 롤백)")
+    void updateStudentMyPagePropagatesExceptionOnDelegationFailure() {
+        Member member = studentMember();
+        List<TechStackName> techStacks = List.of(TechStackName.JAVA);
+        List<TargetJobCategory> targetJobs = List.of(TargetJobCategory.BACKEND);
+        UpdateStudentMyPageRequest request = new UpdateStudentMyPageRequest(
+                studentProfileUpdate(), techStacks, targetJobs);
+
+        when(memberService.updateMyProfile(any(), any())).thenReturn(profileOf(member));
+        // 위임 파이프라인 중간(관심 직군 교체)에서 실패가 발생
+        when(targetJobService.replace(any(), any()))
+                .thenThrow(new RuntimeException(DELEGATE_FAILURE_MESSAGE));
+
+        assertThatThrownBy(() -> myPageService.updateStudentMyPage(member, request))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage(DELEGATE_FAILURE_MESSAGE);
+    }
+
+    // ── 졸업생 통합 수정 (updateGraduateMyPage) ──────────────────────
+
+    @Test
+    @DisplayName("updateGraduateMyPage - 구직 공고를 '삭제 먼저, 추가 나중' 순서로 위임한다")
+    void updateGraduateMyPageDelegatesJobPostAddAndRemove() {
+        Member member = graduateMember();
+        List<Long> idsToDelete = List.of(100L, 200L);
+        List<CreateJobPostLinkRequest> toAdd = List.of(
+                linkRequest("https://jobs.example.com/1"),
+                linkRequest("https://jobs.example.com/2"));
+        // profile·techStacks 는 미전송(null) — 졸업생 공고만 변경
+        UpdateGraduateMyPageRequest request =
+                new UpdateGraduateMyPageRequest(null, null, toAdd, idsToDelete);
+
+        when(memberService.getMyProfile(member)).thenReturn(profileOf(member));
+
+        myPageService.updateGraduateMyPage(member, request);
 
         // 삭제(jobPostIdsToDelete) → 추가(jobPostsToAdd) 순서로 위임된다
         InOrder inOrder = inOrder(jobPostService);
         inOrder.verify(jobPostService).delete(member, 100L);
         inOrder.verify(jobPostService).delete(member, 200L);
-        inOrder.verify(jobPostService).create(member, toAdd.get(0));
-        inOrder.verify(jobPostService).create(member, toAdd.get(1));
+        inOrder.verify(jobPostService).createFromLink(member, toAdd.get(0));
+        inOrder.verify(jobPostService).createFromLink(member, toAdd.get(1));
         // profile 미전송 → 수정이 아닌 조회로 최신 프로필을 채운다
         verify(memberService).getMyProfile(member);
         verify(memberService, never()).updateMyProfile(any(), any());
+        // 졸업생 경로엔 관심 직군 분기 자체가 없다
+        verifyNoInteractions(targetJobService);
     }
 
     @Test
-    @DisplayName("updateMyPage - 모든 항목 미전송(null): 어떤 도메인 수정도 위임하지 않는다")
-    void updateMyPageSkipsUnsentItems() {
+    @DisplayName("updateGraduateMyPage - 프로필·기술 스택·공고 추가를 함께 위임한다")
+    void updateGraduateMyPageDelegatesFullRequest() {
+        Member member = graduateMember();
+        UpdateGraduateProfileRequest profileReq = graduateProfileUpdate();
+        List<TechStackName> techStacks = List.of(TechStackName.SPRING);
+        List<CreateJobPostLinkRequest> toAdd = List.of(linkRequest("https://jobs.example.com/x"));
+        UpdateGraduateMyPageRequest request =
+                new UpdateGraduateMyPageRequest(profileReq, techStacks, toAdd, null);
+
+        MemberResponse updatedProfile = profileOf(member);
+        when(memberService.updateMyProfile(any(), any())).thenReturn(updatedProfile);
+
+        MyPageResponse response = myPageService.updateGraduateMyPage(member, request);
+
+        assertThat(response.profile()).isSameAs(updatedProfile);
+        verify(memberService).updateMyProfile(any(), any());
+        verify(techStackService).replace(member, new ReplaceTechStackRequest(techStacks));
+        verify(jobPostService).createFromLink(member, toAdd.get(0));
+        verify(memberService, never()).getMyProfile(member);
+        verifyNoInteractions(targetJobService);
+    }
+
+    @Test
+    @DisplayName("updateGraduateMyPage - STUDENT 회원이 호출하면 MEMBER_FIELD_ROLE_MISMATCH 로 거부한다")
+    void updateGraduateMyPageRejectsStudent() {
         Member member = studentMember();
-        UpdateMyPageRequest request = new UpdateMyPageRequest(null, null, null, null, null);
+        UpdateGraduateMyPageRequest request = new UpdateGraduateMyPageRequest(null, null, null, null);
+
+        assertThatThrownBy(() -> myPageService.updateGraduateMyPage(member, request))
+                .isInstanceOf(MemberHandler.class);
+
+        verifyNoInteractions(memberService, techStackService, targetJobService, jobPostService);
+    }
+
+    @Test
+    @DisplayName("updateGraduateMyPage - UNKNOWN 회원이 호출하면 MEMBER_FIELD_ROLE_MISMATCH 로 거부한다")
+    void updateGraduateMyPageRejectsUnknown() {
+        Member member = unknownMember();
+        UpdateGraduateMyPageRequest request = new UpdateGraduateMyPageRequest(null, null, null, null);
+
+        assertThatThrownBy(() -> myPageService.updateGraduateMyPage(member, request))
+                .isInstanceOf(MemberHandler.class);
+
+        verifyNoInteractions(memberService, techStackService, targetJobService, jobPostService);
+    }
+
+    @Test
+    @DisplayName("updateGraduateMyPage - 모든 항목 미전송(null): 어떤 도메인 수정도 위임하지 않는다")
+    void updateGraduateMyPageSkipsUnsentItems() {
+        Member member = graduateMember();
+        UpdateGraduateMyPageRequest request = new UpdateGraduateMyPageRequest(null, null, null, null);
 
         when(memberService.getMyProfile(member)).thenReturn(profileOf(member));
 
-        myPageService.updateMyPage(member, request);
+        myPageService.updateGraduateMyPage(member, request);
 
         verify(memberService, never()).updateMyProfile(any(), any());
         verify(techStackService, never()).replace(any(), any());
-        verify(targetJobService, never()).replace(any(), any());
+        verifyNoInteractions(targetJobService);
         verify(jobPostService, never()).delete(any(), any());
-        verify(jobPostService, never()).create(any(), any());
-    }
-
-    @Test
-    @DisplayName("updateMyPage - 위임 중 하나가 실패하면 예외를 전파하고 이후 위임을 실행하지 않는다(전체 롤백)")
-    void updateMyPagePropagatesExceptionOnDelegationFailure() {
-        Member member = studentMember();
-        List<TechStackName> techStacks = List.of(TechStackName.JAVA);
-        List<TargetJobCategory> targetJobs = List.of(TargetJobCategory.BACKEND);
-        List<CreateJobPostRequest> toAdd = List.of(jobPostRequest("네이버"));
-        UpdateMyPageRequest request = new UpdateMyPageRequest(
-                profileUpdateRequest(), techStacks, targetJobs, toAdd, List.of(100L));
-
-        // 위임 파이프라인 중간(관심 직군 교체)에서 실패가 발생
-        when(targetJobService.replace(any(), any()))
-                .thenThrow(new RuntimeException(DELEGATE_FAILURE_MESSAGE));
-
-        assertThatThrownBy(() -> myPageService.updateMyPage(member, request))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessage(DELEGATE_FAILURE_MESSAGE);
-
-        // 실패 지점 이후 위임(졸업생 공고 삭제·추가)은 실행되지 않는다.
-        // updateMyPage 는 단일 @Transactional 이므로 전파된 예외로 트랜잭션 전체가 롤백된다.
-        verify(jobPostService, never()).delete(any(), any());
-        verify(jobPostService, never()).create(any(), any());
+        verify(jobPostService, never()).createFromLink(any(), any());
     }
 }

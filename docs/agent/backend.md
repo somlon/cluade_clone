@@ -67,11 +67,14 @@ mju.capstone.ddingconnect
 - **활동 통계 `ActivityStats`**: 커피챗 수 = 본인이 요청자/수신자로 참여한 `ACCEPTED` 상태 합산(`CoffeeChatService.countMyAcceptedCoffeeChats`), 로드맵 수 = 본인 생성(`RoadmapService.countMyRoadmaps`), 질문 수 = 본인 작성(`QuestionService.countMyQuestions`).
 - `targetJobs` 는 `STUDENT`, `jobPosts` 는 `GRADUATE` 역할에서만 채워지고 그 외 역할에선 빈 리스트. `jobPosts` 는 `JobPostService.getMyJobPosts` (졸업생 매핑이 없으면 빈 리스트).
 - 마이페이지용 항목별 조회 메서드(`countMy*`, `getMyJobPosts`)는 각 도메인 서비스에 추가돼 향후 단건 화면에서도 재사용 가능. 별도 공개 엔드포인트는 아직 두지 않고 마이페이지 1개만 노출.
-- **`PATCH /api/v1/members/mypage`** — 마이페이지 편집 항목 전체를 '수정 완료' 1회 요청으로 일괄 수정. 조회와 같은 경로·메서드만 `PATCH`. 컨트롤러는 `MemberController`, 서비스는 `MyPageService.updateMyPage`.
-- **수정도 애그리게이터**: `updateMyPage` 는 레포지토리 직접 접근 없이 각 도메인의 **기존 수정 API** 에 위임한다 — 프로필 `MemberService.updateMyProfile`, 기술 스택 `TechStackService.replace`, 관심 직군 `TargetJobService.replace`(재학생), 졸업생 구직 공고 `JobPostService.create`/`delete`. 위임 후 `getMyPage` 와 공유하는 `buildResponse` 헬퍼로 최신 `MyPageResponse` 를 반환한다(조회와 동일 응답 재사용).
-- **요청 DTO `UpdateMyPageRequest`** = `profile`(`UpdateMemberRequest` 재사용, `@Valid` 로 프로필 형식 검증 전파) + `techStacks` + `targetJobs` + `jobPostsToAdd` + `jobPostIdsToDelete`. **부분 수정 규약** — 필드가 `null` 이면 그 항목은 미변경(`profile` 이 null 이면 수정 대신 조회로 최신 프로필을 채움), 리스트가 빈 값이면 그 항목 전부 삭제(replace 규약).
-- **졸업생 구직 공고는 추가·삭제만** 위임 — `jobPostIdsToDelete`(삭제)를 먼저, `jobPostsToAdd`(추가)를 나중에 처리. 기존 공고 본문 편집은 범위 밖이며 개별 편집은 `PATCH /api/v1/job-post/{id}` 사용. 졸업생 권한·소유자 검증은 위임 메서드(`JobPostService`)가 그대로 수행한다.
-- **'수정 완료' = 원자성**: `updateMyPage` 는 단일 `@Transactional`. 위임 도메인 수정 메서드가 모두 `@Transactional`(전파 REQUIRED)이라 애그리게이터 트랜잭션에 참여 → 일부라도 실패하면 전체 롤백, 부분 저장 없음.
+- **역할별 수정 엔드포인트 2개** — 마이페이지 편집은 역할별로 분리돼 있다. 컨트롤러는 `MemberController`, 서비스는 `MyPageService.updateStudentMyPage` / `updateGraduateMyPage`.
+  - **`PATCH /api/v1/members/mypage/student`** — STUDENT 전용. 프로필(공통 9 + `grade`) + `techStacks` + `targetJobs` 일괄 수정.
+  - **`PATCH /api/v1/members/mypage/graduate`** — GRADUATE 전용. 프로필(공통 9 + `businessCardImage`·`jobType`·`company`·`careerYear`) + `techStacks` + `jobPostsToAdd`(링크 전용) + `jobPostIdsToDelete` 일괄 수정.
+  - 진입부 가드 — 컨트롤러는 `@LoginMember` 만 받고, 역할 검증은 서비스 진입부(`MyPageServiceImpl.update*MyPage`)에서 수행. `member.getRole()` 이 해당 역할이 아니면 즉시 `MEMBER_FIELD_ROLE_MISMATCH`(UNKNOWN 도 거부).
+- **역할별 DTO 4개**: `UpdateStudentMyPageRequest(@Valid UpdateStudentProfileRequest profile, List<TechStackName> techStacks, List<TargetJobCategory> targetJobs)`, `UpdateGraduateMyPageRequest(@Valid UpdateGraduateProfileRequest profile, List<TechStackName> techStacks, @Valid List<CreateJobPostLinkRequest> jobPostsToAdd, List<Long> jobPostIdsToDelete)`. 프로필은 `UpdateStudentProfileRequest`(공통 9필드 + `grade`) / `UpdateGraduateProfileRequest`(공통 9필드 + GRADUATE 4필드)로 분리해 각 역할 필드만 노출 — 역할 외 필드는 record 정의 자체에 없어 클라이언트가 보낼 수 없다. **부분 수정 규약** — 필드가 `null` 이면 그 항목은 미변경(`profile` 이 null 이면 수정 대신 조회로 최신 프로필을 채움), 리스트가 빈 값이면 그 항목 전부 삭제(replace 규약).
+- **수정도 애그리게이터**: 각 도메인의 **기존 수정 API** 에 위임한다 — 프로필 `MemberService.updateMyProfile`(역할별 프로필 DTO 의 `toUpdateMemberRequest()` 어댑터를 거쳐 호출), 기술 스택 `TechStackService.replace`, 관심 직군 `TargetJobService.replace`(STUDENT 경로), 졸업생 구직 공고 `JobPostService.createFromLink`/`delete`(GRADUATE 경로). 위임 후 `getMyPage` 와 공유하는 `buildResponse` 헬퍼로 최신 `MyPageResponse` 를 반환한다.
+- **졸업생 구직 공고는 링크 전용 추가·삭제만** 위임 — `jobPostIdsToDelete`(삭제)를 먼저, `jobPostsToAdd`(`CreateJobPostLinkRequest` 리스트, 추가)를 나중에 처리. 추가는 `JobPostService.createFromLink`(`detailUrl` 만 채운 `PostContents` 저장 + `GraduateJobPost` 매핑, `jobType=null` 이므로 알람 분기 스킵)로 진행. 기존 11필드 공고 본문 편집은 범위 밖이며 개별 편집은 `PATCH /api/v1/job-post/{id}` 사용. 졸업생 권한·소유자 검증은 위임 메서드가 그대로 수행한다.
+- **'수정 완료' = 원자성**: `updateStudentMyPage`/`updateGraduateMyPage` 는 단일 `@Transactional`. 위임 도메인 수정 메서드가 모두 `@Transactional`(전파 REQUIRED)이라 애그리게이터 트랜잭션에 참여 → 일부라도 실패하면 전체 롤백, 부분 저장 없음.
 - **'취소' = 클라이언트 임시저장**: 편집 임시상태는 프론트가 보관, 취소 시 서버 호출 없이 폼을 버리고 조회 데이터로 복원. 별도 취소 엔드포인트 없음(서버 무상태).
 
 ### 인증/JWT

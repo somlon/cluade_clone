@@ -4,8 +4,9 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
+import mju.capstone.ddingconnect.domain.member.dto.request.UpdateGraduateMyPageRequest;
 import mju.capstone.ddingconnect.domain.member.dto.request.UpdateMemberRequest;
-import mju.capstone.ddingconnect.domain.member.dto.request.UpdateMyPageRequest;
+import mju.capstone.ddingconnect.domain.member.dto.request.UpdateStudentMyPageRequest;
 import mju.capstone.ddingconnect.domain.member.dto.response.MemberResponse;
 import mju.capstone.ddingconnect.domain.member.dto.response.MyPageResponse;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMember;
@@ -76,17 +77,35 @@ public interface MemberSwagger {
 
 
     @Operation(
-            summary = "마이페이지 통합 수정",
-            description = "로그인된 회원의 마이페이지 편집 항목을 1회 요청으로 일괄 수정합니다. "
-                    + "프로필(닉네임/이름/이메일/학번/학과/소셜 링크 등 + 역할별 필드), 기술 스택, "
-                    + "관심 직군(재학생), 구직 공고 추가·삭제(졸업생)를 포함합니다. "
+            summary = "재학생 마이페이지 통합 수정",
+            description = "STUDENT 역할 전용 마이페이지 편집 항목을 1회 요청으로 일괄 수정합니다. "
+                    + "프로필(공통 9필드 + 학년), 기술 스택, 관심 직군을 포함합니다. "
+                    + "STUDENT 가 아니면 400(MEMBER_FIELD_ROLE_MISMATCH)으로 거부합니다(UNKNOWN/GRADUATE 모두 거부). "
                     + "단일 트랜잭션으로 처리되어 일부라도 실패하면 전체가 롤백됩니다. "
                     + "각 항목은 미전송(null) 시 변경하지 않으며, 수정 후 최신 마이페이지를 반환합니다."
     )
-    @PatchMapping("/mypage")
-    ApiResponse<MyPageResponse> updateMyPage(
+    @PatchMapping("/mypage/student")
+    ApiResponse<MyPageResponse> updateStudentMyPage(
             @Parameter(hidden = true) @LoginMember Member member,
-            @Parameter(description = "마이페이지 통합 수정 요청")
-            @RequestBody UpdateMyPageRequest request);
+            @Parameter(description = "재학생 마이페이지 통합 수정 요청")
+            @RequestBody UpdateStudentMyPageRequest request);
+
+
+
+
+    @Operation(
+            summary = "졸업생 마이페이지 통합 수정",
+            description = "GRADUATE 역할 전용 마이페이지 편집 항목을 1회 요청으로 일괄 수정합니다. "
+                    + "프로필(공통 9필드 + 명함이미지/직무/회사명/경력), 기술 스택, "
+                    + "구직 공고 링크 추가·삭제를 포함합니다. "
+                    + "GRADUATE 가 아니면 400(MEMBER_FIELD_ROLE_MISMATCH)으로 거부합니다(UNKNOWN/STUDENT 모두 거부). "
+                    + "단일 트랜잭션으로 처리되어 일부라도 실패하면 전체가 롤백됩니다. "
+                    + "각 항목은 미전송(null) 시 변경하지 않으며, 수정 후 최신 마이페이지를 반환합니다."
+    )
+    @PatchMapping("/mypage/graduate")
+    ApiResponse<MyPageResponse> updateGraduateMyPage(
+            @Parameter(hidden = true) @LoginMember Member member,
+            @Parameter(description = "졸업생 마이페이지 통합 수정 요청")
+            @RequestBody UpdateGraduateMyPageRequest request);
 
 }

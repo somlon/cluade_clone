@@ -4,8 +4,9 @@ import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
+import mju.capstone.ddingconnect.domain.member.dto.request.UpdateGraduateMyPageRequest;
 import mju.capstone.ddingconnect.domain.member.dto.request.UpdateMemberRequest;
-import mju.capstone.ddingconnect.domain.member.dto.request.UpdateMyPageRequest;
+import mju.capstone.ddingconnect.domain.member.dto.request.UpdateStudentMyPageRequest;
 import mju.capstone.ddingconnect.domain.member.dto.response.MemberResponse;
 import mju.capstone.ddingconnect.domain.member.dto.response.MyPageResponse;
 import mju.capstone.ddingconnect.domain.member.service.MemberService;
@@ -60,11 +61,19 @@ public class MemberController implements MemberSwagger {
         return ApiResponse.onSuccess(myPageService.getMyPage(member));
     }
 
-    /** 마이페이지 통합 수정 (Update) — 프로필/기술 스택/관심 직군/구직 공고를 1회 요청으로 일괄 수정 */
-    @PatchMapping("/mypage")
-    public ApiResponse<MyPageResponse> updateMyPage(
+    /** 재학생 마이페이지 통합 수정 (Update) — STUDENT 전용 */
+    @PatchMapping("/mypage/student")
+    public ApiResponse<MyPageResponse> updateStudentMyPage(
             @Parameter(hidden = true) @LoginMember Member member,
-            @Valid @RequestBody UpdateMyPageRequest request) {
-        return ApiResponse.onSuccess(myPageService.updateMyPage(member, request));
+            @Valid @RequestBody UpdateStudentMyPageRequest request) {
+        return ApiResponse.onSuccess(myPageService.updateStudentMyPage(member, request));
+    }
+
+    /** 졸업생 마이페이지 통합 수정 (Update) — GRADUATE 전용 */
+    @PatchMapping("/mypage/graduate")
+    public ApiResponse<MyPageResponse> updateGraduateMyPage(
+            @Parameter(hidden = true) @LoginMember Member member,
+            @Valid @RequestBody UpdateGraduateMyPageRequest request) {
+        return ApiResponse.onSuccess(myPageService.updateGraduateMyPage(member, request));
     }
 }

@@ -11,6 +11,7 @@ import mju.capstone.ddingconnect.domain.job_post.domain.PostContents;
 import mju.capstone.ddingconnect.domain.job_post.domain.repository.GraduateJobPostRepository;
 import mju.capstone.ddingconnect.domain.job_post.domain.repository.JobAlarmRepository;
 import mju.capstone.ddingconnect.domain.job_post.domain.repository.PostContentsRepository;
+import mju.capstone.ddingconnect.domain.job_post.dto.request.CreateJobPostLinkRequest;
 import mju.capstone.ddingconnect.domain.job_post.dto.request.CreateJobPostRequest;
 import mju.capstone.ddingconnect.domain.job_post.dto.request.UpdateJobPostRequest;
 import mju.capstone.ddingconnect.domain.job_post.dto.response.JobPostResponse;
@@ -98,6 +99,30 @@ public class JobPostServiceImpl implements JobPostService {
                     tj.getMember(), AlarmType.JOB, JOB_ALARM_NEW_CONTENT));
         }
 
+        return JobPostResponse.from(saved);
+    }
+
+    @Override
+    @Transactional
+    public JobPostResponse createFromLink(Member member, CreateJobPostLinkRequest request) {
+        // 졸업생 권한 확인 (기존 create 와 동일 정책)
+        if (member.getRole() != MemberRole.GRADUATE) {
+            throw new JobPostHandler(ErrorStatus.POST_CONTENTS_NOT_GRADUATE);
+        }
+
+        // detailUrl 만 세팅, 나머지 필드는 null 유지
+        PostContents saved = postContentsRepository.save(PostContents.builder()
+                .detailUrl(request.detailUrl())
+                .build());
+
+        graduateRepository.findByMemberId(member.getId()).ifPresent(graduate ->
+                graduateJobPostRepository.save(GraduateJobPost.builder()
+                        .graduate(graduate)
+                        .postContents(saved)
+                        .build())
+        );
+
+        // 알람 발행 분기 스킵 — jobType 이 null 이라 관심직무 매칭 불가.
         return JobPostResponse.from(saved);
     }
 
