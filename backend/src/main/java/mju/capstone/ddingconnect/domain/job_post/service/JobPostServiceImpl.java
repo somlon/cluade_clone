@@ -14,6 +14,7 @@ import mju.capstone.ddingconnect.domain.job_post.domain.repository.PostContentsR
 import mju.capstone.ddingconnect.domain.job_post.dto.request.CreateJobPostLinkRequest;
 import mju.capstone.ddingconnect.domain.job_post.dto.request.CreateJobPostRequest;
 import mju.capstone.ddingconnect.domain.job_post.dto.request.UpdateJobPostRequest;
+import mju.capstone.ddingconnect.domain.job_post.dto.response.GraduatePostResponse;
 import mju.capstone.ddingconnect.domain.job_post.dto.response.JobPostResponse;
 import mju.capstone.ddingconnect.domain.member.domain.MemberRole;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
@@ -77,6 +78,12 @@ public class JobPostServiceImpl implements JobPostService {
                         .postContents(saved)
                         .build())
         );
+
+        // jobType 이 null 이면 관심직무 매칭 불가 → 알람 발행 분기 스킵 (NPE 방지).
+        // 11필드 등록 경로에서는 보통 jobType 이 있지만, 링크 전용 등록(createFromLink) 후 update 등 경로상 null 가능.
+        if (saved.getJobType() == null) {
+            return JobPostResponse.from(saved);
+        }
 
         // [알람 발행] PostContents.jobType 과 동일한 TargetJob.interestedJob 을 가진 학생에게 JobAlarm 발행.
         // JobType ↔ TargetJobCategory 는 같은 원티드 taxonomy 의 같은 11개 값으로 enum 만 분리돼 있어 name() 으로 매칭.
@@ -277,6 +284,32 @@ public class JobPostServiceImpl implements JobPostService {
                         .map(JobPostResponse::from)
                         .toList())
                 .orElseGet(List::of);
+    }
+
+    /**
+     * 선배 공고 목록 — GraduateJobPost 매핑 전체 → 카드 DTO 변환.
+     * 매핑이 N:1(여러 매핑이 같은 PostContents 를 가리킬 수도 있음)이지만, 운영상 1:1 가정이라 distinct 처리는 응답 DTO 의 자연 키(id)에 맡긴다.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<GraduatePostResponse> getGraduatePosts() {
+        return graduateJobPostRepository.findAll().stream()
+                .map(GraduatePostResponse::from)
+                .toList();
+    }
+
+    /**
+     * 일반(크롤링) 공고 목록 — GraduateJobPost 매핑이 없는 PostContents 만.
+     * 매핑이 0건이면 전체 공고를 반환하는 분기를 둬, IN 절 빈 컬렉션으로 인한 SQL 오류를 피한다.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<JobPostResponse> getCrawledPosts() {
+        List<Long> graduatePostIds = graduateJobPostRepository.findDistinctPostContentsIds();
+        List<PostContents> result = graduatePostIds.isEmpty()
+                ? postContentsRepository.findAll()
+                : postContentsRepository.findByIdNotIn(graduatePostIds);
+        return result.stream().map(JobPostResponse::from).toList();
     }
 
     /**

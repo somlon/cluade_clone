@@ -463,4 +463,72 @@ class JobPostServiceImplTest {
 
         assertThat(result).isEmpty();
     }
+
+    // ── TODO R: 링크 등록 NPE 가드 ───────────────────────────────────
+
+    @Test
+    @DisplayName("create - jobType 이 null 이면 알람 분기를 스킵하고 NPE 없이 응답 반환 (TODO R R-2 가드)")
+    void createSkipsAlarmDispatchWhenJobTypeNull() {
+        PostContents nullJobType = PostContents.builder().id(101L)
+                .companyName("(링크 전용)").detailUrl("https://example.com").jobType(null).build();
+        when(postContentsRepository.save(any(PostContents.class))).thenReturn(nullJobType);
+        when(graduateRepository.findByMemberId(graduateMember.getId())).thenReturn(Optional.of(graduate));
+
+        // create() 가 정상 동작해야 함 (NPE 방지)
+        JobPostResponse response = jobPostService.create(graduateMember,
+                new CreateJobPostRequest(null, null, null, null, null, null, null, null,
+                        "https://example.com", null, null));
+
+        assertThat(response.id()).isEqualTo(101L);
+        // 알람 발행 분기 자체가 실행되지 않아야 한다
+        verify(targetJobRepository, never()).findByInterestedJob(any());
+        verify(jobAlarmRepository, never()).save(any());
+    }
+
+    // ── TODO R: 선배/일반 공고 분리 ──────────────────────────────────
+
+    @Test
+    @DisplayName("getGraduatePosts - GraduateJobPost 매핑을 GraduatePostResponse 카드로 변환")
+    void getGraduatePostsReturnsCards() {
+        GraduateJobPost mapping = GraduateJobPost.builder()
+                .id(1L).graduate(graduate).postContents(postContents).build();
+        when(graduateJobPostRepository.findAll()).thenReturn(List.of(mapping));
+
+        var result = jobPostService.getGraduatePosts();
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).id()).isEqualTo(100L);
+        assertThat(result.get(0).graduateMemberId()).isEqualTo(graduateMember.getId());
+        assertThat(result.get(0).graduateNickname()).isEqualTo("졸업생");
+        assertThat(result.get(0).graduateCareerYear()).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("getCrawledPosts - 선배 매핑이 있는 PostContents id 들을 제외하고 반환")
+    void getCrawledPostsExcludesGraduateMappedIds() {
+        PostContents crawled = PostContents.builder().id(200L).companyName("크롤링 회사").build();
+        when(graduateJobPostRepository.findDistinctPostContentsIds()).thenReturn(List.of(100L));
+        when(postContentsRepository.findByIdNotIn(List.of(100L))).thenReturn(List.of(crawled));
+
+        List<JobPostResponse> result = jobPostService.getCrawledPosts();
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).id()).isEqualTo(200L);
+        // 매핑이 있을 때는 findAll 을 호출하지 않는다 (불필요 조회 회피)
+        verify(postContentsRepository, never()).findAll();
+    }
+
+    @Test
+    @DisplayName("getCrawledPosts - 선배 매핑이 0건이면 findAll 로 폴백 (IN(빈) SQL 오류 회피)")
+    void getCrawledPostsFallsBackToFindAllWhenNoMapping() {
+        PostContents crawled1 = PostContents.builder().id(200L).companyName("회사1").build();
+        PostContents crawled2 = PostContents.builder().id(201L).companyName("회사2").build();
+        when(graduateJobPostRepository.findDistinctPostContentsIds()).thenReturn(List.of());
+        when(postContentsRepository.findAll()).thenReturn(List.of(crawled1, crawled2));
+
+        List<JobPostResponse> result = jobPostService.getCrawledPosts();
+
+        assertThat(result).hasSize(2);
+        verify(postContentsRepository, never()).findByIdNotIn(any());
+    }
 }

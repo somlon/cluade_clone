@@ -60,53 +60,6 @@
 
 **출처**: 졸업생 마이페이지 화면(2번째 사진)의 "내 명함 영역 + 사진 등록" 요구사항.
 
-### TODO R: 졸업생 공고 — 링크 전용 등록 + 선배공고/일반공고 분리 표시 (job_post 도메인)
-
-**문제**: 졸업생이 마이페이지에서 "나의 공고 올리기" 모달(3번째 사진)로 **링크만 입력**해 공고를 등록할 수 있어야 하고, 구직 정보 화면(4번째 사진)에서는 **선배가 올린 공고**와 **일반 공고 목록**이 시각적으로 분리돼 표시돼야 한다. 현재 `CreateJobPostRequest` 는 11 필드(`companyImage`·`region`·`careerType`·`jobType`·`country`·`location`·`fullLocation`·`deadline`·`detailUrl`·`preferredLanguages`·`companyName`) 모두 받는 구조라 링크만 입력하는 흐름과 맞지 않고, `JobPostService.getList()` 는 `postContentsRepository.findAll()` 로 선배 공고/크롤링 공고 구분 없이 전체를 반환한다.
-
-추가 발견 (버그): `JobPostServiceImpl.create` 의 `toCategory(saved.getJobType())` 는 `jobType` 이 null 이면 `TargetJobCategory.valueOf(null)` 로 NPE 발생 — 링크만 등록되는 경로에서는 jobType 이 null 이라 반드시 가드 필요.
-
-**디폴트 결정**:
-
-R-1. **링크 전용 등록 경로 신설**:
-
-- ~~신규 DTO `CreateJobPostLinkRequest(String detailUrl)`~~ — **TODO L 작업 시 선행 신설 완료** (`job_post/dto/request/CreateJobPostLinkRequest.java`, `@NotBlank` + `^https?://.+` `@Pattern`).
-- ~~서비스 동작~~ — **TODO L 작업 시 `JobPostService.createFromLink` 선행 신설 완료** (`PostContents.builder().detailUrl(...).build()` 저장 → `GraduateJobPost` 매핑 + 알람 분기 스킵). `UpdateGraduateMyPageRequest.jobPostsToAdd` 가 이미 이 메서드에 위임 중.
-- 신규 엔드포인트 `POST /api/v1/job-posts/link` — 본 TODO R 작업의 잔여 항목. `JobPostController`/`JobPostSwagger` 에 메서드 추가 + 기존 서비스 메서드(`createFromLink`)에 위임.
-
-R-2. **`JobPostServiceImpl.create` jobType null 가드**:
-
-- `toCategory(saved.getJobType())` 호출 직전에 `if (saved.getJobType() == null) return JobPostResponse.from(saved);` (또는 알람 분기 전체를 `if` 로 감싸기). 기존 11필드 등록 경로는 그대로 동작.
-
-R-3. **선배 공고 / 일반 공고 분리 조회**:
-
-- 분리 기준: `GraduateJobPost` 매핑 **존재 여부** (데이터 모델 변경 없이 가능)
-- 신규 엔드포인트 ① `GET /api/v1/job-posts/graduates` — `GraduateJobPost` 매핑이 존재하는 PostContents 만 (선배 공고 = 화면의 "선배가 올린 공고")
-- 신규 엔드포인트 ② `GET /api/v1/job-posts/crawled` — `GraduateJobPost` 매핑이 **없는** PostContents 만 (화면의 "공고 목록")
-- 신규 응답 DTO `GraduatePostResponse` — 기존 `JobPostResponse` 필드 + 등록자(`Graduate.member.nickname`·`department`·`Graduate.jobType`·`careerYear`) 카드용 정보 포함
-- 일반 공고는 기존 `JobPostResponse` 재사용
-- 기존 `GET /api/v1/job-posts`(getList) 는 호환성 위해 유지하고 신규 화면은 분리 엔드포인트만 사용. 추후 deprecate 검토.
-
-R-4. **리포지토리 보강**:
-
-- `GraduateJobPostRepository` — `findDistinctPostContentsIds()` 또는 `findAllByPostContentsIdIn(...)` 형태 메서드 추가
-- `PostContentsRepository` — `findAllByIdNotIn(Collection<Long>)` 사용 (없으면 추가)
-
-**데이터 일관성 메모**: 데이터팀의 `upload_jobs.py` (크롤링 → 가짜 선배 적재, 추천 알고리즘용 더미 시드) 와 `routers/crawling.py` (`POST /api/data/crawling/sync`, 운영 sync — PostContents 만 적재) 가 적재 방식이 다르다. 분리 기준이 매핑 유무이므로 두 흐름이 혼재해도 R-3 가 정상 동작하나, 운영상 데이터팀과 적재 정책 합의 권장 — 본 TODO 범위 외.
-
-**수정 파일**:
-
-- `job_post/dto/request/CreateJobPostLinkRequest.java` 신규
-- `job_post/dto/response/GraduatePostResponse.java` 신규
-- `job_post/service/JobPostService.java`·`JobPostServiceImpl.java` — `createFromLink`, `getGraduatePosts`, `getCrawledPosts` 추가 및 `create` 의 null 가드
-- `job_post/controller/JobPostController.java`·`JobPostSwagger.java` — 엔드포인트 3개 추가
-- `job_post/domain/repository/GraduateJobPostRepository.java`·`PostContentsRepository.java` — 쿼리 메서드 추가
-- 관련 테스트 보강
-
-**연관**: TODO L 의 `UpdateGraduateMyPageRequest.jobPostsToAdd` 타입과 일치시켜야 함.
-
-**출처**: 마이페이지 "나의 공고 올리기" 모달(3번째 사진) + 구직 정보 화면(4번째 사진) + `ddingconnect-data` 의 `master_crawler.py`·`routers/crawling.py`·`upload_jobs.py` 분석.
-
 ### 11개 작업자 노트 (TODO #1~#11 머지 완료 후 보존되는 일반 가이드)
 
 - **브랜치 정책**: 각 TODO 를 **개별 브랜치 + 개별 PR** 로 처리하는 것을 기본으로 한다. 영향 범위가 큰 TODO 는 단독 PR 필수. 같은 도메인 내 작은 변경은 묶어서 1개 PR 도 허용 (작업자 판단). 사용자가 "TODO N 작업" 으로 단일 항목 지목 시 그 항목만 단독 PR.
