@@ -43,6 +43,8 @@ class CoffeeChatServiceImplTest {
     @Mock CoffeeChatAlarmRepository coffeeChatAlarmRepository;
     @Mock MemberRepository memberRepository;
     @Mock ApplicationEventPublisher eventPublisher;
+    @Mock mju.capstone.ddingconnect.domain.interested_job.domain.repository.TargetJobRepository targetJobRepository;
+    @Mock mju.capstone.ddingconnect.domain.techstack.domain.repository.TechStackRepository techStackRepository;
     @InjectMocks CoffeeChatServiceImpl coffeeChatService;
 
     private Member studentRequester;
@@ -364,5 +366,69 @@ class CoffeeChatServiceImplTest {
         long result = coffeeChatService.countMyAcceptedCoffeeChats(studentRequester);
 
         assertThat(result).isEqualTo(5L);
+    }
+
+    @Test
+    @DisplayName("getMyActivities - 요청자/수신자 양방향 합치고 중복 제거 + 상대방 정보로 카드 조립")
+    void getMyActivitiesAssemblesPartnerCards() {
+        Long memberId = studentRequester.getId();
+
+        // sent: studentRequester → graduateReceiver
+        CoffeeChat sent = CoffeeChat.builder().id(101L)
+                .requester(studentRequester).receiver(graduateReceiver)
+                .status(mju.capstone.ddingconnect.domain.coffeechat.domain.CoffeeChatStatus.PENDING)
+                .build();
+        // received: other → studentRequester
+        CoffeeChat received = CoffeeChat.builder().id(102L)
+                .requester(other).receiver(studentRequester)
+                .status(mju.capstone.ddingconnect.domain.coffeechat.domain.CoffeeChatStatus.ACCEPTED)
+                .build();
+
+        when(coffeeChatRepository.findByRequesterId(memberId)).thenReturn(List.of(sent));
+        when(coffeeChatRepository.findByReceiverId(memberId)).thenReturn(List.of(received));
+        // 상대방 부가 정보 (관심직무·기술스택)
+        when(targetJobRepository.findByMemberId(graduateReceiver.getId())).thenReturn(List.of(
+                mju.capstone.ddingconnect.domain.interested_job.domain.TargetJob.builder()
+                        .interestedJob(mju.capstone.ddingconnect.domain.interested_job.domain.TargetJobCategory.BACKEND)
+                        .build()));
+        when(techStackRepository.findByMemberId(graduateReceiver.getId())).thenReturn(List.of(
+                mju.capstone.ddingconnect.domain.techstack.domain.TechStack.builder()
+                        .name(mju.capstone.ddingconnect.domain.techstack.domain.TechStackName.JAVA).build()));
+        when(targetJobRepository.findByMemberId(other.getId())).thenReturn(List.of());
+        when(techStackRepository.findByMemberId(other.getId())).thenReturn(List.of());
+
+        var result = coffeeChatService.getMyActivities(studentRequester);
+
+        assertThat(result).hasSize(2);
+        // 첫 카드: 요청자=본인, 상대=graduateReceiver
+        assertThat(result.get(0).coffeeChatId()).isEqualTo(101L);
+        assertThat(result.get(0).partnerId()).isEqualTo(graduateReceiver.getId());
+        assertThat(result.get(0).partnerNickname()).isEqualTo("이선배");
+        assertThat(result.get(0).partnerTechStacks())
+                .containsExactly(mju.capstone.ddingconnect.domain.techstack.domain.TechStackName.JAVA);
+        // 두 번째 카드: 수신자=본인, 상대=other
+        assertThat(result.get(1).coffeeChatId()).isEqualTo(102L);
+        assertThat(result.get(1).partnerId()).isEqualTo(other.getId());
+        assertThat(result.get(1).partnerJobs()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("getMyActivities - sent/received 에 같은 커피챗이 중복 들어오면 id 기준 한 번만 응답")
+    void getMyActivitiesDedupesByCoffeeChatId() {
+        Long memberId = studentRequester.getId();
+        CoffeeChat dup = CoffeeChat.builder().id(200L)
+                .requester(studentRequester).receiver(graduateReceiver)
+                .status(mju.capstone.ddingconnect.domain.coffeechat.domain.CoffeeChatStatus.PENDING)
+                .build();
+
+        when(coffeeChatRepository.findByRequesterId(memberId)).thenReturn(List.of(dup));
+        when(coffeeChatRepository.findByReceiverId(memberId)).thenReturn(List.of(dup));
+        when(targetJobRepository.findByMemberId(graduateReceiver.getId())).thenReturn(List.of());
+        when(techStackRepository.findByMemberId(graduateReceiver.getId())).thenReturn(List.of());
+
+        var result = coffeeChatService.getMyActivities(studentRequester);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).coffeeChatId()).isEqualTo(200L);
     }
 }

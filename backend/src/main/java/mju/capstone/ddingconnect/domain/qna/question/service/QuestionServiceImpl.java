@@ -149,6 +149,14 @@ public class QuestionServiceImpl implements QuestionService {
         return questionRepository.countByMemberId(member.getId());
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<QuestionResponse> getMyQuestions(Member member) {
+        // 본인 글만 — 전체 목록(getList)과 분리. 카운트/좋아요 매핑은 toResponse 가 일관 처리.
+        return questionRepository.findByMemberId(member.getId())
+                .stream().map(q -> toResponse(q, member)).toList();
+    }
+
     private QuestionResponse toResponse(Question question, Member member) {
         long likeCount = questionLikeRepository.countByQuestionId(question.getId());
         long answerCount = answerRepository.countByQuestionId(question.getId());

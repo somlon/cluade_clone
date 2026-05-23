@@ -24,31 +24,6 @@
 
 **출처**: PR #22.
 
-### TODO M: 나의 활동 페이지 API — 커피챗/로드맵/Q&A 본인 활동 조회 (member·coffeechat·qna 도메인)
-
-**문제**: 마이페이지 상단 통계 카드(`MyPageResponse.ActivityStats` 의 `coffeeChatCount`·`roadmapCount`·`questionCount`)를 클릭하면 "나의 활동" 페이지로 진입해 본인 활동 **목록**을 보여줘야 하나, 현재 백엔드는 카운트만 제공하고 본인 스코프 목록 조회 API 가 없다. 단, 로드맵은 `RoadmapServiceImpl.getList` 가 이미 `findByMemberIdOrderByCreatedAtDesc` 로 본인 글만 반환하므로 그대로 재사용 가능.
-
-**디폴트 결정**: 도메인별로 다음과 같이 처리한다.
-
-1. **로드맵** — `GET /api/v1/roadmaps` 그대로 재사용. **백엔드 변경 0건.** 프론트 "나의 활동/로드맵" 탭에서 동일 엔드포인트 호출.
-2. **Q&A 질문** — 신규 엔드포인트 `GET /api/v1/questions/me` + 신규 서비스 메서드 `QuestionService.getMyQuestions(Member)` 추가. 내부 구현은 `questionRepository.findByMemberId(memberId)` (이미 `MemberServiceImpl` 에서 회원탈퇴 캐스케이드 용도로 사용 중) → 기존 `toResponse(q, member)` 매핑. **기존 `GET /api/v1/questions` 의 `getList(member)` 는 절대 수정하지 않는다** — Q&A 게시판은 전체 질문을 보여줘야 하므로 별도 엔드포인트로 분리.
-3. **커피챗** — 신규 컨트롤러 `MyActivityController` 와 엔드포인트 `GET /api/v1/members/me/activity/coffeechats` 추가. 신규 서비스 메서드 `CoffeeChatService.getMyActivities(Member)` 는 `findByRequesterId` + `findByReceiverId` 결과를 합쳐 중복 제거하고, 본인이 아닌 쪽(상대방) 의 닉네임/학과/관심직무/기술스택을 묶어 신규 DTO `CoffeeChatPartnerResponse` 로 반환. 카드 UI 가 상대방 정보를 표시하기 때문.
-
-**필터**: 후순위. 컨트롤러 시그니처에 `@RequestParam(required=false)` 자리만 예약하고 구현은 후속 작업.
-
-**수정/신규 파일**:
-
-- `backend/src/main/java/mju/capstone/ddingconnect/domain/qna/question/service/QuestionService.java`·`QuestionServiceImpl.java` — `getMyQuestions` 추가
-- `domain/qna/question/controller/QuestionController.java`·`QuestionSwagger.java` — `/me` 엔드포인트 1개 추가
-- `domain/coffeechat/service/CoffeeChatService.java`·`CoffeeChatServiceImpl.java` — `getMyActivities` 추가
-- `domain/coffeechat/dto/response/CoffeeChatPartnerResponse.java` 신규
-- `domain/member/controller/MyActivityController.java`·`MyActivitySwagger.java` 신규
-- 관련 테스트 함께 갱신/추가 (`QuestionControllerTest`·`QuestionServiceImplTest`·`CoffeeChatServiceImplTest`·`MyActivityControllerTest`)
-
-**연관**: TODO P(졸업생 로드맵 제외) — 로드맵 엔드포인트 진입 가드 추가는 거기서 처리.
-
-**출처**: 마이페이지 활동 카드 화면 + "나의 활동" 페이지 화면(`나의 활동 - 클릭시.png`) vs `ddingconnect-backend` `develop`(e985b05) 코드 비교.
-
 ### TODO N: 프로필 사진 멀티파트 업로드 (member 도메인)
 
 **문제**: 마이페이지 화면 상단의 프로필 사진(동그라미) 영역에 사진을 업로드해 표시하는 기능이 요구된다. 현재 `Member.profileImage` 는 `varchar(255)` URL 문자열만 보관하고(`Member.java`), 사진 업로드 전용 엔드포인트가 없다. `UpdateMemberRequest.profileImage` 가 String 이라 프론트가 URL 을 직접 만들어 보내야 하는 어색한 구조.

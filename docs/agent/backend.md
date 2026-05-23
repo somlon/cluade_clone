@@ -62,6 +62,10 @@ mju.capstone.ddingconnect
 
 ### 마이페이지 (member)
 - **`GET /api/v1/members/mypage`** — 마이페이지 화면을 1회 호출로 렌더링하기 위한 통합 조회. 컨트롤러는 `MemberController`, 서비스는 `MyPageService(Impl)`.
+- **나의 활동 페이지 (`MyActivityController` + 도메인별 분산)**: 마이페이지 활동 통계 카드를 클릭해 진입하는 '나의 활동' 페이지는 도메인별 본인 스코프 목록을 별도 엔드포인트로 노출한다. 도메인별 배치:
+  - **로드맵** — `GET /api/v1/roadmaps` 재사용(이미 본인 글 최신순 반환, 백엔드 변경 0). 프론트가 같은 엔드포인트를 호출.
+  - **Q&A** — `GET /api/v1/questions/me` (`QuestionController.getMyQuestions` → `QuestionService.getMyQuestions`). 내부적으로 `questionRepository.findByMemberId(memberId)` 로 본인 글만 조회하고 기존 `toResponse(q, member)` 로 좋아요/답변 카운트·`likedByMe` 까지 일관 매핑. 전체 목록(`GET /api/v1/questions`, `getList(member)`)은 절대 수정하지 않는다 — Q&A 게시판은 전체 질문을 보여줘야 하므로 별도 엔드포인트로 분리.
+  - **커피챗** — `GET /api/v1/members/me/activity/coffeechats` (`MyActivityController.getMyCoffeeChats` → `CoffeeChatService.getMyActivities`). 응답 DTO 가 상대방(파트너) 정보 위주(`CoffeeChatPartnerResponse`)라 기존 `CoffeeChatController` 의 본인 시점 응답(`CoffeeChatResponse`)과 분리하기 위해 별도 컨트롤러 신설. 신규 컨트롤러는 base `/api/v1/members` 로 회원 도메인 패키지에 둔다(나의 활동 = 마이페이지 후속 화면).
 - **애그리게이터 패턴**: `MyPageServiceImpl` 은 레포지토리를 직접 주입하지 않고, 항목별 도메인 서비스(`MemberService`/`TechStackService`/`TargetJobService`/`CoffeeChatService`/`RoadmapService`/`QuestionService`/`JobPostService`)를 in-process 로 호출해 한 응답으로 조합한다. 모놀리식 내 HTTP 자기호출이 아니라 서비스 계층 직접 호출.
 - 응답 `MyPageResponse` = `profile`(`MemberResponse` 재사용) + `activity`(활동 통계) + `techStacks` + `targetJobs`(재학생 항목) + `jobPosts`(졸업생 항목).
 - **활동 통계 `ActivityStats`**: 커피챗 수 = 본인이 요청자/수신자로 참여한 `ACCEPTED` 상태 합산(`CoffeeChatService.countMyAcceptedCoffeeChats`), 로드맵 수 = 본인 생성(`RoadmapService.countMyRoadmaps`), 질문 수 = 본인 작성(`QuestionService.countMyQuestions`).
@@ -115,6 +119,7 @@ mju.capstone.ddingconnect
   - REJECTED: 요청자에게만 1건 (content 정적)
 - 삭제(취소)는 요청자만 가능
 - **삭제 캐스케이드 (서비스 레벨)**: `CoffeeChatServiceImpl.delete` 에서 `CoffeeChatAlarm` 먼저 `deleteByCoffeeChatId` 로 정리 → `CoffeeChat` 삭제. `CoffeeChatAlarm.coffeeChat` 가 `nullable = false` FK 라 정리 없이는 MySQL FK constraint 위반.
+- **나의 활동 커피챗 목록 (`CoffeeChatService.getMyActivities`)**: 마이페이지 '커피챗 수' 카드를 클릭해 진입하는 '나의 활동/커피챗' 화면 백엔드. `findByRequesterId(memberId)` + `findByReceiverId(memberId)` 결과를 합쳐 `CoffeeChat.id` 기준 중복 제거(같은 row 가 양쪽에 들어오는 안전 가드)한 뒤, 각 커피챗마다 본인 아닌 쪽(상대방)을 추출해 `CoffeeChatPartnerResponse` 로 조립. 상대방 부가 정보(`TargetJob` 관심직무 + `TechStack` 기술스택)는 `TargetJobRepository.findByMemberId` / `TechStackRepository.findByMemberId` 로 조회 — 타 도메인 레포를 직접 주입받는 패턴은 QnA·매칭 조립 선례와 동일. `status` 는 PENDING/ACCEPTED/REJECTED 모두 포함하고 화면에서 필터링한다.
 - **커피챗 매칭 플로우 (`CoffeeChatMatchingController` / `CoffeeChatMatchingService(Impl)`)**: Figma 매칭 화면(정보 입력 → 결과 리스트 → 상대 상세)의 백엔드. 신규 컨트롤러는 base `/api/v1/coffeechat` 로 기존 `CoffeeChatController` 와 메서드 경로가 달라 충돌 없음. 엔드포인트 3개:
   - `POST /api/v1/coffeechat/matching` — 매칭 폼 6필드(`MatchingRequest`) 수신 → 알고리즘 호출 → 후보 카드 리스트(`MatchedCandidateResponse`). 후보 없으면 빈 리스트.
   - `GET /api/v1/coffeechat/matching/{memberId}` — 매칭 상대 상세(`MatchedCandidateDetailResponse`). "내 매칭 결과였는지"는 검증하지 않음.
@@ -147,6 +152,7 @@ mju.capstone.ddingconnect
 - **답변 등록은 졸업생 + 질문 작성자 본인** (`AnswerServiceImpl.create`): 기본은 졸업생만 답변 가능하나, **본인이 작성한 질문글에 한해 학생(STUDENT)도 답변 허용**. 검증식 = `member.getRole() != GRADUATE && !question.getMember().getId().equals(member.getId())` 일 때만 403 (`ANSWER_NOT_GRADUATE`). 도메인 의도 = Q&A 답변은 멘토(졸업생)가 학생 질문에 답하는 흐름이되, 질문자 본인의 자문자답은 예외 허용. `Question` 조회를 역할 검증보다 **먼저** 수행하므로 존재하지 않는 questionId 는 403 이 아닌 404 (`QUESTION_NOT_FOUND`)가 먼저 발생. 본인 질문 본인 답변 시 알람 미발행 분기는 그대로 동작. 수정/삭제는 기존 작성자 권한만 검증 (역할 제한 X).
 - 좋아요: `QuestionLike`, `AnswerLike` (복합키 `AnswerLikeId`), toggle 방식. **본인이 작성한 글에는 좋아요 불가** (`QuestionServiceImpl.toggleLike` / `AnswerServiceImpl.toggleLike` 진입부에서 작성자 == 호출자 체크. 위반 시 400 `QUESTION_SELF_LIKE` / `ANSWER_SELF_LIKE`).
 - **카운트·내 좋아요 여부**는 응답 DTO 에 포함 (`QuestionResponse.likeCount`/`likedByMe`/`answerCount`, `AnswerResponse.likeCount`/`likedByMe`). 매 GET 시 `countBy*` / `existsByMemberIdAnd*` 쿼리 호출 (캐시 컬럼 미도입). 모든 Q&A GET API (`getList`, `getOne`, `Answer.getList`) 가 `Member` 를 받아 `likedByMe` 채움.
+- **나의 활동 — 본인 질문 목록 (`GET /api/v1/questions/me`)**: `QuestionController.getMyQuestions` → `QuestionService.getMyQuestions` → `questionRepository.findByMemberId(memberId)` 로 본인 글만 조회. 응답 매핑은 기존 `toResponse(q, member)` 재사용 → `likeCount`/`answerCount`/`likedByMe` 일관 처리. **전체 목록 `getList(member)` 는 절대 수정하지 않는다** — Q&A 게시판은 전체 질문을 보여줘야 하므로 별도 엔드포인트로 분리. 마이페이지 '질문 수' 카드를 클릭해 진입하는 '나의 활동/Q&A' 화면용.
 - 좋아요 토글 응답: `LikeToggleResponse(liked, likeCount)` — 토글 후 새 상태·카운트 즉시 반환. 프론트 추가 GET 불필요.
 - 작성자만 수정/삭제
 - **삭제 캐스케이드 (서비스 레벨)**:
