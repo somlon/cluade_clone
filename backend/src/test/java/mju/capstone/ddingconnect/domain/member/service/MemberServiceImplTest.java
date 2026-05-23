@@ -33,7 +33,11 @@ import mju.capstone.ddingconnect.domain.roadmap.domain.repository.RoadmapAlarmRe
 import mju.capstone.ddingconnect.domain.roadmap.domain.repository.RoadmapRepository;
 import mju.capstone.ddingconnect.domain.roadmap.service.RoadmapService;
 import mju.capstone.ddingconnect.domain.techstack.domain.repository.TechStackRepository;
+import mju.capstone.ddingconnect.global.aws.S3Service;
+import mju.capstone.ddingconnect.global.response.code.status.ErrorStatus;
 import mju.capstone.ddingconnect.global.response.exception.handler.MemberHandler;
+import mju.capstone.ddingconnect.global.response.exception.handler.S3Handler;
+import org.springframework.mock.web.MockMultipartFile;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -80,6 +84,7 @@ class MemberServiceImplTest {
     @Mock AnswerLikeRepository answerLikeRepository;
     @Mock TechStackRepository techStackRepository;
     @Mock TargetJobRepository targetJobRepository;
+    @Mock S3Service s3Service;
 
     @InjectMocks MemberServiceImpl memberService;
 
@@ -435,5 +440,99 @@ class MemberServiceImplTest {
 
         verify(coffeeChatAlarmRepository, times(1)).deleteByCoffeeChatId(eq(801L));
         verify(coffeeChatRepository, times(1)).delete(dual);
+    }
+
+    // ── 졸업생 명함 이미지 업로드 (updateBusinessCard) ───────────────
+
+    private MockMultipartFile pngImage(long sizeBytes) {
+        byte[] content = new byte[(int) sizeBytes];
+        return new MockMultipartFile("image", "card.png", "image/png", content);
+    }
+
+    @Test
+    @DisplayName("updateBusinessCard - 기존 명함 없으면 S3 업로드 후 Graduate.businessCardImage 갱신")
+    void updateBusinessCardWithoutExisting() {
+        Member member = buildGraduateMember();
+        Graduate graduate = Graduate.builder().id(10L).member(member)
+                .businessCardImage(null).jobType(JobType.BACKEND).company("네이버").careerYear(3).build();
+        MockMultipartFile image = pngImage(1024L);
+        String newUrl = "https://bucket.s3.region.amazonaws.com/card-xyz.png";
+
+        when(graduateRepository.findByMemberId(2L)).thenReturn(Optional.of(graduate));
+        when(s3Service.uploadImage(image)).thenReturn(newUrl);
+        when(graduateRepository.save(any(Graduate.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        MemberResponse response = memberService.updateBusinessCard(member, image);
+
+        verify(s3Service, never()).deleteImage(any());
+        verify(s3Service).uploadImage(image);
+
+        ArgumentCaptor<Graduate> captor = ArgumentCaptor.forClass(Graduate.class);
+        verify(graduateRepository).save(captor.capture());
+        assertThat(captor.getValue().getBusinessCardImage()).isEqualTo(newUrl);
+        // 다른 GRADUATE 전용 필드는 보존
+        assertThat(captor.getValue().getJobType()).isEqualTo(JobType.BACKEND);
+        assertThat(captor.getValue().getCompany()).isEqualTo("네이버");
+        assertThat(captor.getValue().getCareerYear()).isEqualTo(3);
+        assertThat(response.businessCardImage()).isEqualTo(newUrl);
+    }
+
+    @Test
+    @DisplayName("updateBusinessCard - 기존 명함이 있으면 deleteImage → uploadImage 순서 보장")
+    void updateBusinessCardReplacesExisting() {
+        Member member = buildGraduateMember();
+        Graduate graduate = Graduate.builder().id(10L).member(member)
+                .businessCardImage("https://bucket.s3.region.amazonaws.com/old-card.png")
+                .jobType(JobType.BACKEND).company("네이버").careerYear(3).build();
+        MockMultipartFile image = pngImage(2048L);
+
+        when(graduateRepository.findByMemberId(2L)).thenReturn(Optional.of(graduate));
+        when(s3Service.uploadImage(image)).thenReturn("https://bucket.s3.region.amazonaws.com/new-card.png");
+        when(graduateRepository.save(any(Graduate.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        memberService.updateBusinessCard(member, image);
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(s3Service);
+        order.verify(s3Service).deleteImage("https://bucket.s3.region.amazonaws.com/old-card.png");
+        order.verify(s3Service).uploadImage(image);
+    }
+
+    @Test
+    @DisplayName("updateBusinessCard - STUDENT 호출 시 MEMBER_FIELD_ROLE_MISMATCH 로 거부, S3 미호출")
+    void updateBusinessCardRejectsStudent() {
+        Member member = buildStudentMember();
+        MockMultipartFile image = pngImage(1024L);
+
+        assertThatThrownBy(() -> memberService.updateBusinessCard(member, image))
+                .isInstanceOf(MemberHandler.class)
+                .matches(e -> ((MemberHandler) e).getErrorReasonHttpStatus().getCode()
+                        .equals(ErrorStatus.MEMBER_FIELD_ROLE_MISMATCH.getCode()));
+
+        verify(s3Service, never()).uploadImage(any());
+        verify(graduateRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("updateBusinessCard - 허용 외 content-type 은 _FILE_TYPE_NOT_ALLOWED 로 거부")
+    void updateBusinessCardRejectsBadContentType() {
+        Member member = buildGraduateMember();
+        MockMultipartFile bad = new MockMultipartFile("image", "f.gif", "image/gif", new byte[]{1, 2});
+
+        assertThatThrownBy(() -> memberService.updateBusinessCard(member, bad))
+                .isInstanceOf(S3Handler.class)
+                .matches(e -> ((S3Handler) e).getErrorReasonHttpStatus().getCode()
+                        .equals(ErrorStatus._FILE_TYPE_NOT_ALLOWED.getCode()));
+    }
+
+    @Test
+    @DisplayName("updateBusinessCard - 크기 초과(5MB 초과)는 _FILE_TOO_LARGE 로 거부")
+    void updateBusinessCardRejectsOversized() {
+        Member member = buildGraduateMember();
+        MockMultipartFile big = pngImage(MemberServiceImpl.BUSINESS_CARD_MAX_BYTES + 1);
+
+        assertThatThrownBy(() -> memberService.updateBusinessCard(member, big))
+                .isInstanceOf(S3Handler.class)
+                .matches(e -> ((S3Handler) e).getErrorReasonHttpStatus().getCode()
+                        .equals(ErrorStatus._FILE_TOO_LARGE.getCode()));
     }
 }

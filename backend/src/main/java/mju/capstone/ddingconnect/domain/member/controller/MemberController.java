@@ -14,7 +14,9 @@ import mju.capstone.ddingconnect.domain.member.service.MyPageService;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMember;
 import mju.capstone.ddingconnect.global.common.SuccessMessage;
 import mju.capstone.ddingconnect.global.response.exception.handler.ApiResponse;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/v1/members")
@@ -75,5 +77,13 @@ public class MemberController implements MemberSwagger {
             @Parameter(hidden = true) @LoginMember Member member,
             @Valid @RequestBody UpdateGraduateMyPageRequest request) {
         return ApiResponse.onSuccess(myPageService.updateGraduateMyPage(member, request));
+    }
+
+    /** 졸업생 명함 이미지 업로드/교체 (Update) — GRADUATE 전용, multipart/form-data */
+    @PatchMapping(value = "/me/business-card", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<MemberResponse> updateBusinessCard(
+            @Parameter(hidden = true) @LoginMember Member member,
+            @RequestPart("image") MultipartFile image) {
+        return ApiResponse.onSuccess(memberService.updateBusinessCard(member, image));
     }
 }

@@ -99,23 +99,6 @@
 
 **출처**: 졸업생 마이페이지 화면(2번째 사진) 카드 영역 분석 + `MyPageServiceImpl.buildResponse` 분기 결여 확인.
 
-### TODO Q: 졸업생 명함 이미지 업로드 (member 도메인)
-
-**문제**: 졸업생 마이페이지에 명함 등록 영역(네모 칸)이 있고 업로드한 사진이 표시돼야 한다. 현재 `Graduate.businessCardImage`(`Graduate.java`) 는 varchar(255) URL 문자열 보관용이며 업로드 엔드포인트가 없다.
-
-**디폴트 결정**: TODO N(프로필 사진)과 동일한 패턴으로 신설한다.
-
-- 신규 엔드포인트: `PATCH /api/v1/members/me/business-card` (multipart/form-data, `@RequestPart("image") MultipartFile`)
-- **GRADUATE 전용**: 진입부에서 STUDENT/UNKNOWN 호출 시 `MEMBER_FIELD_ROLE_MISMATCH` 반환
-- 동작: 기존 이미지 있으면 `s3Service.deleteImage`(또는 TODO O 이후 `deleteFile`) 후 새 이미지 업로드 → `Graduate.businessCardImage` 갱신
-- content-type/크기 검증은 TODO N 과 동일 (`image/png`·`image/jpeg`·`image/webp`, 5MB)
-
-**수정 파일**: `member/controller/MemberController.java`·`MemberSwagger.java`, `member/service/MemberService.java`·`MemberServiceImpl.java` — `updateBusinessCard(Member, MultipartFile)` 추가. 관련 테스트.
-
-**연관**: TODO N·O 와 S3 업로드 패턴 공유.
-
-**출처**: 졸업생 마이페이지 화면(2번째 사진)의 "내 명함 영역 + 사진 등록" 요구사항.
-
 ### TODO R: 졸업생 공고 — 링크 전용 등록 + 선배공고/일반공고 분리 표시 (job_post 도메인)
 
 **문제**: 졸업생이 마이페이지에서 "나의 공고 올리기" 모달(3번째 사진)로 **링크만 입력**해 공고를 등록할 수 있어야 하고, 구직 정보 화면(4번째 사진)에서는 **선배가 올린 공고**와 **일반 공고 목록**이 시각적으로 분리돼 표시돼야 한다. 현재 `CreateJobPostRequest` 는 11 필드(`companyImage`·`region`·`careerType`·`jobType`·`country`·`location`·`fullLocation`·`deadline`·`detailUrl`·`preferredLanguages`·`companyName`) 모두 받는 구조라 링크만 입력하는 흐름과 맞지 않고, `JobPostService.getList()` 는 `postContentsRepository.findAll()` 로 선배 공고/크롤링 공고 구분 없이 전체를 반환한다.

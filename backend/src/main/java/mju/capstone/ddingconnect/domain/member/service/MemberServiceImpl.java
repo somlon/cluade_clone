@@ -32,10 +32,13 @@ import mju.capstone.ddingconnect.domain.roadmap.domain.repository.RoadmapAlarmRe
 import mju.capstone.ddingconnect.domain.roadmap.domain.repository.RoadmapRepository;
 import mju.capstone.ddingconnect.domain.roadmap.service.RoadmapService;
 import mju.capstone.ddingconnect.domain.techstack.domain.repository.TechStackRepository;
+import mju.capstone.ddingconnect.global.aws.S3Service;
 import mju.capstone.ddingconnect.global.response.code.status.ErrorStatus;
 import mju.capstone.ddingconnect.global.response.exception.handler.MemberHandler;
+import mju.capstone.ddingconnect.global.response.exception.handler.S3Handler;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -50,9 +53,15 @@ public class MemberServiceImpl implements MemberService {
     static final int MIN_GRADE = 1;
     static final int MAX_GRADE = 4;
 
+    // 명함 이미지 업로드 제약 — TODO Q. 테스트도 동일 상수를 참조한다
+    static final Set<String> BUSINESS_CARD_CONTENT_TYPES =
+            Set.of("image/png", "image/jpeg", "image/webp");
+    static final long BUSINESS_CARD_MAX_BYTES = 5L * 1024 * 1024; // 5MB
+
     private final MemberRepository memberRepository;
     private final StudentRepository studentRepository;
     private final GraduateRepository graduateRepository;
+    private final S3Service s3Service;
 
     // 회원 hard delete 캐스케이드용 의존성
     private final QuestionService questionService;
@@ -138,6 +147,63 @@ public class MemberServiceImpl implements MemberService {
                 return graduateRepository.save(updatedGraduate);
             }).orElse(null);
             return MemberResponse.from(updated, savedGraduate);
+        }
+    }
+
+    /**
+     * 졸업생 명함 이미지 업로드/교체 (GRADUATE 전용).
+     * - GRADUATE 가 아니면 MEMBER_FIELD_ROLE_MISMATCH (STUDENT/UNKNOWN 모두 거부)
+     * - content-type 화이트리스트: image/png, image/jpeg, image/webp
+     * - 크기 제한: 5MB
+     * - 기존 URL 있으면 S3 에서 삭제 후 새 이미지 업로드 → Graduate.businessCardImage 갱신
+     */
+    @Override
+    @Transactional
+    public MemberResponse updateBusinessCard(Member member, MultipartFile image) {
+        if (member.getRole() != MemberRole.GRADUATE) {
+            throw new MemberHandler(ErrorStatus.MEMBER_FIELD_ROLE_MISMATCH);
+        }
+        validateBusinessCardImage(image);
+
+        Graduate graduate = graduateRepository.findByMemberId(member.getId())
+                .orElseThrow(() -> new MemberHandler(ErrorStatus.MEMBER_NOT_FOUND));
+
+        String oldUrl = graduate.getBusinessCardImage();
+        if (oldUrl != null && !oldUrl.isBlank()) {
+            s3Service.deleteImage(oldUrl);
+        }
+
+        String newUrl = s3Service.uploadImage(image);
+
+        Graduate updated = Graduate.builder()
+                .id(graduate.getId())
+                .member(graduate.getMember())
+                .businessCardImage(newUrl)
+                .jobType(graduate.getJobType())
+                .company(graduate.getCompany())
+                .careerYear(graduate.getCareerYear())
+                .build();
+        Graduate saved = graduateRepository.save(updated);
+
+        return MemberResponse.from(member, saved);
+    }
+
+    /**
+     * 명함 이미지 검증.
+     * - null/빈 파일: _FILE_UPLOAD_FAILED
+     * - content-type 미지원: _FILE_TYPE_NOT_ALLOWED
+     * - 크기 초과: _FILE_TOO_LARGE
+     */
+    private void validateBusinessCardImage(MultipartFile image) {
+        if (image == null || image.isEmpty()) {
+            throw new S3Handler(ErrorStatus._FILE_UPLOAD_FAILED);
+        }
+        String contentType = image.getContentType();
+        if (contentType == null || !BUSINESS_CARD_CONTENT_TYPES.contains(contentType)) {
+            throw new S3Handler(ErrorStatus._FILE_TYPE_NOT_ALLOWED);
+        }
+        if (image.getSize() > BUSINESS_CARD_MAX_BYTES) {
+            throw new S3Handler(ErrorStatus._FILE_TOO_LARGE);
         }
     }
 
