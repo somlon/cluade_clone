@@ -8,10 +8,15 @@ import mju.capstone.ddingconnect.domain.coffeechat.domain.repository.CoffeeChatA
 import mju.capstone.ddingconnect.domain.coffeechat.domain.repository.CoffeeChatRepository;
 import mju.capstone.ddingconnect.domain.coffeechat.dto.request.CreateCoffeeChatRequest;
 import mju.capstone.ddingconnect.domain.coffeechat.dto.request.UpdateCoffeeChatStatusRequest;
+import mju.capstone.ddingconnect.domain.coffeechat.dto.response.CoffeeChatPartnerResponse;
 import mju.capstone.ddingconnect.domain.coffeechat.dto.response.CoffeeChatResponse;
+import mju.capstone.ddingconnect.domain.interested_job.domain.TargetJob;
+import mju.capstone.ddingconnect.domain.interested_job.domain.repository.TargetJobRepository;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.domain.member.domain.MemberRole;
 import mju.capstone.ddingconnect.domain.member.domain.repository.MemberRepository;
+import mju.capstone.ddingconnect.domain.techstack.domain.TechStack;
+import mju.capstone.ddingconnect.domain.techstack.domain.repository.TechStackRepository;
 import mju.capstone.ddingconnect.global.response.code.status.ErrorStatus;
 import mju.capstone.ddingconnect.global.response.exception.handler.CoffeeChatHandler;
 import mju.capstone.ddingconnect.global.response.exception.handler.MemberHandler;
@@ -23,7 +28,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * [커피챗 서비스 구현체]
@@ -55,6 +63,10 @@ public class CoffeeChatServiceImpl implements CoffeeChatService {
     private final CoffeeChatAlarmRepository coffeeChatAlarmRepository;
     private final MemberRepository memberRepository;
     private final ApplicationEventPublisher eventPublisher;
+
+    // 나의 활동 카드 조립에 필요한 상대방 부가 정보(관심직무·기술스택) 조회용
+    private final TargetJobRepository targetJobRepository;
+    private final TechStackRepository techStackRepository;
 
     @Override
     @Transactional
@@ -228,5 +240,56 @@ public class CoffeeChatServiceImpl implements CoffeeChatService {
         Long memberId = member.getId();
         return coffeeChatRepository.countByRequesterIdAndStatus(memberId, CoffeeChatStatus.ACCEPTED)
                 + coffeeChatRepository.countByReceiverIdAndStatus(memberId, CoffeeChatStatus.ACCEPTED);
+    }
+
+    /**
+     * 나의 활동 페이지 — 본인이 요청자/수신자로 참여한 모든 커피챗을 합쳐 상대방 카드 리스트로 반환.
+     * - sent(findByRequesterId) + received(findByReceiverId) 합쳐 coffeeChat.id 기준 중복 제거
+     * - 카드당 상대방(본인 아닌 쪽) 의 닉네임/학과 + 관심직무(TargetJob)/기술스택(TechStack) 을 묶어 응답
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<CoffeeChatPartnerResponse> getMyActivities(Member member) {
+        Long memberId = member.getId();
+        List<CoffeeChat> sent = coffeeChatRepository.findByRequesterId(memberId);
+        List<CoffeeChat> received = coffeeChatRepository.findByReceiverId(memberId);
+
+        Set<Long> seen = new HashSet<>();
+        List<CoffeeChatPartnerResponse> result = new ArrayList<>();
+        for (CoffeeChat cc : concat(sent, received)) {
+            if (!seen.add(cc.getId())) continue;
+            Member partner = cc.getRequester().getId().equals(memberId)
+                    ? cc.getReceiver()
+                    : cc.getRequester();
+            result.add(toPartnerResponse(cc, partner));
+        }
+        return result;
+    }
+
+    private static List<CoffeeChat> concat(List<CoffeeChat> a, List<CoffeeChat> b) {
+        List<CoffeeChat> all = new ArrayList<>(a.size() + b.size());
+        all.addAll(a);
+        all.addAll(b);
+        return all;
+    }
+
+    private CoffeeChatPartnerResponse toPartnerResponse(CoffeeChat cc, Member partner) {
+        List<mju.capstone.ddingconnect.domain.interested_job.domain.TargetJobCategory> jobs =
+                targetJobRepository.findByMemberId(partner.getId()).stream()
+                        .map(TargetJob::getInterestedJob)
+                        .toList();
+        List<mju.capstone.ddingconnect.domain.techstack.domain.TechStackName> stacks =
+                techStackRepository.findByMemberId(partner.getId()).stream()
+                        .map(TechStack::getName)
+                        .toList();
+        return new CoffeeChatPartnerResponse(
+                cc.getId(),
+                cc.getStatus(),
+                partner.getId(),
+                partner.getNickname(),
+                partner.getDepartment(),
+                jobs,
+                stacks
+        );
     }
 }

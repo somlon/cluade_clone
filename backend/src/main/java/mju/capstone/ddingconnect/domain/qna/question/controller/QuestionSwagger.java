@@ -42,6 +42,18 @@ public interface QuestionSwagger {
 
 
     @Operation(
+            summary = "나의 질문 목록 조회 (나의 활동 페이지)",
+            description = "로그인한 회원이 작성한 질문만 조회합니다. 마이페이지의 '질문 수' 카드를 클릭해 진입하는 '나의 활동/Q&A' 화면용. "
+                    + "전체 질문 목록(GET /api/v1/questions)과 분리된 엔드포인트로, 응답 DTO 는 동일합니다."
+    )
+    @GetMapping("/me")
+    ApiResponse<List<QuestionResponse>> getMyQuestions(
+            @Parameter(hidden = true) @LoginMember Member member);
+
+
+
+
+    @Operation(
             summary = "질문 상세 조회",
             description = "질문 카드를 클릭했을 때 본문과 답변 화면 진입 시 호출되며, 조회수가 +1 증가합니다. 응답에 좋아요 개수(`likeCount`), 답변 개수(`answerCount`), 본인 좋아요 여부(`likedByMe`)가 포함됩니다."
     )
