@@ -26,23 +26,6 @@
 
 **출처**: 마이페이지 수정 페이지 포트폴리오 요구사항 + `S3Service` 분석.
 
-### TODO Q: 졸업생 명함 이미지 업로드 (member 도메인)
-
-**문제**: 졸업생 마이페이지에 명함 등록 영역(네모 칸)이 있고 업로드한 사진이 표시돼야 한다. 현재 `Graduate.businessCardImage`(`Graduate.java`) 는 varchar(255) URL 문자열 보관용이며 업로드 엔드포인트가 없다.
-
-**디폴트 결정**: TODO N(프로필 사진)과 동일한 패턴으로 신설한다.
-
-- 신규 엔드포인트: `PATCH /api/v1/members/me/business-card` (multipart/form-data, `@RequestPart("image") MultipartFile`)
-- **GRADUATE 전용**: 진입부에서 STUDENT/UNKNOWN 호출 시 `MEMBER_FIELD_ROLE_MISMATCH` 반환
-- 동작: 기존 이미지 있으면 `s3Service.deleteImage`(또는 TODO O 이후 `deleteFile`) 후 새 이미지 업로드 → `Graduate.businessCardImage` 갱신
-- content-type/크기 검증은 TODO N 과 동일 (`image/png`·`image/jpeg`·`image/webp`, 5MB)
-
-**수정 파일**: `member/controller/MemberController.java`·`MemberSwagger.java`, `member/service/MemberService.java`·`MemberServiceImpl.java` — `updateBusinessCard(Member, MultipartFile)` 추가. 관련 테스트.
-
-**연관**: TODO N·O 와 S3 업로드 패턴 공유.
-
-**출처**: 졸업생 마이페이지 화면(2번째 사진)의 "내 명함 영역 + 사진 등록" 요구사항.
-
 ### 11개 작업자 노트 (TODO #1~#11 머지 완료 후 보존되는 일반 가이드)
 
 - **브랜치 정책**: 각 TODO 를 **개별 브랜치 + 개별 PR** 로 처리하는 것을 기본으로 한다. 영향 범위가 큰 TODO 는 단독 PR 필수. 같은 도메인 내 작은 변경은 묶어서 1개 PR 도 허용 (작업자 판단). 사용자가 "TODO N 작업" 으로 단일 항목 지목 시 그 항목만 단독 PR.

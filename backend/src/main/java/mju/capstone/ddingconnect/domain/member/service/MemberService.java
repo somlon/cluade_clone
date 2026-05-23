@@ -23,4 +23,13 @@ public interface MemberService {
      * - 기존 profileImage URL 이 있으면 S3 에서 삭제 후 새 이미지 업로드 → Member.profileImage 갱신
      */
     MemberResponse updateProfileImage(Member member, MultipartFile image);
+
+    /**
+     * 졸업생 명함 이미지 업로드/교체 (GRADUATE 전용).
+     * - 진입 가드: STUDENT/UNKNOWN 호출 시 MEMBER_FIELD_ROLE_MISMATCH 로 거부
+     * - content-type 화이트리스트: image/png, image/jpeg, image/webp (위반 시 _FILE_TYPE_NOT_ALLOWED)
+     * - 크기 제한: 5MB (위반 시 _FILE_TOO_LARGE)
+     * - 기존 businessCardImage URL 이 있으면 S3 에서 삭제 후 새 이미지 업로드 → Graduate.businessCardImage 갱신
+     */
+    MemberResponse updateBusinessCard(Member member, MultipartFile image);
 }

@@ -128,4 +128,22 @@ public interface MemberSwagger {
             @Parameter(description = "업로드할 프로필 이미지 파일 (image/png, image/jpeg, image/webp)")
             @RequestPart("image") MultipartFile image);
 
+
+
+
+    @Operation(
+            summary = "졸업생 명함 이미지 업로드/교체 (GRADUATE 전용)",
+            description = "졸업생 마이페이지의 명함 영역에 사진을 업로드해 표시/교체합니다. "
+                    + "multipart/form-data 로 `image` 파트에 파일을 전송합니다. "
+                    + "GRADUATE 가 아니면 400(`MEMBER_FIELD_ROLE_MISMATCH`)으로 거부합니다(STUDENT/UNKNOWN 모두 거부). "
+                    + "허용 content-type: image/png, image/jpeg, image/webp. 크기 제한: 5MB. "
+                    + "위반 시 400(`_FILE_TYPE_NOT_ALLOWED` / `_FILE_TOO_LARGE`)으로 거부합니다. "
+                    + "기존 명함 이미지가 있으면 S3 에서 먼저 삭제한 후 새 이미지를 업로드합니다."
+    )
+    @PatchMapping(value = "/me/business-card", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    ApiResponse<MemberResponse> updateBusinessCard(
+            @Parameter(hidden = true) @LoginMember Member member,
+            @Parameter(description = "업로드할 명함 이미지 파일 (image/png, image/jpeg, image/webp)")
+            @RequestPart("image") MultipartFile image);
+
 }
