@@ -35,6 +35,7 @@ import mju.capstone.ddingconnect.domain.techstack.domain.repository.TechStackRep
 import mju.capstone.ddingconnect.global.aws.S3Service;
 import mju.capstone.ddingconnect.global.response.code.status.ErrorStatus;
 import mju.capstone.ddingconnect.global.response.exception.handler.MemberHandler;
+import mju.capstone.ddingconnect.global.response.exception.handler.S3Handler;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -51,6 +52,16 @@ public class MemberServiceImpl implements MemberService {
     // 학년 허용 범위 (sanitizeGrade) — 테스트도 동일 상수를 참조한다
     static final int MIN_GRADE = 1;
     static final int MAX_GRADE = 4;
+
+    // 프로필 이미지 업로드 제약 — 테스트도 동일 상수를 참조한다
+    static final Set<String> PROFILE_IMAGE_CONTENT_TYPES =
+            Set.of("image/png", "image/jpeg", "image/webp");
+    static final long PROFILE_IMAGE_MAX_BYTES = 5L * 1024 * 1024; // 5MB
+
+    // 명함 이미지 업로드 제약 — TODO Q. 테스트도 동일 상수를 참조한다
+    static final Set<String> BUSINESS_CARD_CONTENT_TYPES =
+            Set.of("image/png", "image/jpeg", "image/webp");
+    static final long BUSINESS_CARD_MAX_BYTES = 5L * 1024 * 1024; // 5MB
 
     // 포트폴리오 PDF 업로드 제약 — TODO O. 테스트도 동일 상수를 참조한다
     static final Set<String> PORTFOLIO_CONTENT_TYPES = Set.of("application/pdf");
@@ -149,6 +160,92 @@ public class MemberServiceImpl implements MemberService {
     }
 
     /**
+     * 프로필 이미지 업로드/교체.
+     * - content-type 화이트리스트: image/png, image/jpeg, image/webp
+     * - 크기 제한: 5MB
+     * - 기존 URL 있으면 S3 에서 삭제 후 새 이미지 업로드 → Member.profileImage 갱신
+     */
+    @Override
+    @Transactional
+    public MemberResponse updateProfileImage(Member member, MultipartFile image) {
+        validateImage(image);
+
+        // 기존 이미지가 있으면 먼저 삭제 (S3 cleanup) — 실패해도 새 업로드는 진행
+        String oldImageUrl = member.getProfileImage();
+        if (oldImageUrl != null && !oldImageUrl.isBlank()) {
+            s3Service.deleteImage(oldImageUrl);
+        }
+
+        String newUrl = s3Service.uploadImage(image);
+
+        Member updated = Member.builder()
+                .id(member.getId())
+                .email(member.getEmail())
+                .name(member.getName())
+                .nickname(member.getNickname())
+                .password(member.getPassword())
+                .studentNumber(member.getStudentNumber())
+                .department(member.getDepartment())
+                .githubLink(member.getGithubLink())
+                .linkedinLink(member.getLinkedinLink())
+                .portfolio(member.getPortfolio())
+                .profileImage(newUrl)
+                .point(member.getPoint())
+                .certificate(member.getCertificate())
+                .isDeleted(member.getIsDeleted())
+                .role(member.getRole())
+                .build();
+
+        memberRepository.save(updated);
+
+        // 역할별 부가 정보 그대로 채워 응답
+        if (member.getRole() == MemberRole.STUDENT) {
+            return MemberResponse.from(updated, studentRepository.findByMemberId(member.getId()).orElse(null));
+        } else if (member.getRole() == MemberRole.GRADUATE) {
+            return MemberResponse.from(updated, graduateRepository.findByMemberId(member.getId()).orElse(null));
+        }
+        return MemberResponse.from(updated, (Student) null);
+    }
+
+    /**
+     * 졸업생 명함 이미지 업로드/교체 (GRADUATE 전용).
+     * - GRADUATE 가 아니면 MEMBER_FIELD_ROLE_MISMATCH (STUDENT/UNKNOWN 모두 거부)
+     * - content-type 화이트리스트: image/png, image/jpeg, image/webp
+     * - 크기 제한: 5MB
+     * - 기존 URL 있으면 S3 에서 삭제 후 새 이미지 업로드 → Graduate.businessCardImage 갱신
+     */
+    @Override
+    @Transactional
+    public MemberResponse updateBusinessCard(Member member, MultipartFile image) {
+        if (member.getRole() != MemberRole.GRADUATE) {
+            throw new MemberHandler(ErrorStatus.MEMBER_FIELD_ROLE_MISMATCH);
+        }
+        validateBusinessCardImage(image);
+
+        Graduate graduate = graduateRepository.findByMemberId(member.getId())
+                .orElseThrow(() -> new MemberHandler(ErrorStatus.MEMBER_NOT_FOUND));
+
+        String oldUrl = graduate.getBusinessCardImage();
+        if (oldUrl != null && !oldUrl.isBlank()) {
+            s3Service.deleteImage(oldUrl);
+        }
+
+        String newUrl = s3Service.uploadImage(image);
+
+        Graduate updated = Graduate.builder()
+                .id(graduate.getId())
+                .member(graduate.getMember())
+                .businessCardImage(newUrl)
+                .jobType(graduate.getJobType())
+                .company(graduate.getCompany())
+                .careerYear(graduate.getCareerYear())
+                .build();
+        Graduate saved = graduateRepository.save(updated);
+
+        return MemberResponse.from(member, saved);
+    }
+
+    /**
      * 포트폴리오 PDF 업로드/교체.
      * - content-type: application/pdf
      * - 크기 제한: 20MB
@@ -191,6 +288,44 @@ public class MemberServiceImpl implements MemberService {
             return MemberResponse.from(updated, graduateRepository.findByMemberId(member.getId()).orElse(null));
         }
         return MemberResponse.from(updated, (Student) null);
+    }
+
+    /**
+     * 프로필 이미지 업로드 파일 검증.
+     * - null/빈 파일: _FILE_UPLOAD_FAILED (잘못된 입력)
+     * - content-type 미지원: _FILE_TYPE_NOT_ALLOWED
+     * - 크기 초과: _FILE_TOO_LARGE
+     */
+    private void validateImage(MultipartFile image) {
+        if (image == null || image.isEmpty()) {
+            throw new S3Handler(ErrorStatus._FILE_UPLOAD_FAILED);
+        }
+        String contentType = image.getContentType();
+        if (contentType == null || !PROFILE_IMAGE_CONTENT_TYPES.contains(contentType)) {
+            throw new S3Handler(ErrorStatus._FILE_TYPE_NOT_ALLOWED);
+        }
+        if (image.getSize() > PROFILE_IMAGE_MAX_BYTES) {
+            throw new S3Handler(ErrorStatus._FILE_TOO_LARGE);
+        }
+    }
+
+    /**
+     * 명함 이미지 검증.
+     * - null/빈 파일: _FILE_UPLOAD_FAILED
+     * - content-type 미지원: _FILE_TYPE_NOT_ALLOWED
+     * - 크기 초과: _FILE_TOO_LARGE
+     */
+    private void validateBusinessCardImage(MultipartFile image) {
+        if (image == null || image.isEmpty()) {
+            throw new S3Handler(ErrorStatus._FILE_UPLOAD_FAILED);
+        }
+        String contentType = image.getContentType();
+        if (contentType == null || !BUSINESS_CARD_CONTENT_TYPES.contains(contentType)) {
+            throw new S3Handler(ErrorStatus._FILE_TYPE_NOT_ALLOWED);
+        }
+        if (image.getSize() > BUSINESS_CARD_MAX_BYTES) {
+            throw new S3Handler(ErrorStatus._FILE_TOO_LARGE);
+        }
     }
 
     /**

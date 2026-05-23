@@ -24,4 +24,10 @@ public interface QuestionService {
 
     /** 본인이 작성한 질문 수 */
     long countMyQuestions(Member member);
+
+    /**
+     * 본인이 작성한 질문 목록 (나의 활동 페이지 — Q&A 탭).
+     * 전체 질문 목록(GET /api/v1/questions)과 분리된 엔드포인트(GET /api/v1/questions/me)가 호출한다.
+     */
+    List<QuestionResponse> getMyQuestions(Member member);
 }

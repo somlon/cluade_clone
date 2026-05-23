@@ -234,6 +234,52 @@ class MemberControllerTest {
     }
 
     @Test
+    @DisplayName("PATCH /api/v1/members/me/profile-image - multipart 업로드 → MemberService.updateProfileImage 위임")
+    void updateProfileImageDelegates() throws Exception {
+        org.springframework.mock.web.MockMultipartFile image =
+                new org.springframework.mock.web.MockMultipartFile(
+                        "image", "p.png", "image/png", new byte[]{1, 2, 3});
+        MemberResponse res = new MemberResponse(1L, "test@mju.ac.kr", null, "테스터",
+                null, null, null, null, null,
+                "https://bucket.s3.region.amazonaws.com/new.png",
+                0L, MemberRole.STUDENT, 3, null, null, null, null);
+        given(memberService.updateProfileImage(any(), any())).willReturn(res);
+
+        mockMvc.perform(multipart(BASE_URL + "/me/profile-image")
+                        .file(image)
+                        .with(req -> { req.setMethod("PATCH"); return req; }))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.profileImage")
+                        .value("https://bucket.s3.region.amazonaws.com/new.png"));
+
+        verify(memberService).updateProfileImage(any(), any());
+    }
+
+    @Test
+    @DisplayName("PATCH /api/v1/members/me/business-card - multipart 업로드 → MemberService.updateBusinessCard 위임")
+    void updateBusinessCardDelegates() throws Exception {
+        WithMockLoginMember.loginAsGraduate();
+        org.springframework.mock.web.MockMultipartFile image =
+                new org.springframework.mock.web.MockMultipartFile(
+                        "image", "card.png", "image/png", new byte[]{1, 2, 3});
+        MemberResponse res = new MemberResponse(2L, "g@mju.ac.kr", null, "졸업생",
+                null, null, null, null, null, null,
+                0L, MemberRole.GRADUATE, null,
+                "https://bucket.s3.region.amazonaws.com/card.png",
+                null, "네이버", 3);
+        given(memberService.updateBusinessCard(any(), any())).willReturn(res);
+
+        mockMvc.perform(multipart(BASE_URL + "/me/business-card")
+                        .file(image)
+                        .with(req -> { req.setMethod("PATCH"); return req; }))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.businessCardImage")
+                        .value("https://bucket.s3.region.amazonaws.com/card.png"));
+
+        verify(memberService).updateBusinessCard(any(), any());
+    }
+
+    @Test
     @DisplayName("PATCH /api/v1/members/me/portfolio - multipart PDF 업로드 → MemberService.updatePortfolio 위임")
     void updatePortfolioDelegates() throws Exception {
         org.springframework.mock.web.MockMultipartFile file =
