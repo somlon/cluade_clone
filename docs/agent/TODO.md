@@ -8,22 +8,6 @@
 
 > **관찰 (의도 확인 필요)**: `ErrorStatus.getReason()`/`getReasonHttpStatus()` 가 실패 코드 enum 인데 `ErrorReasonDTO` 를 `.isSuccess(true)` 로 고정 생성한다(`SuccessStatus` 와 대비). 현재 `ApiResponse.onFailure` 가 `isSuccess=false` 를 따로 지정하므로 실제 응답엔 영향 없으나, 오해를 부르는 죽은 설정값이다 — 의도 확인 후 정리 여부 결정.
 
-### TODO C: 회원가입 이메일 도메인 검증 미적용 (PR #22 후속, auth 도메인)
-
-**문제**: `SignupRequest.email` 에 `@Pattern` (`^[a-zA-Z0-9._%+\-]+@mju\.ac\.kr$`) 이 선언돼 있으나, `AuthController.signup` (`AuthController.java:24`) 과 `AuthSwagger.signup` (`AuthSwagger.java:26`) 의 `SignupRequest` 파라미터에 `@Valid` 가 없어 검증이 트리거되지 않음. 같은 컨트롤러의 `sendCode`/`verifyCode` 는 `@Valid` 보유. → 현재 `@mju.ac.kr` 제한이 가입 경로에서 무력화된 상태.
-
-**디폴트 결정**: `signup` 의 `SignupRequest` 파라미터에 `@Valid` 추가. 인터페이스(`AuthSwagger`)·구현(`AuthController`) 양쪽 동기화. 검증 실패는 기존 `MethodArgumentNotValidException` 핸들러가 `_BAD_REQUEST` 로 매핑 (회원 도메인 소셜 링크 검증과 동일 패턴).
-
-**출처**: PR #22 (`ddd4004`) 가 `@Pattern` 만 추가하고 `@Valid` 를 누락.
-
-### TODO D: 이메일 인증 결과가 회원가입에 미반영 (PR #22 후속, auth 도메인)
-
-**문제**: `AuthServiceImpl.signup` (`AuthServiceImpl.java:34-62`) 이 `EmailService`/`RedisUtil` 을 참조하지 않음. `POST /api/v1/auth/verify-code` 통과 여부와 무관하게 가입이 가능 — 인증 안 한 이메일로도 회원가입됨. `EmailServiceImpl.verifyCode` 는 코드 일치 시 Redis 키를 삭제만 하므로 "인증 완료" 상태가 어디에도 남지 않음.
-
-**미확정 (사용자 결정 필요)**: signup 이 인증 통과를 확인하는 방식. 후보 — (a) `verifyCode` 성공 시 `verified:{email}` 플래그를 Redis 에 단기 저장 → `signup` 진입부에서 존재 확인 후 소비, (b) `verifyCode` 가 단기 인증 토큰을 발급해 `signup` 요청에 포함. 방식 확정 전까지 코드 변경 보류.
-
-**출처**: PR #22.
-
 ### TODO N: 프로필 사진 멀티파트 업로드 (member 도메인)
 
 **문제**: 마이페이지 화면 상단의 프로필 사진(동그라미) 영역에 사진을 업로드해 표시하는 기능이 요구된다. 현재 `Member.profileImage` 는 `varchar(255)` URL 문자열만 보관하고(`Member.java`), 사진 업로드 전용 엔드포인트가 없다. `UpdateMemberRequest.profileImage` 가 String 이라 프론트가 URL 을 직접 만들어 보내야 하는 어색한 구조.
@@ -58,21 +42,6 @@
 **연관**: TODO N·Q.
 
 **출처**: 마이페이지 수정 페이지 포트폴리오 요구사항 + `S3Service` 분석.
-
-### TODO P: 졸업생 마이페이지/나의 활동 — 로드맵 항목 제외 (member·roadmap 도메인)
-
-**문제**: 졸업생 마이페이지 화면(2번째 사진)의 활동 통계 카드에는 로드맵 항목 자체가 없다(`12 / 5` 두 개만). 현재 백엔드는 `MyPageServiceImpl.buildResponse` 가 역할 무관하게 `roadmapService.countMyRoadmaps(member)` 를 호출해 GRADUATE 응답에도 `roadmapCount` 가 채워진다. 또한 TODO M 의 `GET /api/v1/roadmaps` 도 GRADUATE 호출 시 차단 가드가 없다.
-
-**디폴트 결정**:
-
-1. **마이페이지 응답**: `MyPageServiceImpl.buildResponse` 에서 `member.getRole() == MemberRole.STUDENT` 일 때만 `countMyRoadmaps` 를 호출하고, 그 외 역할은 `0` 또는 `null` 로 반환. `MyPageResponse.ActivityStats.roadmapCount` 의 nullable 처리(또는 STUDENT/GRADUATE 변형 분리) 중 작업자 판단으로 결정 — 단, 프론트와 합의된 표현이 우선.
-2. **백엔드 차단 가드**: `RoadmapController.getRoadmaps`(`/api/v1/roadmaps`) 진입부에 `if (member.getRole() == MemberRole.GRADUATE) throw new MemberHandler(ErrorStatus.MEMBER_FIELD_ROLE_MISMATCH);` 한 줄 추가. 프론트가 GRADUATE 화면에서 탭을 렌더링하지 않더라도 호출은 막아 보안 일관성 확보. 단 졸업생도 로드맵 단건 조회(`/{roadmapId}`)는 허용 — 다른 사람 로드맵을 볼 수 있어야 하므로 가드는 list 만 적용.
-
-**수정 파일**: `member/service/MyPageServiceImpl.java`, `member/dto/response/MyPageResponse.java`(nullable 처리), `roadmap/controller/RoadmapController.java`. 관련 테스트 보강(`MyPageServiceImplTest` 의 GRADUATE 케이스, `RoadmapControllerTest` 의 가드 케이스).
-
-**연관**: TODO M(나의 활동 페이지) — 로드맵 엔드포인트 공유.
-
-**출처**: 졸업생 마이페이지 화면(2번째 사진) 카드 영역 분석 + `MyPageServiceImpl.buildResponse` 분기 결여 확인.
 
 ### TODO Q: 졸업생 명함 이미지 업로드 (member 도메인)
 

@@ -69,6 +69,7 @@ mju.capstone.ddingconnect
 - **애그리게이터 패턴**: `MyPageServiceImpl` 은 레포지토리를 직접 주입하지 않고, 항목별 도메인 서비스(`MemberService`/`TechStackService`/`TargetJobService`/`CoffeeChatService`/`RoadmapService`/`QuestionService`/`JobPostService`)를 in-process 로 호출해 한 응답으로 조합한다. 모놀리식 내 HTTP 자기호출이 아니라 서비스 계층 직접 호출.
 - 응답 `MyPageResponse` = `profile`(`MemberResponse` 재사용) + `activity`(활동 통계) + `techStacks` + `targetJobs`(재학생 항목) + `jobPosts`(졸업생 항목).
 - **활동 통계 `ActivityStats`**: 커피챗 수 = 본인이 요청자/수신자로 참여한 `ACCEPTED` 상태 합산(`CoffeeChatService.countMyAcceptedCoffeeChats`), 로드맵 수 = 본인 생성(`RoadmapService.countMyRoadmaps`), 질문 수 = 본인 작성(`QuestionService.countMyQuestions`).
+- **`roadmapCount` 는 STUDENT 전용** (`MyPageServiceImpl.buildResponse`): 졸업생 마이페이지 카드에는 로드맵 항목 자체가 없으므로 `member.getRole() == MemberRole.STUDENT` 일 때만 `roadmapService.countMyRoadmaps(member)` 를 호출하고, GRADUATE/UNKNOWN 은 호출 없이 `0L` 고정. `ActivityStats.roadmapCount` 의 타입은 그대로 `long` 유지(0 사용, nullable 변환 안 함) — 응답 contract 변화 0건.
 - `targetJobs` 는 `STUDENT`, `jobPosts` 는 `GRADUATE` 역할에서만 채워지고 그 외 역할에선 빈 리스트. `jobPosts` 는 `JobPostService.getMyJobPosts` (졸업생 매핑이 없으면 빈 리스트).
 - 마이페이지용 항목별 조회 메서드(`countMy*`, `getMyJobPosts`)는 각 도메인 서비스에 추가돼 향후 단건 화면에서도 재사용 가능. 별도 공개 엔드포인트는 아직 두지 않고 마이페이지 1개만 노출.
 - **역할별 수정 엔드포인트 2개** — 마이페이지 편집은 역할별로 분리돼 있다. 컨트롤러는 `MemberController`, 서비스는 `MyPageService.updateStudentMyPage` / `updateGraduateMyPage`.
@@ -169,6 +170,7 @@ mju.capstone.ddingconnect
 - `Roadmap.content`: MySQL `TEXT` 컬럼 (`@Column(columnDefinition = "TEXT")`) — 데이터 파트 AI 가 생성한 `RoadmapResponse` JSON 문자열을 그대로 저장. 본문이 255자를 넘을 수 있어 `VARCHAR` 가 아닌 `TEXT`.
 - **상세 조회 (`GET /api/v1/roadmaps/{roadmapId}`)**: `RoadmapServiceImpl.getOne` 이 저장된 `Roadmap.content`(AI 생성 JSON)를 `RoadmapResponse.content` 로 그대로 반환. 미존재 시 `ROADMAP_NOT_FOUND`(404).
 - **목록 조회 (`GET /api/v1/roadmaps`)**: `@LoginMember` 회원이 생성한 로드맵만 `RoadmapRepository.findByMemberIdOrderByCreatedAtDesc` 로 **최신순** 반환 — 마이 "생성된 로드맵" 목록 화면용. 전 회원 `findAll` 노출이 아니라 회원 스코프 + 인증 필수(화이트리스트 아님). `RoadmapResponse` 는 `id`·`memberId`·`content`·`createdAt` 4필드 — 목록 항목의 날짜는 `createdAt`, 제목은 `content`(JSON) 내 `roadmap_title` 로 표시(목록 전용 경량 DTO·제목 필드는 두지 않음). `createdAt` 은 `BaseEntity` 감사 컬럼을 `RoadmapResponse` 가 노출하는 것이며 생성·상세 응답에도 함께 포함된다.
+- **목록 조회 GRADUATE 차단 가드 (`RoadmapController.getRoadmaps`)**: 졸업생 마이페이지/나의 활동에는 로드맵 탭 자체가 없으므로 `member.getRole() == MemberRole.GRADUATE` 면 진입부에서 `MemberHandler(MEMBER_FIELD_ROLE_MISMATCH)` 로 400 거부. 프론트가 호출하지 않더라도 서버 일관성을 위해 차단한다. 단건 조회(`GET /api/v1/roadmaps/{roadmapId}`)는 다른 사람 로드맵 공유 화면을 위해 가드 없이 유지 — 가드는 목록에만 적용.
 - **입력 6필드 미저장**: 현재 결정은 결과 `content` 만 저장하고 입력 폼 원본은 저장하지 않는다. 재생성·입력 이력·수정 화면 프리필이 필요해지면 별도 컬럼/엔티티 추가 검토 — 제품 요구 확정 후 결정.
 - update API 미지원 (재생성 = 새 create + 기존 delete)
 - 삭제는 소유자(member.id 일치)만 가능 (`ROADMAP_UNAUTHORIZED`)

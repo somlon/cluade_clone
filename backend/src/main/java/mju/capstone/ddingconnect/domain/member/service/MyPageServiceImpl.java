@@ -117,9 +117,14 @@ public class MyPageServiceImpl implements MyPageService {
      * getMyPage(조회)와 updateStudent/GraduateMyPage(수정 후 최신 조회)가 공유한다.
      */
     private MyPageResponse buildResponse(Member member, MemberResponse profile) {
+        // 로드맵은 STUDENT 전용 항목 — 졸업생 마이페이지엔 로드맵 카드가 없으므로 GRADUATE/UNKNOWN 은 0.
+        long roadmapCount = member.getRole() == MemberRole.STUDENT
+                ? roadmapService.countMyRoadmaps(member)
+                : 0L;
+
         MyPageResponse.ActivityStats activity = new MyPageResponse.ActivityStats(
                 coffeeChatService.countMyAcceptedCoffeeChats(member),
-                roadmapService.countMyRoadmaps(member),
+                roadmapCount,
                 questionService.countMyQuestions(member)
         );
 

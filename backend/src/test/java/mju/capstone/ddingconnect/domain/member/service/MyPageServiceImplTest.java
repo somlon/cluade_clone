@@ -127,12 +127,11 @@ class MyPageServiceImplTest {
     }
 
     @Test
-    @DisplayName("getMyPage - 졸업생: 등록 구직 공고를 조합하고 targetJobs 는 비운다")
+    @DisplayName("getMyPage - 졸업생: 등록 구직 공고를 조합하고 targetJobs 는 비운다 / 로드맵 카운트는 0(서비스 미호출)")
     void getMyPageForGraduate() {
         Member member = graduateMember();
         when(memberService.getMyProfile(member)).thenReturn(profileOf(member));
         when(coffeeChatService.countMyAcceptedCoffeeChats(member)).thenReturn(0L);
-        when(roadmapService.countMyRoadmaps(member)).thenReturn(0L);
         when(questionService.countMyQuestions(member)).thenReturn(0L);
         when(techStackService.getMyTechStacks(member)).thenReturn(List.of());
         when(jobPostService.getMyJobPosts(member)).thenReturn(List.of(
@@ -141,11 +140,28 @@ class MyPageServiceImplTest {
         MyPageResponse response = myPageService.getMyPage(member);
 
         assertThat(response.profile().role()).isEqualTo(MemberRole.GRADUATE);
+        assertThat(response.activity().roadmapCount()).isEqualTo(0L);
         assertThat(response.jobPosts()).hasSize(1);
         assertThat(response.targetJobs()).isEmpty();
 
-        // 졸업생이면 관심 직군 서비스는 호출하지 않는다
+        // 졸업생이면 관심 직군·로드맵 카운트 서비스는 호출하지 않는다
         verify(targetJobService, never()).getMyTargetJobs(member);
+        verify(roadmapService, never()).countMyRoadmaps(member);
+    }
+
+    @Test
+    @DisplayName("getMyPage - UNKNOWN: 로드맵 카운트는 0 으로 고정되고 서비스는 호출되지 않는다")
+    void getMyPageForUnknownSkipsRoadmapCount() {
+        Member member = unknownMember();
+        when(memberService.getMyProfile(member)).thenReturn(profileOf(member));
+        when(coffeeChatService.countMyAcceptedCoffeeChats(member)).thenReturn(0L);
+        when(questionService.countMyQuestions(member)).thenReturn(0L);
+        when(techStackService.getMyTechStacks(member)).thenReturn(List.of());
+
+        MyPageResponse response = myPageService.getMyPage(member);
+
+        assertThat(response.activity().roadmapCount()).isEqualTo(0L);
+        verify(roadmapService, never()).countMyRoadmaps(member);
     }
 
     // ── 재학생 통합 수정 (updateStudentMyPage) ───────────────────────
