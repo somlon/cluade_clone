@@ -87,11 +87,19 @@ mju.capstone.ddingconnect
 ### 구직 공고 (job_post)
 - **졸업생만 등록 가능** (`MemberRole.GRADUATE` 검증, `POST_CONTENTS_NOT_GRADUATE`)
 - `PostContents` (공고 본문) + `GraduateJobPost` (졸업생-공고 매핑)으로 분리
+- **등록 경로 2가지**:
+  - **11필드 본문 등록** (`POST /api/v1/job-post`): 회사명/직무/마감일 등 본문을 모두 받는 기존 경로. `CreateJobPostRequest` 사용.
+  - **링크 전용 등록** (`POST /api/v1/job-post/link`, GRADUATE 전용): '나의 공고 올리기' 모달에서 `detailUrl` 만 입력해 등록. `CreateJobPostLinkRequest` (`@NotBlank` + `^https?://.+`) → `JobPostService.createFromLink` 가 `PostContents.builder().detailUrl(...).build()` 저장 + `GraduateJobPost` 매핑. `jobType=null` 이라 알람 분기 스킵. 마이페이지 통합 수정(`UpdateGraduateMyPageRequest.jobPostsToAdd`)도 같은 서비스 메서드를 위임.
+- **선배/일반 공고 분리 조회**: 구직 정보 화면이 선배 공고와 일반 공고를 시각적으로 분리 표시하므로 두 엔드포인트로 분리. 분리 기준은 `GraduateJobPost` **매핑 존재 여부** (데이터 모델 변경 없이 가능).
+  - `GET /api/v1/job-post/graduates` — 매핑 존재(선배 등록). `JobPostService.getGraduatePosts` → `graduateJobPostRepository.findAll()` → `GraduatePostResponse.from(mapping)` 매핑. 응답 DTO `GraduatePostResponse` 는 본문 10필드 + 등록자(`Graduate.member.nickname`·`department` + `Graduate.jobType`·`careerYear`) 카드용 정보 포함.
+  - `GET /api/v1/job-post/crawled` — 매핑 없음(크롤링 등). `JobPostService.getCrawledPosts` → `graduateJobPostRepository.findDistinctPostContentsIds()` 로 선배 매핑된 id 추출 → `postContentsRepository.findByIdNotIn(graduatePostIds)` 로 제외. 매핑이 0건이면 `findAll()` 로 폴백(IN 빈 컬렉션 SQL 오류 회피). 응답은 기존 `JobPostResponse` 재사용.
+  - `GET /api/v1/job-post` (전체) 는 호환성 유지(deprecate 후보).
 - 수정/삭제는 매핑 테이블 통해 소유자 확인
 - `PostContents.jobType` enum 은 공고의 직무 속성. 구직 정보 화면의 **직무 필터** 용도 (`JobType` enum)
 - **선호 언어는 다중 입력** (`PostContents.preferredLanguages`, `List<String>`): `@ElementCollection` + `@CollectionTable(name = "post_contents_preferred_language", joinColumns = post_contents_id)` 로 별도 컬렉션 테이블에 매핑 — 공고 카드에서 언어별 칩으로 표시. `Create/UpdateJobPostRequest`·`JobPostResponse` 모두 `List<String>`. `update` 는 null-coalescing(요청 리스트가 null 이면 기존값 유지). 컬렉션 테이블 행은 `PostContents` 삭제 시 Hibernate 가 자동 정리하므로 서비스 레벨 수동 캐스케이드 대상 아님.
 - **삭제 캐스케이드 (서비스 레벨)**: `PostContents` 삭제 시 자식 행을 **서비스 코드에서 명시적으로 먼저 삭제** (`JobPostServiceImpl.delete`). 순서 = `JobAlarm` → `GraduateJobPost` → `PostContents`. 이유: `GraduateJobPost.postContents`, `JobAlarm.postContents` 가 `nullable = false` FK 인데 JPA cascade 설정이 없어, 부모만 지우면 영속성 컨텍스트의 자식이 transient 부모를 참조하게 되어 `TransientObjectException` 으로 터짐. 알람도 함께 hard delete 정책 (사용자의 알람 이력은 손실되지만, 공고가 사라진 상태의 dangling 알람을 막음).
 - **update 시 jobType 변경 알람 디스패치 (`JobPostServiceImpl.update`)**: `oldJobType != newJobType` 일 때, 이 공고의 기존 `JobAlarm` 수신자 (= prev) 와 새 `jobType` 매칭 학생 (= curr) 의 차집합을 계산해 두 종류 알람을 발행. **Removed = prev − curr** → `"관심 직군에서 벗어난 공고로 변경되었습니다."`, **Added = curr − prev** → `"관심 직무에 새로운 공고가 등록되었습니다."`. 기존 알람 row 는 보존(삭제·갱신 X). 등록 졸업생 본인 항상 제외. prev 집합 정의는 이 공고(`postContentsId`)에 연결된 `JobAlarm` row 만 본다 (다른 알람 타입/다른 공고는 무관).
+- **`create` 의 `jobType` null 가드 (`JobPostServiceImpl.create`)**: 알람 분기 진입 직전에 `if (saved.getJobType() == null) return JobPostResponse.from(saved);` 단락. 링크 전용 등록 경로(`createFromLink`)는 이 분기를 거치지 않지만, 향후 update 등 다른 경로에서 `jobType=null` 인 row 가 알람 분기로 들어올 경우의 NPE(`TargetJobCategory.valueOf(null)`) 를 차단한다.
 
 ### 관심 직군 (interested_job)
 - 학생 마이페이지의 **관심 직군 칩** — 회원 ↔ `TargetJobCategory` enum 단순 매핑. `PostContents`(구직 공고)와는 FK 관계 **없음**.
