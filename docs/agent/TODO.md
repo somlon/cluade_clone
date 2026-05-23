@@ -8,23 +8,6 @@
 
 > **관찰 (의도 확인 필요)**: `ErrorStatus.getReason()`/`getReasonHttpStatus()` 가 실패 코드 enum 인데 `ErrorReasonDTO` 를 `.isSuccess(true)` 로 고정 생성한다(`SuccessStatus` 와 대비). 현재 `ApiResponse.onFailure` 가 `isSuccess=false` 를 따로 지정하므로 실제 응답엔 영향 없으나, 오해를 부르는 죽은 설정값이다 — 의도 확인 후 정리 여부 결정.
 
-### TODO O: 포트폴리오 PDF 업로드 + S3Service 일반화 (member 도메인 · global/aws 인프라)
-
-**문제**: 마이페이지 수정 시 포트폴리오 영역에 PDF 파일을 업로드 가능해야 한다. `Member.portfolio` 는 `varchar(255)` 단일 문자열로 충분(이미지·PDF 모두 결국 S3 URL 만 DB 에 저장하는 패턴)하나, 업로드 엔드포인트 자체가 없고 기존 `S3Service.uploadImage` 는 이름이 image 전용이며 content-type 검증을 안 해 PDF·기타 파일이 묵시적으로 통과된다 — 명확성 부족.
-
-**디폴트 결정**:
-
-1. **`S3Service` 일반화**: `uploadFile(MultipartFile file, Set<String> allowedContentTypes, long maxBytes)` 메서드 신규 추가. 진입부에서 content-type/크기 검증 후 S3 업로드. 기존 `uploadImage` 는 내부적으로 `uploadFile(file, IMAGE_CONTENT_TYPES, IMAGE_MAX_BYTES)` 를 호출하도록 위임 정리(호출처 영향 0). 가능하면 `deleteImage` 도 임의 키 삭제 가능하므로 `deleteFile` 로 rename(기존 호출처 함께 마이그레이션).
-2. **신규 엔드포인트** `PATCH /api/v1/members/me/portfolio` (multipart/form-data, `@RequestPart("file") MultipartFile`). content-type 은 `application/pdf` 만 허용, 크기 제한 20MB. 위반 시 TODO N 과 같은 `_FILE_TYPE_NOT_ALLOWED`·`_FILE_TOO_LARGE` 로 거부.
-3. **서비스 동작**: 기존 URL 있으면 `s3Service.deleteFile(oldUrl)` 후 새 URL 업로드 → `Member.portfolio` 갱신.
-
-**수정 파일**: `global/aws/S3Service.java` — `uploadFile` 추가 + `uploadImage` 위임 정리 + (선택) `deleteImage` → `deleteFile` rename. `member/controller/MemberController.java`·`MemberSwagger.java`. `member/service/MemberService(Impl).java` — `updatePortfolio(Member, MultipartFile)` 추가. `global/response/code/status/ErrorStatus.java` — TODO N 과 공유. 관련 테스트 보강.
-
-**주의 (PDF 가 DB 에 저장되지 않음)**: 파일 자체는 S3 에 저장되고 DB(`Member.portfolio`) 에는 public URL 문자열만 들어간다. `varchar(255)` 길이는 현 S3 URL 형식(`https://<bucket>.s3.<region>.amazonaws.com/<key>`)에 충분 — 컬럼 길이 변경 불요.
-
-**연관**: TODO N·Q.
-
-**출처**: 마이페이지 수정 페이지 포트폴리오 요구사항 + `S3Service` 분석.
 
 ### 11개 작업자 노트 (TODO #1~#11 머지 완료 후 보존되는 일반 가이드)
 

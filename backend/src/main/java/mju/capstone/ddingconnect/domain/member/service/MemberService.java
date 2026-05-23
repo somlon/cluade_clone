@@ -32,4 +32,12 @@ public interface MemberService {
      * - 기존 businessCardImage URL 이 있으면 S3 에서 삭제 후 새 이미지 업로드 → Graduate.businessCardImage 갱신
      */
     MemberResponse updateBusinessCard(Member member, MultipartFile image);
+
+    /**
+     * 포트폴리오 PDF 업로드/교체.
+     * - content-type: application/pdf (위반 시 _FILE_TYPE_NOT_ALLOWED)
+     * - 크기 제한: 20MB (위반 시 _FILE_TOO_LARGE)
+     * - 기존 portfolio URL 이 있으면 S3 에서 삭제 후 새 PDF 업로드 → Member.portfolio 갱신
+     */
+    MemberResponse updatePortfolio(Member member, MultipartFile file);
 }
