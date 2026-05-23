@@ -143,6 +143,163 @@ DB 측은 `application-db.yml` 이 `ddl-auto=create` 라 부팅 시 자동으로
 
 **출처**: `cluade_clone` ↔ `ddingconnect-backend` 로드맵 도메인 비교 세션 (`cluade_clone` `main` d0d4f2e ↔ `ddingconnect-backend` `develop`/`main`).
 
+### TODO L: 마이페이지 통합 수정 — 역할별 엔드포인트/DTO 분리 (member 도메인)
+
+**문제**: `backend/src/main/java/mju/capstone/ddingconnect/domain/member/dto/request/UpdateMyPageRequest.java` 가 STUDENT 전용(`targetJobs`)과 GRADUATE 전용(`jobPostsToAdd`·`jobPostIdsToDelete`) 필드를 단일 record 에 혼재해 들고 있어, 클라이언트가 본인 역할과 무관한 필드를 채워 보내도 사후 단계(`JobPostServiceImpl.create` 의 `POST_CONTENTS_NOT_GRADUATE`)에서만 거부된다. 동일 record 안의 `UpdateMemberRequest` 는 `grade`(STUDENT)/`businessCardImage·jobType·company·careerYear`(GRADUATE) 혼재이고 이 부분은 `MemberServiceImpl.validateRoleFields` 가 사전 차단하지만, mypage 통합 수정 경로의 `jobPostsToAdd/Delete` 에는 동일 가드가 없다 — 일관성·DX 양쪽 모두 결함.
+
+**디폴트 결정**: 엔드포인트와 DTO 를 역할별로 분리한다.
+
+- 엔드포인트: `PATCH /api/v1/members/mypage/student`, `PATCH /api/v1/members/mypage/graduate`. 기존 `PATCH /api/v1/members/mypage` 는 deprecate 마킹 후 점진 제거.
+- 컨트롤러 진입부에서 `member.getRole()` 과 엔드포인트가 불일치하면 즉시 `MEMBER_FIELD_ROLE_MISMATCH` 반환 (UNKNOWN 도 거부).
+- 신규 DTO: `UpdateStudentMyPageRequest(profile, techStacks, targetJobs)`, `UpdateGraduateMyPageRequest(profile, techStacks, jobPostsToAdd, jobPostIdsToDelete)`. 그 안의 프로필 부분은 `UpdateStudentProfileRequest`(공통 + `grade`) / `UpdateGraduateProfileRequest`(공통 + `businessCardImage`·`jobType`·`company`·`careerYear`) 로 분리해 각 역할 필드만 노출.
+- `MyPageService.updateMyPage` 를 역할별 메서드 2개로 오버로드 — STUDENT 경로엔 jobPost 분기 자체가 없고, GRADUATE 경로엔 targetJob 분기가 없다. 단일 `@Transactional` 안에서 위임하는 기존 원자성 규약은 유지.
+
+**수정 파일**: `backend/src/main/java/mju/capstone/ddingconnect/domain/member/controller/MemberController.java`, `member/controller/MemberSwagger.java`, `member/service/MyPageService.java`, `member/service/MyPageServiceImpl.java`. 신규 DTO 4개(`member/dto/request/` 아래). 기존 `UpdateMyPageRequest.java`·`UpdateMemberRequest.java` 는 호환성 위해 한동안 유지 후 정리. 관련 테스트 함께 갱신(`MemberControllerTest`·`MyPageServiceImplTest`).
+
+**연관**: TODO N·O·Q 의 multipart 업로드 엔드포인트(`/profile-image`·`/portfolio`·`/business-card`)가 이 역할별 검증 패턴 위에서 동작 — 본 TODO 가 선행되면 이후 작업의 분기 코드를 줄일 수 있다. TODO R 의 `jobPostsToAdd` 타입(`CreateJobPostLinkRequest`)과도 정합.
+
+**출처**: 재학생/졸업생 마이페이지 화면 + `ddingconnect-backend` `develop`(e985b05) 코드 비교 세션.
+
+### TODO M: 나의 활동 페이지 API — 커피챗/로드맵/Q&A 본인 활동 조회 (member·coffeechat·qna 도메인)
+
+**문제**: 마이페이지 상단 통계 카드(`MyPageResponse.ActivityStats` 의 `coffeeChatCount`·`roadmapCount`·`questionCount`)를 클릭하면 "나의 활동" 페이지로 진입해 본인 활동 **목록**을 보여줘야 하나, 현재 백엔드는 카운트만 제공하고 본인 스코프 목록 조회 API 가 없다. 단, 로드맵은 `RoadmapServiceImpl.getList` 가 이미 `findByMemberIdOrderByCreatedAtDesc` 로 본인 글만 반환하므로 그대로 재사용 가능.
+
+**디폴트 결정**: 도메인별로 다음과 같이 처리한다.
+
+1. **로드맵** — `GET /api/v1/roadmaps` 그대로 재사용. **백엔드 변경 0건.** 프론트 "나의 활동/로드맵" 탭에서 동일 엔드포인트 호출.
+2. **Q&A 질문** — 신규 엔드포인트 `GET /api/v1/questions/me` + 신규 서비스 메서드 `QuestionService.getMyQuestions(Member)` 추가. 내부 구현은 `questionRepository.findByMemberId(memberId)` (이미 `MemberServiceImpl` 에서 회원탈퇴 캐스케이드 용도로 사용 중) → 기존 `toResponse(q, member)` 매핑. **기존 `GET /api/v1/questions` 의 `getList(member)` 는 절대 수정하지 않는다** — Q&A 게시판은 전체 질문을 보여줘야 하므로 별도 엔드포인트로 분리.
+3. **커피챗** — 신규 컨트롤러 `MyActivityController` 와 엔드포인트 `GET /api/v1/members/me/activity/coffeechats` 추가. 신규 서비스 메서드 `CoffeeChatService.getMyActivities(Member)` 는 `findByRequesterId` + `findByReceiverId` 결과를 합쳐 중복 제거하고, 본인이 아닌 쪽(상대방) 의 닉네임/학과/관심직무/기술스택을 묶어 신규 DTO `CoffeeChatPartnerResponse` 로 반환. 카드 UI 가 상대방 정보를 표시하기 때문.
+
+**필터**: 후순위. 컨트롤러 시그니처에 `@RequestParam(required=false)` 자리만 예약하고 구현은 후속 작업.
+
+**수정/신규 파일**:
+
+- `backend/src/main/java/mju/capstone/ddingconnect/domain/qna/question/service/QuestionService.java`·`QuestionServiceImpl.java` — `getMyQuestions` 추가
+- `domain/qna/question/controller/QuestionController.java`·`QuestionSwagger.java` — `/me` 엔드포인트 1개 추가
+- `domain/coffeechat/service/CoffeeChatService.java`·`CoffeeChatServiceImpl.java` — `getMyActivities` 추가
+- `domain/coffeechat/dto/response/CoffeeChatPartnerResponse.java` 신규
+- `domain/member/controller/MyActivityController.java`·`MyActivitySwagger.java` 신규
+- 관련 테스트 함께 갱신/추가 (`QuestionControllerTest`·`QuestionServiceImplTest`·`CoffeeChatServiceImplTest`·`MyActivityControllerTest`)
+
+**연관**: TODO P(졸업생 로드맵 제외) — 로드맵 엔드포인트 진입 가드 추가는 거기서 처리.
+
+**출처**: 마이페이지 활동 카드 화면 + "나의 활동" 페이지 화면(`나의 활동 - 클릭시.png`) vs `ddingconnect-backend` `develop`(e985b05) 코드 비교.
+
+### TODO N: 프로필 사진 멀티파트 업로드 (member 도메인)
+
+**문제**: 마이페이지 화면 상단의 프로필 사진(동그라미) 영역에 사진을 업로드해 표시하는 기능이 요구된다. 현재 `Member.profileImage` 는 `varchar(255)` URL 문자열만 보관하고(`Member.java`), 사진 업로드 전용 엔드포인트가 없다. `UpdateMemberRequest.profileImage` 가 String 이라 프론트가 URL 을 직접 만들어 보내야 하는 어색한 구조.
+
+**디폴트 결정**: 멀티파트 업로드 엔드포인트를 신설해 S3 업로드 + URL 저장을 백엔드가 책임진다. `S3Service.uploadImage(MultipartFile)` (`backend/src/main/java/mju/capstone/ddingconnect/global/aws/S3Service.java`) 함수가 이미 회원가입 증명서 업로드 흐름(`AuthServiceImpl.signup`)에서 사용 중 → 그대로 재사용. **OCR 검증은 무관**(현재 회원가입 증명서도 OCR 없이 단순 S3 업로드만 수행, `data` 레포의 `routers/ocr_router.py` 는 미연동 상태).
+
+- 신규 엔드포인트: `PATCH /api/v1/members/me/profile-image` (multipart/form-data, `@RequestPart("image") MultipartFile`)
+- 응답: 갱신된 `MemberResponse` 또는 `{profileImage: <url>}` (작업자 판단, Swagger 와 일치시키기)
+- 서비스 동작: 기존 이미지 URL 이 있으면 `s3Service.deleteImage(oldUrl)` 후 새 URL 업로드 → `Member.profileImage` 갱신
+- content-type 화이트리스트: `image/png`·`image/jpeg`·`image/webp`. 크기 제한 5MB. 위반 시 신규 ErrorStatus `_FILE_TYPE_NOT_ALLOWED`·`_FILE_TOO_LARGE` 로 400 거부
+
+**수정 파일**: `member/controller/MemberController.java`, `member/controller/MemberSwagger.java`, `member/service/MemberService.java`·`MemberServiceImpl.java` — `updateProfileImage(Member, MultipartFile)` 추가. `global/response/code/status/ErrorStatus.java` — 두 에러코드 추가. 테스트 보강(`MemberControllerTest`·`MemberServiceImplTest`).
+
+**연관**: TODO O·Q 가 같은 multipart S3 업로드 패턴을 공유. `S3Service` 일반화는 TODO O 에서 처리하며, 본 TODO 는 기존 `uploadImage` 를 그대로 사용해도 무방.
+
+**출처**: 마이페이지 수정 페이지 사진 등록 요구사항 + `AuthServiceImpl.signup` 의 기존 S3 업로드 패턴 분석.
+
+### TODO O: 포트폴리오 PDF 업로드 + S3Service 일반화 (member 도메인 · global/aws 인프라)
+
+**문제**: 마이페이지 수정 시 포트폴리오 영역에 PDF 파일을 업로드 가능해야 한다. `Member.portfolio` 는 `varchar(255)` 단일 문자열로 충분(이미지·PDF 모두 결국 S3 URL 만 DB 에 저장하는 패턴)하나, 업로드 엔드포인트 자체가 없고 기존 `S3Service.uploadImage` 는 이름이 image 전용이며 content-type 검증을 안 해 PDF·기타 파일이 묵시적으로 통과된다 — 명확성 부족.
+
+**디폴트 결정**:
+
+1. **`S3Service` 일반화**: `uploadFile(MultipartFile file, Set<String> allowedContentTypes, long maxBytes)` 메서드 신규 추가. 진입부에서 content-type/크기 검증 후 S3 업로드. 기존 `uploadImage` 는 내부적으로 `uploadFile(file, IMAGE_CONTENT_TYPES, IMAGE_MAX_BYTES)` 를 호출하도록 위임 정리(호출처 영향 0). 가능하면 `deleteImage` 도 임의 키 삭제 가능하므로 `deleteFile` 로 rename(기존 호출처 함께 마이그레이션).
+2. **신규 엔드포인트** `PATCH /api/v1/members/me/portfolio` (multipart/form-data, `@RequestPart("file") MultipartFile`). content-type 은 `application/pdf` 만 허용, 크기 제한 20MB. 위반 시 TODO N 과 같은 `_FILE_TYPE_NOT_ALLOWED`·`_FILE_TOO_LARGE` 로 거부.
+3. **서비스 동작**: 기존 URL 있으면 `s3Service.deleteFile(oldUrl)` 후 새 URL 업로드 → `Member.portfolio` 갱신.
+
+**수정 파일**: `global/aws/S3Service.java` — `uploadFile` 추가 + `uploadImage` 위임 정리 + (선택) `deleteImage` → `deleteFile` rename. `member/controller/MemberController.java`·`MemberSwagger.java`. `member/service/MemberService(Impl).java` — `updatePortfolio(Member, MultipartFile)` 추가. `global/response/code/status/ErrorStatus.java` — TODO N 과 공유. 관련 테스트 보강.
+
+**주의 (PDF 가 DB 에 저장되지 않음)**: 파일 자체는 S3 에 저장되고 DB(`Member.portfolio`) 에는 public URL 문자열만 들어간다. `varchar(255)` 길이는 현 S3 URL 형식(`https://<bucket>.s3.<region>.amazonaws.com/<key>`)에 충분 — 컬럼 길이 변경 불요.
+
+**연관**: TODO N·Q.
+
+**출처**: 마이페이지 수정 페이지 포트폴리오 요구사항 + `S3Service` 분석.
+
+### TODO P: 졸업생 마이페이지/나의 활동 — 로드맵 항목 제외 (member·roadmap 도메인)
+
+**문제**: 졸업생 마이페이지 화면(2번째 사진)의 활동 통계 카드에는 로드맵 항목 자체가 없다(`12 / 5` 두 개만). 현재 백엔드는 `MyPageServiceImpl.buildResponse` 가 역할 무관하게 `roadmapService.countMyRoadmaps(member)` 를 호출해 GRADUATE 응답에도 `roadmapCount` 가 채워진다. 또한 TODO M 의 `GET /api/v1/roadmaps` 도 GRADUATE 호출 시 차단 가드가 없다.
+
+**디폴트 결정**:
+
+1. **마이페이지 응답**: `MyPageServiceImpl.buildResponse` 에서 `member.getRole() == MemberRole.STUDENT` 일 때만 `countMyRoadmaps` 를 호출하고, 그 외 역할은 `0` 또는 `null` 로 반환. `MyPageResponse.ActivityStats.roadmapCount` 의 nullable 처리(또는 STUDENT/GRADUATE 변형 분리) 중 작업자 판단으로 결정 — 단, 프론트와 합의된 표현이 우선.
+2. **백엔드 차단 가드**: `RoadmapController.getRoadmaps`(`/api/v1/roadmaps`) 진입부에 `if (member.getRole() == MemberRole.GRADUATE) throw new MemberHandler(ErrorStatus.MEMBER_FIELD_ROLE_MISMATCH);` 한 줄 추가. 프론트가 GRADUATE 화면에서 탭을 렌더링하지 않더라도 호출은 막아 보안 일관성 확보. 단 졸업생도 로드맵 단건 조회(`/{roadmapId}`)는 허용 — 다른 사람 로드맵을 볼 수 있어야 하므로 가드는 list 만 적용.
+
+**수정 파일**: `member/service/MyPageServiceImpl.java`, `member/dto/response/MyPageResponse.java`(nullable 처리), `roadmap/controller/RoadmapController.java`. 관련 테스트 보강(`MyPageServiceImplTest` 의 GRADUATE 케이스, `RoadmapControllerTest` 의 가드 케이스).
+
+**연관**: TODO M(나의 활동 페이지) — 로드맵 엔드포인트 공유.
+
+**출처**: 졸업생 마이페이지 화면(2번째 사진) 카드 영역 분석 + `MyPageServiceImpl.buildResponse` 분기 결여 확인.
+
+### TODO Q: 졸업생 명함 이미지 업로드 (member 도메인)
+
+**문제**: 졸업생 마이페이지에 명함 등록 영역(네모 칸)이 있고 업로드한 사진이 표시돼야 한다. 현재 `Graduate.businessCardImage`(`Graduate.java`) 는 varchar(255) URL 문자열 보관용이며 업로드 엔드포인트가 없다.
+
+**디폴트 결정**: TODO N(프로필 사진)과 동일한 패턴으로 신설한다.
+
+- 신규 엔드포인트: `PATCH /api/v1/members/me/business-card` (multipart/form-data, `@RequestPart("image") MultipartFile`)
+- **GRADUATE 전용**: 진입부에서 STUDENT/UNKNOWN 호출 시 `MEMBER_FIELD_ROLE_MISMATCH` 반환
+- 동작: 기존 이미지 있으면 `s3Service.deleteImage`(또는 TODO O 이후 `deleteFile`) 후 새 이미지 업로드 → `Graduate.businessCardImage` 갱신
+- content-type/크기 검증은 TODO N 과 동일 (`image/png`·`image/jpeg`·`image/webp`, 5MB)
+
+**수정 파일**: `member/controller/MemberController.java`·`MemberSwagger.java`, `member/service/MemberService.java`·`MemberServiceImpl.java` — `updateBusinessCard(Member, MultipartFile)` 추가. 관련 테스트.
+
+**연관**: TODO N·O 와 S3 업로드 패턴 공유.
+
+**출처**: 졸업생 마이페이지 화면(2번째 사진)의 "내 명함 영역 + 사진 등록" 요구사항.
+
+### TODO R: 졸업생 공고 — 링크 전용 등록 + 선배공고/일반공고 분리 표시 (job_post 도메인)
+
+**문제**: 졸업생이 마이페이지에서 "나의 공고 올리기" 모달(3번째 사진)로 **링크만 입력**해 공고를 등록할 수 있어야 하고, 구직 정보 화면(4번째 사진)에서는 **선배가 올린 공고**와 **일반 공고 목록**이 시각적으로 분리돼 표시돼야 한다. 현재 `CreateJobPostRequest` 는 11 필드(`companyImage`·`region`·`careerType`·`jobType`·`country`·`location`·`fullLocation`·`deadline`·`detailUrl`·`preferredLanguages`·`companyName`) 모두 받는 구조라 링크만 입력하는 흐름과 맞지 않고, `JobPostService.getList()` 는 `postContentsRepository.findAll()` 로 선배 공고/크롤링 공고 구분 없이 전체를 반환한다.
+
+추가 발견 (버그): `JobPostServiceImpl.create` 의 `toCategory(saved.getJobType())` 는 `jobType` 이 null 이면 `TargetJobCategory.valueOf(null)` 로 NPE 발생 — 링크만 등록되는 경로에서는 jobType 이 null 이라 반드시 가드 필요.
+
+**디폴트 결정**:
+
+R-1. **링크 전용 등록 경로 신설**:
+
+- 신규 엔드포인트 `POST /api/v1/job-posts/link`
+- 신규 DTO `CreateJobPostLinkRequest(String detailUrl)` — `@NotBlank` + URL 형식 `@Pattern` 검증
+- 서비스 동작: `PostContents.builder().detailUrl(...).build()` (다른 필드 null) 저장 → `GraduateJobPost` 매핑 생성. **알람 발행 분기 스킵**(jobType 이 null 이므로 관심직무 매칭 불가)
+- TODO L 의 `UpdateGraduateMyPageRequest.jobPostsToAdd` 도 동일 DTO 로 통일 권장 — 이후 변경 비용 절감
+
+R-2. **`JobPostServiceImpl.create` jobType null 가드**:
+
+- `toCategory(saved.getJobType())` 호출 직전에 `if (saved.getJobType() == null) return JobPostResponse.from(saved);` (또는 알람 분기 전체를 `if` 로 감싸기). 기존 11필드 등록 경로는 그대로 동작.
+
+R-3. **선배 공고 / 일반 공고 분리 조회**:
+
+- 분리 기준: `GraduateJobPost` 매핑 **존재 여부** (데이터 모델 변경 없이 가능)
+- 신규 엔드포인트 ① `GET /api/v1/job-posts/graduates` — `GraduateJobPost` 매핑이 존재하는 PostContents 만 (선배 공고 = 화면의 "선배가 올린 공고")
+- 신규 엔드포인트 ② `GET /api/v1/job-posts/crawled` — `GraduateJobPost` 매핑이 **없는** PostContents 만 (화면의 "공고 목록")
+- 신규 응답 DTO `GraduatePostResponse` — 기존 `JobPostResponse` 필드 + 등록자(`Graduate.member.nickname`·`department`·`Graduate.jobType`·`careerYear`) 카드용 정보 포함
+- 일반 공고는 기존 `JobPostResponse` 재사용
+- 기존 `GET /api/v1/job-posts`(getList) 는 호환성 위해 유지하고 신규 화면은 분리 엔드포인트만 사용. 추후 deprecate 검토.
+
+R-4. **리포지토리 보강**:
+
+- `GraduateJobPostRepository` — `findDistinctPostContentsIds()` 또는 `findAllByPostContentsIdIn(...)` 형태 메서드 추가
+- `PostContentsRepository` — `findAllByIdNotIn(Collection<Long>)` 사용 (없으면 추가)
+
+**데이터 일관성 메모**: 데이터팀의 `upload_jobs.py` (크롤링 → 가짜 선배 적재, 추천 알고리즘용 더미 시드) 와 `routers/crawling.py` (`POST /api/data/crawling/sync`, 운영 sync — PostContents 만 적재) 가 적재 방식이 다르다. 분리 기준이 매핑 유무이므로 두 흐름이 혼재해도 R-3 가 정상 동작하나, 운영상 데이터팀과 적재 정책 합의 권장 — 본 TODO 범위 외.
+
+**수정 파일**:
+
+- `job_post/dto/request/CreateJobPostLinkRequest.java` 신규
+- `job_post/dto/response/GraduatePostResponse.java` 신규
+- `job_post/service/JobPostService.java`·`JobPostServiceImpl.java` — `createFromLink`, `getGraduatePosts`, `getCrawledPosts` 추가 및 `create` 의 null 가드
+- `job_post/controller/JobPostController.java`·`JobPostSwagger.java` — 엔드포인트 3개 추가
+- `job_post/domain/repository/GraduateJobPostRepository.java`·`PostContentsRepository.java` — 쿼리 메서드 추가
+- 관련 테스트 보강
+
+**연관**: TODO L 의 `UpdateGraduateMyPageRequest.jobPostsToAdd` 타입과 일치시켜야 함.
+
+**출처**: 마이페이지 "나의 공고 올리기" 모달(3번째 사진) + 구직 정보 화면(4번째 사진) + `ddingconnect-data` 의 `master_crawler.py`·`routers/crawling.py`·`upload_jobs.py` 분석.
+
 ### 11개 작업자 노트 (TODO #1~#11 머지 완료 후 보존되는 일반 가이드)
 
 - **브랜치 정책**: 각 TODO 를 **개별 브랜치 + 개별 PR** 로 처리하는 것을 기본으로 한다. 영향 범위가 큰 TODO 는 단독 PR 필수. 같은 도메인 내 작은 변경은 묶어서 1개 PR 도 허용 (작업자 판단). 사용자가 "TODO N 작업" 으로 단일 항목 지목 시 그 항목만 단독 PR.
