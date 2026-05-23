@@ -33,7 +33,11 @@ import mju.capstone.ddingconnect.domain.roadmap.domain.repository.RoadmapAlarmRe
 import mju.capstone.ddingconnect.domain.roadmap.domain.repository.RoadmapRepository;
 import mju.capstone.ddingconnect.domain.roadmap.service.RoadmapService;
 import mju.capstone.ddingconnect.domain.techstack.domain.repository.TechStackRepository;
+import mju.capstone.ddingconnect.global.aws.S3Service;
+import mju.capstone.ddingconnect.global.response.code.status.ErrorStatus;
 import mju.capstone.ddingconnect.global.response.exception.handler.MemberHandler;
+import mju.capstone.ddingconnect.global.response.exception.handler.S3Handler;
+import org.springframework.mock.web.MockMultipartFile;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -48,6 +52,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -80,6 +85,7 @@ class MemberServiceImplTest {
     @Mock AnswerLikeRepository answerLikeRepository;
     @Mock TechStackRepository techStackRepository;
     @Mock TargetJobRepository targetJobRepository;
+    @Mock S3Service s3Service;
 
     @InjectMocks MemberServiceImpl memberService;
 
@@ -435,5 +441,70 @@ class MemberServiceImplTest {
 
         verify(coffeeChatAlarmRepository, times(1)).deleteByCoffeeChatId(eq(801L));
         verify(coffeeChatRepository, times(1)).delete(dual);
+    }
+
+    // ── 포트폴리오 PDF 업로드 (updatePortfolio) ──────────────────────
+
+    private MockMultipartFile pdfFile(long sizeBytes) {
+        byte[] content = new byte[(int) sizeBytes];
+        return new MockMultipartFile("file", "portfolio.pdf", "application/pdf", content);
+    }
+
+    @Test
+    @DisplayName("updatePortfolio - 기존 포트폴리오 없으면 S3Service.uploadFile 위임 후 Member.portfolio 갱신, deleteImage 미호출")
+    void updatePortfolioWithoutExisting() {
+        Member member = buildStudentMember(); // portfolio = null
+        MockMultipartFile pdf = pdfFile(2048L);
+        String newUrl = "https://bucket.s3.region.amazonaws.com/portfolio-xyz.pdf";
+
+        when(s3Service.uploadFile(eq(pdf),
+                eq(MemberServiceImpl.PORTFOLIO_CONTENT_TYPES),
+                eq(MemberServiceImpl.PORTFOLIO_MAX_BYTES))).thenReturn(newUrl);
+        when(studentRepository.findByMemberId(1L)).thenReturn(Optional.empty());
+
+        MemberResponse response = memberService.updatePortfolio(member, pdf);
+
+        verify(s3Service, never()).deleteImage(any());
+        ArgumentCaptor<Member> captor = ArgumentCaptor.forClass(Member.class);
+        verify(memberRepository).save(captor.capture());
+        assertThat(captor.getValue().getPortfolio()).isEqualTo(newUrl);
+        assertThat(response.portfolio()).isEqualTo(newUrl);
+    }
+
+    @Test
+    @DisplayName("updatePortfolio - 기존 포트폴리오가 있으면 deleteImage → uploadFile 순서 보장")
+    void updatePortfolioReplacesExisting() {
+        Member member = Member.builder().id(1L).email("s@mju.ac.kr").role(MemberRole.STUDENT)
+                .portfolio("https://bucket.s3.region.amazonaws.com/old.pdf").build();
+        MockMultipartFile pdf = pdfFile(4096L);
+        String newUrl = "https://bucket.s3.region.amazonaws.com/new.pdf";
+
+        when(s3Service.uploadFile(any(), any(), anyLong())).thenReturn(newUrl);
+        when(studentRepository.findByMemberId(1L)).thenReturn(Optional.empty());
+
+        memberService.updatePortfolio(member, pdf);
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(s3Service);
+        order.verify(s3Service).deleteImage("https://bucket.s3.region.amazonaws.com/old.pdf");
+        order.verify(s3Service).uploadFile(eq(pdf),
+                eq(MemberServiceImpl.PORTFOLIO_CONTENT_TYPES),
+                eq(MemberServiceImpl.PORTFOLIO_MAX_BYTES));
+    }
+
+    @Test
+    @DisplayName("updatePortfolio - S3Service.uploadFile 가 검증 실패로 예외 던지면 전파한다")
+    void updatePortfolioPropagatesValidationFailure() {
+        Member member = buildStudentMember();
+        MockMultipartFile bad = new MockMultipartFile("file", "x.txt", "text/plain", new byte[]{1});
+
+        when(s3Service.uploadFile(any(), any(), anyLong()))
+                .thenThrow(new S3Handler(ErrorStatus._FILE_TYPE_NOT_ALLOWED));
+
+        assertThatThrownBy(() -> memberService.updatePortfolio(member, bad))
+                .isInstanceOf(S3Handler.class)
+                .matches(e -> ((S3Handler) e).getErrorReasonHttpStatus().getCode()
+                        .equals(ErrorStatus._FILE_TYPE_NOT_ALLOWED.getCode()));
+
+        verify(memberRepository, never()).save(any());
     }
 }

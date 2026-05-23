@@ -232,4 +232,26 @@ class MemberControllerTest {
                 .andExpect(jsonPath("$.isSuccess").value(false));
         verify(myPageService, never()).updateGraduateMyPage(any(), any());
     }
+
+    @Test
+    @DisplayName("PATCH /api/v1/members/me/portfolio - multipart PDF 업로드 → MemberService.updatePortfolio 위임")
+    void updatePortfolioDelegates() throws Exception {
+        org.springframework.mock.web.MockMultipartFile file =
+                new org.springframework.mock.web.MockMultipartFile(
+                        "file", "portfolio.pdf", "application/pdf", new byte[]{1, 2, 3});
+        MemberResponse res = new MemberResponse(1L, "test@mju.ac.kr", null, "테스터",
+                null, null, null, null,
+                "https://bucket.s3.region.amazonaws.com/portfolio.pdf", null,
+                0L, MemberRole.STUDENT, 3, null, null, null, null);
+        given(memberService.updatePortfolio(any(), any())).willReturn(res);
+
+        mockMvc.perform(multipart(BASE_URL + "/me/portfolio")
+                        .file(file)
+                        .with(req -> { req.setMethod("PATCH"); return req; }))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.portfolio")
+                        .value("https://bucket.s3.region.amazonaws.com/portfolio.pdf"));
+
+        verify(memberService).updatePortfolio(any(), any());
+    }
 }

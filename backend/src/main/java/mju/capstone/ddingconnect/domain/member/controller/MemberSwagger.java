@@ -11,7 +11,9 @@ import mju.capstone.ddingconnect.domain.member.dto.response.MemberResponse;
 import mju.capstone.ddingconnect.domain.member.dto.response.MyPageResponse;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMember;
 import mju.capstone.ddingconnect.global.response.exception.handler.ApiResponse;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @Tag(name = "회원", description = "회원 컨트롤러 — 프로필 조회/수정/탈퇴(소프트 삭제), 마이페이지 조회 엔드포인트를 제공합니다. (회원가입은 인증 API에서 담당)")
 public interface MemberSwagger {
@@ -107,5 +109,22 @@ public interface MemberSwagger {
             @Parameter(hidden = true) @LoginMember Member member,
             @Parameter(description = "졸업생 마이페이지 통합 수정 요청")
             @RequestBody UpdateGraduateMyPageRequest request);
+
+
+
+
+    @Operation(
+            summary = "포트폴리오 PDF 업로드/교체",
+            description = "마이페이지 포트폴리오 영역에 PDF 파일을 업로드해 표시/교체합니다. "
+                    + "multipart/form-data 로 `file` 파트에 PDF 파일을 전송합니다. "
+                    + "허용 content-type: application/pdf. 크기 제한: 20MB. "
+                    + "위반 시 400(`_FILE_TYPE_NOT_ALLOWED` / `_FILE_TOO_LARGE`)으로 거부합니다. "
+                    + "기존 포트폴리오가 있으면 S3 에서 먼저 삭제한 후 새 PDF 를 업로드합니다."
+    )
+    @PatchMapping(value = "/me/portfolio", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    ApiResponse<MemberResponse> updatePortfolio(
+            @Parameter(hidden = true) @LoginMember Member member,
+            @Parameter(description = "업로드할 포트폴리오 PDF 파일 (application/pdf)")
+            @RequestPart("file") MultipartFile file);
 
 }

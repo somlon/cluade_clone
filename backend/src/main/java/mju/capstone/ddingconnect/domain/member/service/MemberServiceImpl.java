@@ -32,10 +32,12 @@ import mju.capstone.ddingconnect.domain.roadmap.domain.repository.RoadmapAlarmRe
 import mju.capstone.ddingconnect.domain.roadmap.domain.repository.RoadmapRepository;
 import mju.capstone.ddingconnect.domain.roadmap.service.RoadmapService;
 import mju.capstone.ddingconnect.domain.techstack.domain.repository.TechStackRepository;
+import mju.capstone.ddingconnect.global.aws.S3Service;
 import mju.capstone.ddingconnect.global.response.code.status.ErrorStatus;
 import mju.capstone.ddingconnect.global.response.exception.handler.MemberHandler;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -50,9 +52,14 @@ public class MemberServiceImpl implements MemberService {
     static final int MIN_GRADE = 1;
     static final int MAX_GRADE = 4;
 
+    // 포트폴리오 PDF 업로드 제약 — TODO O. 테스트도 동일 상수를 참조한다
+    static final Set<String> PORTFOLIO_CONTENT_TYPES = Set.of("application/pdf");
+    static final long PORTFOLIO_MAX_BYTES = 20L * 1024 * 1024; // 20MB
+
     private final MemberRepository memberRepository;
     private final StudentRepository studentRepository;
     private final GraduateRepository graduateRepository;
+    private final S3Service s3Service;
 
     // 회원 hard delete 캐스케이드용 의존성
     private final QuestionService questionService;
@@ -139,6 +146,51 @@ public class MemberServiceImpl implements MemberService {
             }).orElse(null);
             return MemberResponse.from(updated, savedGraduate);
         }
+    }
+
+    /**
+     * 포트폴리오 PDF 업로드/교체.
+     * - content-type: application/pdf
+     * - 크기 제한: 20MB
+     * - 기존 portfolio URL 있으면 S3 에서 삭제 후 새 PDF 업로드 → Member.portfolio 갱신
+     */
+    @Override
+    @Transactional
+    public MemberResponse updatePortfolio(Member member, MultipartFile file) {
+        // 기존 포트폴리오 cleanup (있으면)
+        String oldUrl = member.getPortfolio();
+        if (oldUrl != null && !oldUrl.isBlank()) {
+            s3Service.deleteImage(oldUrl);
+        }
+
+        // S3Service.uploadFile 이 진입부에서 content-type/크기 검증 후 업로드
+        String newUrl = s3Service.uploadFile(file, PORTFOLIO_CONTENT_TYPES, PORTFOLIO_MAX_BYTES);
+
+        Member updated = Member.builder()
+                .id(member.getId())
+                .email(member.getEmail())
+                .name(member.getName())
+                .nickname(member.getNickname())
+                .password(member.getPassword())
+                .studentNumber(member.getStudentNumber())
+                .department(member.getDepartment())
+                .githubLink(member.getGithubLink())
+                .linkedinLink(member.getLinkedinLink())
+                .portfolio(newUrl)
+                .profileImage(member.getProfileImage())
+                .point(member.getPoint())
+                .certificate(member.getCertificate())
+                .isDeleted(member.getIsDeleted())
+                .role(member.getRole())
+                .build();
+        memberRepository.save(updated);
+
+        if (member.getRole() == MemberRole.STUDENT) {
+            return MemberResponse.from(updated, studentRepository.findByMemberId(member.getId()).orElse(null));
+        } else if (member.getRole() == MemberRole.GRADUATE) {
+            return MemberResponse.from(updated, graduateRepository.findByMemberId(member.getId()).orElse(null));
+        }
+        return MemberResponse.from(updated, (Student) null);
     }
 
     /**
