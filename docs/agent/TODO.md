@@ -8,22 +8,6 @@
 
 > **관찰 (의도 확인 필요)**: `ErrorStatus.getReason()`/`getReasonHttpStatus()` 가 실패 코드 enum 인데 `ErrorReasonDTO` 를 `.isSuccess(true)` 로 고정 생성한다(`SuccessStatus` 와 대비). 현재 `ApiResponse.onFailure` 가 `isSuccess=false` 를 따로 지정하므로 실제 응답엔 영향 없으나, 오해를 부르는 죽은 설정값이다 — 의도 확인 후 정리 여부 결정.
 
-### TODO C: 회원가입 이메일 도메인 검증 미적용 (PR #22 후속, auth 도메인)
-
-**문제**: `SignupRequest.email` 에 `@Pattern` (`^[a-zA-Z0-9._%+\-]+@mju\.ac\.kr$`) 이 선언돼 있으나, `AuthController.signup` (`AuthController.java:24`) 과 `AuthSwagger.signup` (`AuthSwagger.java:26`) 의 `SignupRequest` 파라미터에 `@Valid` 가 없어 검증이 트리거되지 않음. 같은 컨트롤러의 `sendCode`/`verifyCode` 는 `@Valid` 보유. → 현재 `@mju.ac.kr` 제한이 가입 경로에서 무력화된 상태.
-
-**디폴트 결정**: `signup` 의 `SignupRequest` 파라미터에 `@Valid` 추가. 인터페이스(`AuthSwagger`)·구현(`AuthController`) 양쪽 동기화. 검증 실패는 기존 `MethodArgumentNotValidException` 핸들러가 `_BAD_REQUEST` 로 매핑 (회원 도메인 소셜 링크 검증과 동일 패턴).
-
-**출처**: PR #22 (`ddd4004`) 가 `@Pattern` 만 추가하고 `@Valid` 를 누락.
-
-### TODO D: 이메일 인증 결과가 회원가입에 미반영 (PR #22 후속, auth 도메인)
-
-**문제**: `AuthServiceImpl.signup` (`AuthServiceImpl.java:34-62`) 이 `EmailService`/`RedisUtil` 을 참조하지 않음. `POST /api/v1/auth/verify-code` 통과 여부와 무관하게 가입이 가능 — 인증 안 한 이메일로도 회원가입됨. `EmailServiceImpl.verifyCode` 는 코드 일치 시 Redis 키를 삭제만 하므로 "인증 완료" 상태가 어디에도 남지 않음.
-
-**미확정 (사용자 결정 필요)**: signup 이 인증 통과를 확인하는 방식. 후보 — (a) `verifyCode` 성공 시 `verified:{email}` 플래그를 Redis 에 단기 저장 → `signup` 진입부에서 존재 확인 후 소비, (b) `verifyCode` 가 단기 인증 토큰을 발급해 `signup` 요청에 포함. 방식 확정 전까지 코드 변경 보류.
-
-**출처**: PR #22.
-
 ### TODO M: 나의 활동 페이지 API — 커피챗/로드맵/Q&A 본인 활동 조회 (member·coffeechat·qna 도메인)
 
 **문제**: 마이페이지 상단 통계 카드(`MyPageResponse.ActivityStats` 의 `coffeeChatCount`·`roadmapCount`·`questionCount`)를 클릭하면 "나의 활동" 페이지로 진입해 본인 활동 **목록**을 보여줘야 하나, 현재 백엔드는 카운트만 제공하고 본인 스코프 목록 조회 API 가 없다. 단, 로드맵은 `RoadmapServiceImpl.getList` 가 이미 `findByMemberIdOrderByCreatedAtDesc` 로 본인 글만 반환하므로 그대로 재사용 가능.
