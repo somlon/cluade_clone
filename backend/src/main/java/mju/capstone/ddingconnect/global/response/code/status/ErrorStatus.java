@@ -73,7 +73,9 @@ public enum ErrorStatus implements BaseErrorCode {
 
     //S3
     _FILE_UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "S3500", "객체 저장에 실패하였습니다."),
-    _FILE_DELETE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "S3500", "객체 삭제에 실패하였습니다.");
+    _FILE_DELETE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "S3500", "객체 삭제에 실패하였습니다."),
+    _FILE_TYPE_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "S3400", "허용되지 않은 파일 형식입니다."),
+    _FILE_TOO_LARGE(HttpStatus.BAD_REQUEST, "S3400", "파일 크기가 허용된 최대치를 초과합니다.");
     private final HttpStatus httpStatus;
     private final String code;
     private final String message;
