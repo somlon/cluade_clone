@@ -5,6 +5,7 @@ import mju.capstone.ddingconnect.domain.job_post.domain.JobType;
 import mju.capstone.ddingconnect.domain.job_post.domain.PostContents;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -18,4 +19,8 @@ public interface PostContentsRepository extends JpaRepository<PostContents, Long
     List<PostContents> findByCareerType(CareerType careerType);
 
     List<PostContents> findByCompanyName(String companyName);
+
+    List<PostContents> findByIdIn(Collection<Long> ids);
+
+    List<PostContents> findByIdNotIn(Collection<Long> ids);
 }
