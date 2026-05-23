@@ -9,6 +9,8 @@ import mju.capstone.ddingconnect.domain.techstack.domain.TechStackName;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMemberArgumentResolver;
 import mju.capstone.ddingconnect.global.common.SuccessMessage;
 import mju.capstone.ddingconnect.global.config.WebMvcConfig;
+import mju.capstone.ddingconnect.global.response.code.status.ErrorStatus;
+import mju.capstone.ddingconnect.global.response.exception.ExceptionAdvice;
 import mju.capstone.ddingconnect.support.WithMockLoginMember;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,7 +36,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(RoadmapController.class)
 @AutoConfigureMockMvc(addFilters = false)
-@Import({WebMvcConfig.class, LoginMemberArgumentResolver.class})
+@Import({WebMvcConfig.class, LoginMemberArgumentResolver.class, ExceptionAdvice.class})
 @DisplayName("RoadmapController 슬라이스 테스트")
 class RoadmapControllerTest {
 
@@ -106,5 +108,29 @@ class RoadmapControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result").value(SuccessMessage.ROADMAP_DELETED));
         verify(roadmapService).delete(any(), eq(1L));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/roadmaps - GRADUATE 회원은 MEMBER_FIELD_ROLE_MISMATCH(400)로 거부되고 서비스는 호출되지 않는다")
+    void getRoadmapListRejectsGraduate() throws Exception {
+        WithMockLoginMember.loginAsGraduate();
+
+        mockMvc.perform(get(BASE_URL))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(ErrorStatus.MEMBER_FIELD_ROLE_MISMATCH.getCode()));
+
+        verify(roadmapService, org.mockito.Mockito.never()).getList(any());
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/roadmaps/{id} - GRADUATE 도 단건 조회는 허용된다 (가드는 목록만 적용)")
+    void getRoadmapDetailAllowedForGraduate() throws Exception {
+        WithMockLoginMember.loginAsGraduate();
+        given(roadmapService.getOne(1L))
+                .willReturn(new RoadmapResponse(1L, MEMBER_ID, GENERATED_CONTENT, CREATED_AT));
+
+        mockMvc.perform(get(BASE_URL + "/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.id").value(1L));
     }
 }

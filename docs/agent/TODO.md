@@ -68,21 +68,6 @@
 
 **출처**: 마이페이지 수정 페이지 포트폴리오 요구사항 + `S3Service` 분석.
 
-### TODO P: 졸업생 마이페이지/나의 활동 — 로드맵 항목 제외 (member·roadmap 도메인)
-
-**문제**: 졸업생 마이페이지 화면(2번째 사진)의 활동 통계 카드에는 로드맵 항목 자체가 없다(`12 / 5` 두 개만). 현재 백엔드는 `MyPageServiceImpl.buildResponse` 가 역할 무관하게 `roadmapService.countMyRoadmaps(member)` 를 호출해 GRADUATE 응답에도 `roadmapCount` 가 채워진다. 또한 TODO M 의 `GET /api/v1/roadmaps` 도 GRADUATE 호출 시 차단 가드가 없다.
-
-**디폴트 결정**:
-
-1. **마이페이지 응답**: `MyPageServiceImpl.buildResponse` 에서 `member.getRole() == MemberRole.STUDENT` 일 때만 `countMyRoadmaps` 를 호출하고, 그 외 역할은 `0` 또는 `null` 로 반환. `MyPageResponse.ActivityStats.roadmapCount` 의 nullable 처리(또는 STUDENT/GRADUATE 변형 분리) 중 작업자 판단으로 결정 — 단, 프론트와 합의된 표현이 우선.
-2. **백엔드 차단 가드**: `RoadmapController.getRoadmaps`(`/api/v1/roadmaps`) 진입부에 `if (member.getRole() == MemberRole.GRADUATE) throw new MemberHandler(ErrorStatus.MEMBER_FIELD_ROLE_MISMATCH);` 한 줄 추가. 프론트가 GRADUATE 화면에서 탭을 렌더링하지 않더라도 호출은 막아 보안 일관성 확보. 단 졸업생도 로드맵 단건 조회(`/{roadmapId}`)는 허용 — 다른 사람 로드맵을 볼 수 있어야 하므로 가드는 list 만 적용.
-
-**수정 파일**: `member/service/MyPageServiceImpl.java`, `member/dto/response/MyPageResponse.java`(nullable 처리), `roadmap/controller/RoadmapController.java`. 관련 테스트 보강(`MyPageServiceImplTest` 의 GRADUATE 케이스, `RoadmapControllerTest` 의 가드 케이스).
-
-**연관**: TODO M(나의 활동 페이지) — 로드맵 엔드포인트 공유.
-
-**출처**: 졸업생 마이페이지 화면(2번째 사진) 카드 영역 분석 + `MyPageServiceImpl.buildResponse` 분기 결여 확인.
-
 ### TODO Q: 졸업생 명함 이미지 업로드 (member 도메인)
 
 **문제**: 졸업생 마이페이지에 명함 등록 영역(네모 칸)이 있고 업로드한 사진이 표시돼야 한다. 현재 `Graduate.businessCardImage`(`Graduate.java`) 는 varchar(255) URL 문자열 보관용이며 업로드 엔드포인트가 없다.
