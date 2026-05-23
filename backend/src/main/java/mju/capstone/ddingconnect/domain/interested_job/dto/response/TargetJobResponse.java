@@ -7,18 +7,15 @@ import mju.capstone.ddingconnect.domain.interested_job.domain.TargetJobCategory;
  * [관심 직군 응답 DTO]
  * @param id 관심 직군 PK
  * @param interestedJob 관심 직군 카테고리
- * @param key2 추가 키값
  */
 public record TargetJobResponse(
         Long id,
-        TargetJobCategory interestedJob,
-        String key2
+        TargetJobCategory interestedJob
 ) {
     public static TargetJobResponse from(TargetJob targetJob) {
         return new TargetJobResponse(
                 targetJob.getId(),
-                targetJob.getInterestedJob(),
-                targetJob.getKey2()
+                targetJob.getInterestedJob()
         );
     }
 }

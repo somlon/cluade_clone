@@ -517,7 +517,7 @@ class EntityIntegrationTest {
 
     // ─── 관심 직군 (TargetJob) ───────────────────────────────────────────────
     @Test
-    @DisplayName("ERD '관심 직군' 테이블 - FK(회원), 직군ENUM, Key2 저장")
+    @DisplayName("ERD '관심 직군' 테이블 - FK(회원), 직군ENUM 저장")
     void persistsTargetJob() {
         printHeader("관심 직군 (TargetJob)");
 
@@ -525,10 +525,10 @@ class EntityIntegrationTest {
 
         targetJobRepository.save(TargetJob.builder()
                 .member(member)
-                .interestedJob(TargetJobCategory.BACKEND).key2("backend-key-001").build());
+                .interestedJob(TargetJobCategory.BACKEND).build());
 
         TargetJob found = targetJobRepository.findByMemberId(member.getId()).get(0);
-        printSaved("id", found.getId(), "interestedJob", found.getInterestedJob(), "key2", found.getKey2());
+        printSaved("id", found.getId(), "interestedJob", found.getInterestedJob());
         printFK("targetJob.member_id → member.id", member.getId(), found.getMember().getId());
 
         assertThat(found.getInterestedJob()).isEqualTo(TargetJobCategory.BACKEND);
@@ -589,7 +589,7 @@ class EntityIntegrationTest {
                 .graduate(graduate).postContents(postContents).build());
         TargetJob targetJob = targetJobRepository.save(TargetJob.builder()
                 .member(studentMember)
-                .interestedJob(TargetJobCategory.BACKEND).key2("kakao-backend").build());
+                .interestedJob(TargetJobCategory.BACKEND).build());
         JobAlarm jobAlarm = jobAlarmRepository.save(JobAlarm.builder()
                 .member(studentMember).postContents(postContents)
                 .content("관심 공고 업데이트").isRead(false).build());

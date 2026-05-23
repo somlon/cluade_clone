@@ -93,7 +93,7 @@ mju.capstone.ddingconnect
 ### 관심 직군 (interested_job)
 - 학생 마이페이지의 **관심 직군 칩** — 회원 ↔ `TargetJobCategory` enum 단순 매핑. `PostContents`(구직 공고)와는 FK 관계 **없음**.
 - 입력은 카테고리(`TargetJobCategory`) 값뿐. 공고 ID 같은 FK는 받지 않음.
-- `TargetJob` 엔티티는 `member_id`(NOT NULL FK) + `Interested_Job`(enum) + `key2`(미사용, ERD 잔재) 로 구성.
+- `TargetJob` 엔티티는 `member_id`(NOT NULL FK) + `Interested_Job`(enum) 으로 구성.
 - `TargetJobCategory` 와 `JobType` 은 같은 원티드 직군 태그 소스에서 11개 동일 값을 받지만 **타입 분리**. 두 enum 의 값 정렬은 사람이 직접 유지해야 함.
 - 공고 ↔ 관심 직군 매칭(예: "내 관심 카테고리에 해당하는 새 공고 알람")이 필요해지면, FK 가 아닌 `PostContents.jobType` 과 `TargetJob.interestedJob` 의 **enum 값 비교**로 처리. 이 매칭이 두 enum 이 같은 값을 갖는 본질적 이유.
 - **REPLACE 단일 endpoint (`TargetJobServiceImpl.replace`)**: `PATCH /api/v1/target-jobs` 로 본인 관심 직군 리스트 전체를 요청 리스트로 교체. 단일 `@Transactional` 안에서 `deleteByMemberId` 후 `save` N회. 입력 리스트 내부 중복은 서버에서 `Stream.distinct()` 로 제거. 빈 리스트 = 본인 row 전부 삭제(정상 200), `categories` 가 null = 400 (`_BAD_REQUEST`, `TargetJobHandler`). 응답은 교체 후 `List<TargetJobResponse>`. 마이페이지 수정 화면이 유일 진입점이라 단건 add/update/delete endpoint 는 두지 않는다. REPLACE 자체는 `JobAlarm` 을 발행하지 않으며, 공고↔관심직군 알람 매칭은 새 공고 등록 시점의 `JobPostServiceImpl.create` 가 담당.

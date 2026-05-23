@@ -112,7 +112,7 @@ class TargetJobServiceImplTest {
     @DisplayName("getMyTargetJobs - 본인의 관심 직군 목록을 반환한다")
     void getMyTargetJobsReturnsList() {
         TargetJob targetJob = TargetJob.builder().id(10L).member(owner)
-                .interestedJob(TargetJobCategory.BACKEND).key2("k").build();
+                .interestedJob(TargetJobCategory.BACKEND).build();
         when(targetJobRepository.findByMemberId(owner.getId())).thenReturn(List.of(targetJob));
 
         List<TargetJobResponse> result = targetJobService.getMyTargetJobs(owner);

@@ -13,7 +13,6 @@ import mju.capstone.ddingconnect.global.common.BaseEntity;
  * - PK(Long)              → id
  * - FK(Long)              → member (회원.PK 참조)
  * - Interested_Job(ENUM)  → interestedJob (TargetJobCategory, column: Interested_Job)
- * - Key2(varchar(255))    → key2 (현재 미사용, ERD 잔재)
  *
  * 연결 관계:
  * - 회원(Member): N:1 (관심직군.FK → 회원.PK)
@@ -40,7 +39,4 @@ public class TargetJob extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "Interested_Job")
     private TargetJobCategory interestedJob;  // 관심 직군(ENUM)
-
-    @Column(length = 255)
-    private String key2;                // Key2 (미사용)
 }
