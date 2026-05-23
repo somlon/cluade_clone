@@ -52,8 +52,8 @@ class TargetJobControllerTest {
                 List.of(TargetJobCategory.BACKEND, TargetJobCategory.FRONTEND));
         given(targetJobService.replace(any(), any()))
                 .willReturn(List.of(
-                        new TargetJobResponse(1L, TargetJobCategory.BACKEND, null),
-                        new TargetJobResponse(2L, TargetJobCategory.FRONTEND, null)));
+                        new TargetJobResponse(1L, TargetJobCategory.BACKEND),
+                        new TargetJobResponse(2L, TargetJobCategory.FRONTEND)));
 
         mockMvc.perform(patch(BASE_URL)
                         .contentType(MediaType.APPLICATION_JSON)

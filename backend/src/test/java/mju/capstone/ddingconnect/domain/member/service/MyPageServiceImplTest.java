@@ -94,7 +94,7 @@ class MyPageServiceImplTest {
         when(techStackService.getMyTechStacks(member))
                 .thenReturn(List.of(new TechStackResponse(10L, TechStackName.JAVA)));
         when(targetJobService.getMyTargetJobs(member))
-                .thenReturn(List.of(new TargetJobResponse(20L, TargetJobCategory.BACKEND, null)));
+                .thenReturn(List.of(new TargetJobResponse(20L, TargetJobCategory.BACKEND)));
 
         MyPageResponse response = myPageService.getMyPage(member);
 
