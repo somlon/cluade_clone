@@ -32,10 +32,13 @@ import mju.capstone.ddingconnect.domain.roadmap.domain.repository.RoadmapAlarmRe
 import mju.capstone.ddingconnect.domain.roadmap.domain.repository.RoadmapRepository;
 import mju.capstone.ddingconnect.domain.roadmap.service.RoadmapService;
 import mju.capstone.ddingconnect.domain.techstack.domain.repository.TechStackRepository;
+import mju.capstone.ddingconnect.global.aws.S3Service;
 import mju.capstone.ddingconnect.global.response.code.status.ErrorStatus;
 import mju.capstone.ddingconnect.global.response.exception.handler.MemberHandler;
+import mju.capstone.ddingconnect.global.response.exception.handler.S3Handler;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -50,9 +53,15 @@ public class MemberServiceImpl implements MemberService {
     static final int MIN_GRADE = 1;
     static final int MAX_GRADE = 4;
 
+    // 프로필 이미지 업로드 제약 — 테스트도 동일 상수를 참조한다
+    static final Set<String> PROFILE_IMAGE_CONTENT_TYPES =
+            Set.of("image/png", "image/jpeg", "image/webp");
+    static final long PROFILE_IMAGE_MAX_BYTES = 5L * 1024 * 1024; // 5MB
+
     private final MemberRepository memberRepository;
     private final StudentRepository studentRepository;
     private final GraduateRepository graduateRepository;
+    private final S3Service s3Service;
 
     // 회원 hard delete 캐스케이드용 의존성
     private final QuestionService questionService;
@@ -138,6 +147,73 @@ public class MemberServiceImpl implements MemberService {
                 return graduateRepository.save(updatedGraduate);
             }).orElse(null);
             return MemberResponse.from(updated, savedGraduate);
+        }
+    }
+
+    /**
+     * 프로필 이미지 업로드/교체.
+     * - content-type 화이트리스트: image/png, image/jpeg, image/webp
+     * - 크기 제한: 5MB
+     * - 기존 URL 있으면 S3 에서 삭제 후 새 이미지 업로드 → Member.profileImage 갱신
+     */
+    @Override
+    @Transactional
+    public MemberResponse updateProfileImage(Member member, MultipartFile image) {
+        validateImage(image);
+
+        // 기존 이미지가 있으면 먼저 삭제 (S3 cleanup) — 실패해도 새 업로드는 진행
+        String oldImageUrl = member.getProfileImage();
+        if (oldImageUrl != null && !oldImageUrl.isBlank()) {
+            s3Service.deleteImage(oldImageUrl);
+        }
+
+        String newUrl = s3Service.uploadImage(image);
+
+        Member updated = Member.builder()
+                .id(member.getId())
+                .email(member.getEmail())
+                .name(member.getName())
+                .nickname(member.getNickname())
+                .password(member.getPassword())
+                .studentNumber(member.getStudentNumber())
+                .department(member.getDepartment())
+                .githubLink(member.getGithubLink())
+                .linkedinLink(member.getLinkedinLink())
+                .portfolio(member.getPortfolio())
+                .profileImage(newUrl)
+                .point(member.getPoint())
+                .certificate(member.getCertificate())
+                .isDeleted(member.getIsDeleted())
+                .role(member.getRole())
+                .build();
+
+        memberRepository.save(updated);
+
+        // 역할별 부가 정보 그대로 채워 응답
+        if (member.getRole() == MemberRole.STUDENT) {
+            return MemberResponse.from(updated, studentRepository.findByMemberId(member.getId()).orElse(null));
+        } else if (member.getRole() == MemberRole.GRADUATE) {
+            return MemberResponse.from(updated, graduateRepository.findByMemberId(member.getId()).orElse(null));
+        }
+        return MemberResponse.from(updated, (Student) null);
+    }
+
+    /**
+     * 업로드 파일 검증.
+     * - null/빈 파일: _FILE_UPLOAD_FAILED (잘못된 입력)
+     * - content-type 미지원: _FILE_TYPE_NOT_ALLOWED
+     * - 크기 초과: _FILE_TOO_LARGE
+     */
+    private void validateImage(MultipartFile image) {
+        if (image == null || image.isEmpty()) {
+            throw new S3Handler(ErrorStatus._FILE_UPLOAD_FAILED);
+        }
+        String contentType = image.getContentType();
+        if (contentType == null || !PROFILE_IMAGE_CONTENT_TYPES.contains(contentType)) {
+            throw new S3Handler(ErrorStatus._FILE_TYPE_NOT_ALLOWED);
+        }
+        if (image.getSize() > PROFILE_IMAGE_MAX_BYTES) {
+            throw new S3Handler(ErrorStatus._FILE_TOO_LARGE);
         }
     }
 
