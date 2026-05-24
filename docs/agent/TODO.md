@@ -17,33 +17,39 @@
 - **테스트 실패 시**: `--no-verify` 등으로 우회 금지. 원인 분석 후 수정.
 
 
-### TODO L~R 통합 머지 전략 (ddingconnect-backend 동기화용)
+### TODO L~T 통합 머지 전략 (ddingconnect-backend 동기화용)
 
-> `cluade_clone` 에서는 L~R 7개가 PR #73~#80 으로 **개별** 머지됐다. 이를 다음 동기화 대상(`mju-capstone-4/ddingconnect-backend`)으로 옮길 때는 같은 파일을 건드리는 항목을 묶어 **4개 PR 로 압축**한다. 머지 순서는 파일 충돌·서비스 의존성 기준.
+> `cluade_clone` 에서는 L~R 7개가 PR #73~#80 으로, S+T 가 PR #84 로 **개별** 머지됐다(총 9개 TODO). 이를 다음 동기화 대상(`mju-capstone-4/ddingconnect-backend`)으로 옮길 때는 같은 파일을 건드리는 항목을 묶어 **4개 PR 로 압축**한다. 머지 순서는 파일 충돌·서비스 의존성 기준.
 
 #### 충돌 분석
 
-| 파일 | L | M | N | O | P | Q | R |
-|------|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-| `MemberController` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |   |
-| `MyPageServiceImpl` (or 위임 서비스) | ✓ |   |   |   | ✓ |   |   |
-| `MemberServiceImpl` |   | ✓ | ✓ | ✓ |   | ✓ |   |
-| `MyPageResponse` | ✓ |   |   |   | ✓ |   |   |
-| `UpdateXxxMyPageRequest` (DTO 신규) | ✓ |   |   |   |   |   |   |
-| `S3Service` |   |   | ✓ | ✓ |   | ✓ |   |
-| `RoadmapController` |   |   |   |   | ✓ |   |   |
-| `JobPostController` / `JobPostServiceImpl` |   |   |   |   |   |   | ✓ |
-| `ErrorStatus` |   |   | ✓ | ✓ |   | ✓ | ✓ |
+| 파일 | L | M | N | O | P | Q | R | S | T |
+|------|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| `MemberController` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |   |   |   |
+| `MyPageServiceImpl` (or 위임 서비스) | ✓ |   |   |   | ✓ |   |   | ✓ |   |
+| `MemberServiceImpl` |   | ✓ | ✓ | ✓ |   | ✓ |   |   |   |
+| `MyPageResponse` | ✓ |   |   |   | ✓ |   |   | ✓ |   |
+| `MemberResponse` |   |   |   |   |   |   |   | ✓ |   |
+| `UpdateXxxMyPageRequest` (DTO 신규) | ✓ |   |   |   |   |   |   |   |   |
+| `S3Service` |   |   | ✓ | ✓ |   | ✓ |   |   |   |
+| `RoadmapController` |   |   |   |   | ✓ |   |   |   |   |
+| `RoadmapSwagger` |   |   |   |   |   |   |   |   | ✓ |
+| `QuestionSwagger` |   | ✓ |   |   |   |   |   |   | ✓ |
+| `JobPostController` / `JobPostServiceImpl` |   |   |   |   |   |   | ✓ |   |   |
+| `ErrorStatus` |   |   | ✓ | ✓ |   | ✓ | ✓ |   |   |
 
 핵심 충돌 구간:
-- `MyPageResponse` + `MyPageServiceImpl.buildResponse` — **L + P** (activity 분기 / 역할별 응답)
+- `MyPageResponse` + `MyPageServiceImpl.buildResponse` — **L + P + S** (activity 분기 / 역할별 응답 / 역할별 필드 정리·`@JsonInclude(NON_NULL)`)
 - `S3Service` — **N + O + Q** (O 가 foundation, N/Q 가 사용)
 - `MemberController` — 다수 PR 이 새 endpoint 메서드 추가 → 메서드 단위 분리되어 있어 순차 머지로 회피
+- `QuestionSwagger` — **M + T** (M 이 `getMyQuestions` 신설, T 가 같은 메서드에 `@Tag` 부여)
 
 #### 의존성
 
 - **L → R**: L 의 `UpdateGraduateMyPageRequest.jobPostsToAdd` 가 R 의 `JobPostService.createFromLink` 호출
 - **N, Q → O**: N (profileImage), Q (businessCard) 가 O 의 `S3Service.uploadFile(MultipartFile, Set<String>, long)` 호출
+- **S → L + P**: S 가 L 추가의 `MyPageServiceImpl` 와 P 추가의 `buildResponse` roadmapCount STUDENT 분기 위에서 동작 (`long 0L → Long null` 로 교체)
+- **T → M**: T 의 `QuestionSwagger.getMyQuestions` `@Tag` 부여는 M 이 신설한 메서드 위에 얹힘 (RoadmapSwagger.getRoadmaps 측 변경은 pre-existing 메서드라 L~R 의존 없음)
 
 #### PR 분할 (4개)
 
@@ -57,26 +63,27 @@
 - 의존: 없음 (다른 PR 영향 없음)
 - **머지 순서 1순위** — PR2 의 `createFromLink` 호출 컴파일 의존
 
-##### PR2 — `feat(member,roadmap): 마이페이지 역할별 분리 + 로드맵 가드` (TODO L + P)
+##### PR2 — `feat(member,roadmap): 마이페이지 역할별 분리 + 로드맵 가드 + 응답 필드 정리` (TODO L + P + S)
 
 - 엔드포인트:
   - `PATCH /api/v1/members/mypage/student` (L 신규)
   - `PATCH /api/v1/members/mypage/graduate` (L 신규)
-  - `GET /api/v1/members/mypage` (P, `activity.roadmapCount` STUDENT 분기)
+  - `GET /api/v1/members/mypage` (P, `activity.roadmapCount` STUDENT 분기 + S 가 GRADUATE 시 null 로 교체해 응답 키 제외)
   - `GET /api/v1/roadmaps` (P, GRADUATE 차단)
-- 주요 파일: `MemberController` (mypage PATCH 2개), `MyPageService(Impl)` (`updateStudentMyPage`/`updateGraduateMyPage`, `buildResponse` roadmapCount STUDENT 분기), `MyPageResponse`, `UpdateStudentMyPageRequest`/`UpdateGraduateMyPageRequest`, `UpdateStudentProfileRequest`/`UpdateGraduateProfileRequest`, `RoadmapController` (`getRoadmaps` GRADUATE 가드)
-- 통합 이유: L + P 둘 다 `MyPageResponse` + `MyPageServiceImpl.buildResponse` 를 수정 → 분리 시 거의 100% 충돌
+- 주요 파일: `MemberController` (mypage PATCH 2개), `MyPageService(Impl)` (`updateStudentMyPage`/`updateGraduateMyPage`, `buildResponse` 가 S 의 `withoutPoint` + 역할별 null 분기로 최종 형태), `MyPageResponse`(+`ActivityStats`, S 가 `@JsonInclude(NON_NULL)` + `roadmapCount: Long`), `MemberResponse` (S 가 `@JsonInclude(NON_NULL)` + `withoutPoint()` 헬퍼 신설), `UpdateStudentMyPageRequest`/`UpdateGraduateMyPageRequest`, `UpdateStudentProfileRequest`/`UpdateGraduateProfileRequest`, `RoadmapController` (`getRoadmaps` GRADUATE 가드)
+- 통합 이유: L + P + S 셋 다 `MyPageResponse` + `MyPageServiceImpl.buildResponse` 를 수정 → 분리 시 3-way 충돌. S 는 P 의 STUDENT 분기 위에 얹혀 의미가 완성되므로 한 PR 로 합치는 게 자연스러움.
 - 의존: PR1 (`JobPostService.createFromLink`)
 - **머지 순서 2순위**
 
-##### PR3 — `feat(member,coffeechat,qna): 나의 활동 페이지 API` (TODO M)
+##### PR3 — `feat(member,coffeechat,qna,swagger): 나의 활동 페이지 API + Swagger 그룹 통합` (TODO M + T)
 
 - 엔드포인트:
-  - `GET /api/v1/questions/me` (Q&A 본인 글)
+  - `GET /api/v1/questions/me` (Q&A 본인 글, M 신설 / T 가 `@Tag(name = "나의 활동")` 부여)
   - `GET /api/v1/members/me/activity/coffeechats` (커피챗 카드, 상대방 정보 포함)
-  - `GET /api/v1/roadmaps` (기존 활용, 변경 없음)
-- 주요 파일: `QuestionController` (`getMyQuestions`), `QuestionService(Impl)` (`getMyQuestions`, `questionRepository.findByMemberId`), `CoffeeChatService(Impl)` (`getMyActivities`), `MyActivityController` (신규), `CoffeeChatPartnerResponse` DTO
-- 의존: 없음 (독립 도메인)
+  - `GET /api/v1/roadmaps` (기존 활용, M 은 변경 없음 / T 가 `RoadmapSwagger.getRoadmaps` 에 `@Tag(name = "나의 활동")` 부여)
+- 주요 파일: `QuestionController` (`getMyQuestions`), `QuestionService(Impl)` (`getMyQuestions`, `questionRepository.findByMemberId`), `QuestionSwagger` (M 이 `getMyQuestions` 신설 + T 가 `@Tag` 부여), `CoffeeChatService(Impl)` (`getMyActivities`), `MyActivityController` (신규), `CoffeeChatPartnerResponse` DTO, `RoadmapSwagger` (T 가 `getRoadmaps` 에 `@Tag` 부여)
+- 통합 이유: T 의 `QuestionSwagger.getMyQuestions` `@Tag` 가 M 의 신설 메서드 위에 얹혀 분리 시 직렬 의존. RoadmapSwagger 변경은 단독이지만 같은 "나의 활동" 그룹 통합 의도라 함께 묶음.
+- 의존: 없음 (독립 도메인, PR1·PR2 와 무관)
 - **머지 순서 3순위** — `MemberController` 충돌 회피 위해 PR2 후 진행
 
 ##### PR4 — `feat(member,aws): S3Service 일반화 + 파일 업로드 3종` (TODO N + O + Q)
@@ -96,18 +103,18 @@
 ```
 PR1 (R, JobPost)
   ↓
-PR2 (L+P, 마이페이지 + 로드맵 가드)
+PR2 (L+P+S, 마이페이지 + 로드맵 가드 + 응답 필드 정리)
   ↓
-PR3 (M, 활동 페이지)
+PR3 (M+T, 활동 페이지 + Swagger 그룹 통합)
   ↓
 PR4 (N+O+Q, 파일 업로드 3종)
 ```
 
-`MemberController` 가 PR2/PR3/PR4 에 공통 등장 — 머지 순서 직렬화로 충돌 방지.
+`MemberController` 가 PR2/PR3/PR4 에 공통 등장 — 머지 순서 직렬화로 충돌 방지. `MyPageResponse`/`MyPageServiceImpl.buildResponse` 는 PR2 에서 L+P+S 의 최종 형태로 한 번에 머지되어 추후 충돌 없음.
 
 #### 로컬 검증 상태 (2026-05-23, ddingconnect-backend)
 
-위 4개 PR 분할 안에 해당하는 작업을 `ddingconnect-backend` 로컬에 미리 적용해 7개 TODO 전 항목 end-to-end 검증 완료. **30/31 PASS**. 1건은 환경 설정 차이로 백엔드 검증 로직 미트리거(기능적으로는 차단됨):
+위 4개 PR 분할 안에 해당하는 작업을 `ddingconnect-backend` 로컬에 미리 적용해 7개 TODO(L~R) end-to-end 검증 완료. **30/31 PASS**. 1건은 환경 설정 차이로 백엔드 검증 로직 미트리거(기능적으로는 차단됨):
 
 | TODO | PASS/전체 | 핵심 검증 |
 |------|----------|-----------|
@@ -118,6 +125,13 @@ PR4 (N+O+Q, 파일 업로드 3종)
 | P | 4/4 | GRADUATE `/roadmaps` 400 + mypage.activity.roadmapCount=0 + 단건 조회 200 |
 | Q | 4/4 | STUDENT 400 MEMBER400 (S3 호출 전 차단) + GRADUATE 다른 필드 보존 |
 | R | 7/7 | 링크 등록 200 + STUDENT 403 + 선배/일반 분리 + 합계 일치 |
+
+**S, T 는 `cluade_clone` PR #84 머지 후 추가됨 — `ddingconnect-backend` 동기화 시 함께 검증해야 한다.** 권장 검증 시나리오:
+
+| TODO | 핵심 검증 |
+|------|-----------|
+| S | STUDENT 응답에 `jobPosts`/`businessCardImage`/`jobType`/`company`/`careerYear`/`point` 키 부재 + `targetJobs: []` 보존 / GRADUATE 응답에 `targetJobs`/`grade`/`activity.roadmapCount`/`point` 키 부재 + `jobPosts: []` 보존 / `GET /me` 등 다른 엔드포인트는 `point` 값 있으면 노출 (정책 분리) |
+| T | Swagger UI "나의 활동" 그룹에 3개 엔드포인트(coffeechats, roadmaps, questions/me) 모두 표시 + 원본 그룹("로드맵", "질문")에도 그대로 표시 |
 
 별도 환경 메모 (TODO 결함 아님):
 - MySQL utf8mb4 미설정 → 한글 필드 `?????` 저장 (테스트는 영문 입력으로 회피)
