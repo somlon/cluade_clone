@@ -100,7 +100,7 @@ class MyPageServiceImplTest {
     // ── 조회 (getMyPage) ──────────────────────────────────────────────
 
     @Test
-    @DisplayName("getMyPage - 재학생: 프로필·활동 통계·기술 스택·관심 직군을 조합하고 jobPosts 는 비운다")
+    @DisplayName("getMyPage - 재학생: 프로필·활동 통계·기술 스택·관심 직군을 조합하고 jobPosts 는 null(응답 키 제외)")
     void getMyPageForStudent() {
         Member member = studentMember();
         when(memberService.getMyProfile(member)).thenReturn(profileOf(member));
@@ -115,19 +115,20 @@ class MyPageServiceImplTest {
         MyPageResponse response = myPageService.getMyPage(member);
 
         assertThat(response.profile().role()).isEqualTo(MemberRole.STUDENT);
+        assertThat(response.profile().point()).isNull();  // 마이페이지엔 point 항상 제외
         assertThat(response.activity().coffeeChatCount()).isEqualTo(2L);
         assertThat(response.activity().roadmapCount()).isEqualTo(1L);
         assertThat(response.activity().questionCount()).isEqualTo(5L);
         assertThat(response.techStacks()).hasSize(1);
         assertThat(response.targetJobs()).hasSize(1);
-        assertThat(response.jobPosts()).isEmpty();
+        assertThat(response.jobPosts()).isNull();  // STUDENT 는 jobPosts 비해당 → null
 
         // 재학생이면 졸업생 항목 서비스는 호출하지 않는다
         verify(jobPostService, never()).getMyJobPosts(member);
     }
 
     @Test
-    @DisplayName("getMyPage - 졸업생: 등록 구직 공고를 조합하고 targetJobs 는 비운다 / 로드맵 카운트는 0(서비스 미호출)")
+    @DisplayName("getMyPage - 졸업생: 등록 구직 공고를 조합하고 targetJobs/roadmapCount 는 null(응답 키 제외)")
     void getMyPageForGraduate() {
         Member member = graduateMember();
         when(memberService.getMyProfile(member)).thenReturn(profileOf(member));
@@ -140,9 +141,10 @@ class MyPageServiceImplTest {
         MyPageResponse response = myPageService.getMyPage(member);
 
         assertThat(response.profile().role()).isEqualTo(MemberRole.GRADUATE);
-        assertThat(response.activity().roadmapCount()).isEqualTo(0L);
+        assertThat(response.profile().point()).isNull();        // 마이페이지엔 point 항상 제외
+        assertThat(response.activity().roadmapCount()).isNull(); // GRADUATE 는 roadmapCount 비해당 → null
         assertThat(response.jobPosts()).hasSize(1);
-        assertThat(response.targetJobs()).isEmpty();
+        assertThat(response.targetJobs()).isNull();              // GRADUATE 는 targetJobs 비해당 → null
 
         // 졸업생이면 관심 직군·로드맵 카운트 서비스는 호출하지 않는다
         verify(targetJobService, never()).getMyTargetJobs(member);
@@ -150,7 +152,7 @@ class MyPageServiceImplTest {
     }
 
     @Test
-    @DisplayName("getMyPage - UNKNOWN: 로드맵 카운트는 0 으로 고정되고 서비스는 호출되지 않는다")
+    @DisplayName("getMyPage - UNKNOWN: 로드맵 카운트는 null 고정, 양쪽 역할 리스트 모두 null")
     void getMyPageForUnknownSkipsRoadmapCount() {
         Member member = unknownMember();
         when(memberService.getMyProfile(member)).thenReturn(profileOf(member));
@@ -160,8 +162,45 @@ class MyPageServiceImplTest {
 
         MyPageResponse response = myPageService.getMyPage(member);
 
-        assertThat(response.activity().roadmapCount()).isEqualTo(0L);
+        assertThat(response.activity().roadmapCount()).isNull();
+        assertThat(response.targetJobs()).isNull();
+        assertThat(response.jobPosts()).isNull();
         verify(roadmapService, never()).countMyRoadmaps(member);
+        verify(targetJobService, never()).getMyTargetJobs(member);
+        verify(jobPostService, never()).getMyJobPosts(member);
+    }
+
+    @Test
+    @DisplayName("getMyPage - STUDENT 의 targetJobs 가 0개일 때 빈 리스트로 유지 (null 아님 — '해당 역할 + 0개' 의미)")
+    void getMyPageForStudentPreservesEmptyTargetJobs() {
+        Member member = studentMember();
+        when(memberService.getMyProfile(member)).thenReturn(profileOf(member));
+        when(coffeeChatService.countMyAcceptedCoffeeChats(member)).thenReturn(0L);
+        when(roadmapService.countMyRoadmaps(member)).thenReturn(0L);
+        when(questionService.countMyQuestions(member)).thenReturn(0L);
+        when(techStackService.getMyTechStacks(member)).thenReturn(List.of());
+        when(targetJobService.getMyTargetJobs(member)).thenReturn(List.of());
+
+        MyPageResponse response = myPageService.getMyPage(member);
+
+        assertThat(response.targetJobs()).isNotNull().isEmpty();
+        assertThat(response.jobPosts()).isNull();
+    }
+
+    @Test
+    @DisplayName("getMyPage - GRADUATE 의 jobPosts 가 0개일 때 빈 리스트로 유지 (null 아님)")
+    void getMyPageForGraduatePreservesEmptyJobPosts() {
+        Member member = graduateMember();
+        when(memberService.getMyProfile(member)).thenReturn(profileOf(member));
+        when(coffeeChatService.countMyAcceptedCoffeeChats(member)).thenReturn(0L);
+        when(questionService.countMyQuestions(member)).thenReturn(0L);
+        when(techStackService.getMyTechStacks(member)).thenReturn(List.of());
+        when(jobPostService.getMyJobPosts(member)).thenReturn(List.of());
+
+        MyPageResponse response = myPageService.getMyPage(member);
+
+        assertThat(response.jobPosts()).isNotNull().isEmpty();
+        assertThat(response.targetJobs()).isNull();
     }
 
     // ── 재학생 통합 수정 (updateStudentMyPage) ───────────────────────
@@ -181,8 +220,9 @@ class MyPageServiceImplTest {
 
         MyPageResponse response = myPageService.updateStudentMyPage(member, request);
 
-        // 프로필 응답은 수정 API(updateMyProfile)가 반환한 값을 그대로 싣는다
-        assertThat(response.profile()).isSameAs(updatedProfile);
+        // 프로필 응답은 수정 API(updateMyProfile) 반환값을 point 만 제외해서 싣는다 (마이페이지 정책)
+        assertThat(response.profile()).isEqualTo(updatedProfile.withoutPoint());
+        assertThat(response.profile().point()).isNull();
         // 어댑터 변환된 UpdateMemberRequest 로 위임된다 — 시그니처만 확인
         verify(memberService).updateMyProfile(any(), any());
         verify(techStackService).replace(member, new ReplaceTechStackRequest(techStacks));
@@ -300,7 +340,9 @@ class MyPageServiceImplTest {
 
         MyPageResponse response = myPageService.updateGraduateMyPage(member, request);
 
-        assertThat(response.profile()).isSameAs(updatedProfile);
+        // 프로필 응답은 수정 API 반환값을 point 만 제외해서 싣는다 (마이페이지 정책)
+        assertThat(response.profile()).isEqualTo(updatedProfile.withoutPoint());
+        assertThat(response.profile().point()).isNull();
         verify(memberService).updateMyProfile(any(), any());
         verify(techStackService).replace(member, new ReplaceTechStackRequest(techStacks));
         verify(jobPostService).createFromLink(member, toAdd.get(0));

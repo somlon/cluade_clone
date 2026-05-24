@@ -115,12 +115,19 @@ public class MyPageServiceImpl implements MyPageService {
     /**
      * profile 을 제외한 마이페이지 구성 요소(활동 통계/기술 스택/역할별 항목)를 조회해 한 응답으로 조합한다.
      * getMyPage(조회)와 updateStudent/GraduateMyPage(수정 후 최신 조회)가 공유한다.
+     *
+     * 역할별 비해당 필드는 null 로 두고 @JsonInclude(NON_NULL) 가 응답 JSON 에서 키 자체를 제외한다.
+     * 빈 배열 []는 "역할 맞지만 0개" 의미로 보존된다.
+     * point 는 마이페이지에선 항상 제외(withoutPoint).
      */
     private MyPageResponse buildResponse(Member member, MemberResponse profile) {
-        // 로드맵은 STUDENT 전용 항목 — 졸업생 마이페이지엔 로드맵 카드가 없으므로 GRADUATE/UNKNOWN 은 0.
-        long roadmapCount = member.getRole() == MemberRole.STUDENT
+        // 마이페이지에선 point 를 노출하지 않는다(다른 엔드포인트는 영향 없음)
+        MemberResponse profileForMyPage = profile.withoutPoint();
+
+        // 로드맵은 STUDENT 전용 항목 — GRADUATE/UNKNOWN 은 null → 응답에서 키 자체 제외
+        Long roadmapCount = member.getRole() == MemberRole.STUDENT
                 ? roadmapService.countMyRoadmaps(member)
-                : 0L;
+                : null;
 
         MyPageResponse.ActivityStats activity = new MyPageResponse.ActivityStats(
                 coffeeChatService.countMyAcceptedCoffeeChats(member),
@@ -130,14 +137,14 @@ public class MyPageServiceImpl implements MyPageService {
 
         List<TechStackResponse> techStacks = techStackService.getMyTechStacks(member);
 
-        // 관심 직군은 재학생 마이페이지 항목, 등록 구직 공고는 졸업생 마이페이지 항목
+        // 관심 직군은 STUDENT 전용, 등록 구직 공고는 GRADUATE 전용 — 비해당 역할은 null
         List<TargetJobResponse> targetJobs = member.getRole() == MemberRole.STUDENT
                 ? targetJobService.getMyTargetJobs(member)
-                : List.of();
+                : null;
         List<JobPostResponse> jobPosts = member.getRole() == MemberRole.GRADUATE
                 ? jobPostService.getMyJobPosts(member)
-                : List.of();
+                : null;
 
-        return new MyPageResponse(profile, activity, techStacks, targetJobs, jobPosts);
+        return new MyPageResponse(profileForMyPage, activity, techStacks, targetJobs, jobPosts);
     }
 }

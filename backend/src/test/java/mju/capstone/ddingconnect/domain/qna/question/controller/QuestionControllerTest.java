@@ -28,6 +28,7 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -129,7 +130,7 @@ class QuestionControllerTest {
         given(questionService.getMyQuestions(any()))
                 .willReturn(List.of(
                         new QuestionResponse(11L, 1L, QuestionCategory.TECHNICAL, "내 글 1", "c", 0, 0L, 0L, false),
-                        new QuestionResponse(12L, 1L, QuestionCategory.GENERAL, "내 글 2", "c", 0, 0L, 0L, false)));
+                        new QuestionResponse(12L, 1L, QuestionCategory.CAREER, "내 글 2", "c", 0, 0L, 0L, false)));
 
         mockMvc.perform(get(BASE_URL + "/me"))
                 .andExpect(status().isOk())

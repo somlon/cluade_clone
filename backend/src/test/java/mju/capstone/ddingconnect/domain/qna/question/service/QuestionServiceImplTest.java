@@ -255,7 +255,7 @@ class QuestionServiceImplTest {
         Question mine1 = Question.builder().id(10L).member(author)
                 .category(QuestionCategory.TECHNICAL).title("나의 글 1").content("c").viewCount(1).build();
         Question mine2 = Question.builder().id(20L).member(author)
-                .category(QuestionCategory.GENERAL).title("나의 글 2").content("c").viewCount(2).build();
+                .category(QuestionCategory.CAREER).title("나의 글 2").content("c").viewCount(2).build();
         when(questionRepository.findByMemberId(author.getId())).thenReturn(List.of(mine1, mine2));
 
         List<QuestionResponse> result = questionService.getMyQuestions(author);

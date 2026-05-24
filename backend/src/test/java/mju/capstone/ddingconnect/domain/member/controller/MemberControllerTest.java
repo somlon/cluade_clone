@@ -108,21 +108,96 @@ class MemberControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/v1/members/mypage - 마이페이지 조회")
-    void getMyPage() throws Exception {
+    @DisplayName("GET /api/v1/members/mypage - STUDENT: jobPosts·grade 외 GRADUATE 전용 키 제외, []·필수 키는 유지")
+    void getMyPageForStudentExcludesGraduateOnlyKeys() throws Exception {
+        // STUDENT: point 는 마이페이지에선 항상 제외(헬퍼 적용), grade 는 STUDENT 전용으로 노출
         MemberResponse profile = new MemberResponse(1L, "test@mju.ac.kr", null, "테스터",
-                "60201234", "컴퓨터공학과", null, null, null, null, 0L,
+                "60201234", "컴퓨터공학과", null, null, null, null, null,
                 MemberRole.STUDENT, 3, null, null, null, null);
         MyPageResponse res = new MyPageResponse(
                 profile,
                 new MyPageResponse.ActivityStats(2L, 1L, 5L),
-                List.of(), List.of(), List.of());
+                List.of(),
+                List.of(),    // STUDENT 의 targetJobs 0개 → [] 로 유지
+                null);        // STUDENT 는 jobPosts 비해당 → null → 응답 키 제외
         given(myPageService.getMyPage(any())).willReturn(res);
 
         mockMvc.perform(get(BASE_URL + "/mypage"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result.profile.email").value("test@mju.ac.kr"))
-                .andExpect(jsonPath("$.result.activity.questionCount").value(5));
+                .andExpect(jsonPath("$.result.profile.grade").value(3))
+                .andExpect(jsonPath("$.result.activity.questionCount").value(5))
+                .andExpect(jsonPath("$.result.activity.roadmapCount").value(1))
+                // "해당 역할 + 0개" 는 [] 로 보존
+                .andExpect(jsonPath("$.result.targetJobs").isArray())
+                .andExpect(jsonPath("$.result.targetJobs").isEmpty())
+                // 비해당 역할 필드 + dead 필드는 키 자체 제외
+                .andExpect(jsonPath("$.result.jobPosts").doesNotExist())
+                .andExpect(jsonPath("$.result.profile.point").doesNotExist())
+                .andExpect(jsonPath("$.result.profile.businessCardImage").doesNotExist())
+                .andExpect(jsonPath("$.result.profile.jobType").doesNotExist())
+                .andExpect(jsonPath("$.result.profile.company").doesNotExist())
+                .andExpect(jsonPath("$.result.profile.careerYear").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/members/mypage - GRADUATE: targetJobs·grade·roadmapCount 키 제외, jobPosts []는 유지")
+    void getMyPageForGraduateExcludesStudentOnlyKeys() throws Exception {
+        WithMockLoginMember.loginAsGraduate();
+        // GRADUATE: point 항상 제외, businessCardImage/jobType/company/careerYear 노출
+        MemberResponse profile = new MemberResponse(2L, "g@mju.ac.kr", null, "졸업생",
+                "60201234", "컴퓨터공학과", null, null, null, null, null,
+                MemberRole.GRADUATE, null, "card.png", null, "네이버", 3);
+        MyPageResponse res = new MyPageResponse(
+                profile,
+                // roadmapCount = null → 응답에서 키 자체 제외
+                new MyPageResponse.ActivityStats(0L, null, 0L),
+                List.of(),
+                null,            // GRADUATE 는 targetJobs 비해당 → null → 키 제외
+                List.of());      // GRADUATE 의 jobPosts 0개 → [] 로 유지
+        given(myPageService.getMyPage(any())).willReturn(res);
+
+        mockMvc.perform(get(BASE_URL + "/mypage"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.profile.email").value("g@mju.ac.kr"))
+                .andExpect(jsonPath("$.result.profile.company").value("네이버"))
+                .andExpect(jsonPath("$.result.activity.coffeeChatCount").value(0))
+                .andExpect(jsonPath("$.result.activity.questionCount").value(0))
+                // "해당 역할 + 0개" 는 [] 로 보존
+                .andExpect(jsonPath("$.result.jobPosts").isArray())
+                .andExpect(jsonPath("$.result.jobPosts").isEmpty())
+                // 비해당 역할 필드 + dead 필드는 키 자체 제외
+                .andExpect(jsonPath("$.result.targetJobs").doesNotExist())
+                .andExpect(jsonPath("$.result.activity.roadmapCount").doesNotExist())
+                .andExpect(jsonPath("$.result.profile.grade").doesNotExist())
+                .andExpect(jsonPath("$.result.profile.point").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/members/me - 다른 엔드포인트는 point 가 null 이면 키 제외(정책 분리)")
+    void getMyProfileExcludesNullPoint() throws Exception {
+        MemberResponse res = new MemberResponse(1L, "test@mju.ac.kr", null, "테스터",
+                "60201234", "컴퓨터공학과", null, null, null, null, null,
+                MemberRole.STUDENT, 3, null, null, null, null);
+        given(memberService.getMyProfile(any())).willReturn(res);
+
+        mockMvc.perform(get(BASE_URL + "/me"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.email").value("test@mju.ac.kr"))
+                .andExpect(jsonPath("$.result.point").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/members/me - 다른 엔드포인트는 point 값이 있으면 응답에 포함(정책 분리)")
+    void getMyProfileIncludesPresentPoint() throws Exception {
+        MemberResponse res = new MemberResponse(1L, "test@mju.ac.kr", null, "테스터",
+                "60201234", "컴퓨터공학과", null, null, null, null, 1500L,
+                MemberRole.STUDENT, 3, null, null, null, null);
+        given(memberService.getMyProfile(any())).willReturn(res);
+
+        mockMvc.perform(get(BASE_URL + "/me"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.point").value(1500));
     }
 
     // ── 재학생 마이페이지 통합 수정 ─────────────────────────────────────
