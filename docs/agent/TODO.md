@@ -196,3 +196,84 @@ refactor(member): MyPageResponse 역할별 필드 응답 제외 (TODO S)
 - "비해당 필드(null)" vs "있지만 0개([])" 의미 분리
 - backend.md 마이페이지 섹션 갱신
 ```
+
+
+### TODO T — Swagger UI "나의 활동" 그룹 통합 표시
+
+> 발견 맥락: '나의 활동' 페이지(`MyActivityController` + 도메인별 분산)의 3개 엔드포인트가 Swagger UI 에서 각자 다른 컨트롤러 그룹("나의 활동", "로드맵", "질문")에 흩어져 있어, '나의 활동' 한 그룹에서 모아 보거나 통합 테스트하기 불편.
+
+#### 현재 상태
+
+| Swagger 그룹 | 표시되는 엔드포인트 |
+|--------------|---------------------|
+| "나의 활동" | `GET /api/v1/members/me/activity/coffeechats` 만 (1개) |
+| "로드맵" | `GET /api/v1/roadmaps` + 다른 로드맵 API |
+| "질문" | `GET /api/v1/questions/me` + 다른 Q&A API |
+
+#### 목표
+
+"나의 활동" 그룹에 3개 엔드포인트가 **모두** 표시되도록 변경. 원본 도메인 그룹("로드맵", "질문")에서도 계속 표시 — **양쪽 동시 표시는 springdoc-openapi 의도된 동작** (같은 엔드포인트를 두 가지 맥락에서 찾을 수 있게 함).
+
+#### 변경 파일 (2개, 각 1줄)
+
+1. **`RoadmapSwagger.getRoadmaps`** 메서드 위에 method-level `@Tag` 추가:
+   ```java
+   @Tag(name = "나의 활동")
+   @Operation(...)
+   ApiResponse<List<RoadmapResponse>> getRoadmaps(@LoginMember Member member);
+   ```
+
+2. **`QuestionSwagger.getMyQuestions`** 메서드 위에 method-level `@Tag` 추가:
+   ```java
+   @Tag(name = "나의 활동")
+   @Operation(...)
+   ApiResponse<List<QuestionResponse>> getMyQuestions(@LoginMember Member member);
+   ```
+
+> `MyActivitySwagger` 는 이미 클래스 레벨 `@Tag(name = "나의 활동")` 가 있어 그대로 두면 됨. 추가 작업 없음.
+
+#### 변경 후 Swagger UI
+
+```
+[나의 활동]                          ← 통합 그룹
+  GET /api/v1/members/me/activity/coffeechats
+  GET /api/v1/roadmaps                 ← 추가됨
+  GET /api/v1/questions/me             ← 추가됨
+
+[로드맵]                              ← 원본 그룹 유지
+  POST /api/v1/roadmaps
+  GET  /api/v1/roadmaps                ← 양쪽 동시 표시
+  GET  /api/v1/roadmaps/{id}
+  DELETE /api/v1/roadmaps/{id}
+
+[질문]                                ← 원본 그룹 유지
+  POST /api/v1/questions
+  GET  /api/v1/questions
+  GET  /api/v1/questions/me            ← 양쪽 동시 표시
+  GET  /api/v1/questions/{id}
+  PATCH/DELETE/likes ...
+```
+
+#### 문서 갱신 (`backend.md`)
+
+마이페이지 섹션의 "나의 활동 페이지" 항목 끝에 1줄 추가:
+> **Swagger 그룹**: "로드맵"/"질문" 도메인 그룹 + "나의 활동" 보조 그룹에 동시 표시 (`RoadmapSwagger.getRoadmaps`·`QuestionSwagger.getMyQuestions` 에 method-level `@Tag(name = "나의 활동")` 부여). '나의 활동' 화면 기준으로 한 그룹에서 3개 엔드포인트 통합 테스트 가능.
+
+#### 의존성·머지 우선순위
+
+- **독립 TODO** — 다른 어떤 작업과도 충돌 없음 (L~R, S 모두 무관)
+- 코드 변경: 2줄 (Swagger 메타데이터만), 테스트 영향 없음
+- **단독 PR 권장** (극소규모)
+- 언제든 진행 가능
+
+#### 커밋 메시지 예시
+
+```
+docs(swagger): "나의 활동" 그룹에 로드맵·질문 me 엔드포인트 통합 표시 (TODO T)
+
+- RoadmapSwagger.getRoadmaps + QuestionSwagger.getMyQuestions 에
+  method-level @Tag(name = "나의 활동") 추가
+- Swagger UI 에서 "나의 활동" 한 그룹으로 3개 엔드포인트 모아 테스트 가능
+- 원본 도메인 그룹에서도 그대로 표시 (springdoc-openapi 의도된 중복)
+- backend.md 마이페이지 섹션 갱신
+```
