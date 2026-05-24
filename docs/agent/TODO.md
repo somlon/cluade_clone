@@ -122,3 +122,77 @@ PR4 (N+O+Q, 파일 업로드 3종)
 별도 환경 메모 (TODO 결함 아님):
 - MySQL utf8mb4 미설정 → 한글 필드 `?????` 저장 (테스트는 영문 입력으로 회피)
 - `spring.servlet.multipart.max-file-size: 5MB` 설정으로 N-(d) 가 Tomcat 413 으로 차단 — 앱 `_FILE_TOO_LARGE` 검증을 직접 보고 싶으면 max-file-size 를 10MB 로 늘리고 컨트롤러/서비스에서 5MB 자체 체크
+
+
+### TODO S — MyPageResponse 역할별 필드 응답 제외
+
+> 발견 맥락: 재학생 마이페이지 응답에 `jobPosts: []` 가 항상 포함되고, 졸업생 응답에 `targetJobs: []` 가 항상 포함됨 (현재 contract). "내 역할엔 없는 필드"(비해당)와 "내 역할 맞지만 0개"(빈 결과)가 동일한 `[]` 로 표현돼 의미 모호.
+
+#### 목표
+
+- `null` = **비해당 필드** → JSON 응답에서 키 자체 제외
+- `[]` = **해당 역할 맞지만 0개** → 응답에 그대로 포함
+
+→ 프론트가 "공고 없음" 같은 빈 상태 UI 를 그릴지 말지 명확히 구분 가능.
+
+#### 변경 파일 (3개)
+
+1. **`MyPageResponse.java`** (record) — Jackson 어노테이션 추가:
+   ```java
+   @JsonInclude(JsonInclude.Include.NON_NULL)
+   public record MyPageResponse(
+       MemberResponse profile,
+       ActivityStats activity,
+       List<TechStackResponse> techStacks,
+       List<TargetJobResponse> targetJobs,   // STUDENT 일 때만 채워짐, 그 외 null → 응답 제외
+       List<JobPostResponse> jobPosts        // GRADUATE 일 때만 채워짐, 그 외 null → 응답 제외
+   ) {}
+   ```
+
+2. **`MyPageServiceImpl.buildResponse`** — 역할별 null 설정:
+   ```java
+   List<TargetJobResponse> targetJobs = member.getRole() == MemberRole.STUDENT
+       ? targetJobService.getMyTargetJobs(member)
+       : null;
+   List<JobPostResponse> jobPosts = member.getRole() == MemberRole.GRADUATE
+       ? jobPostService.getMyJobPosts(member)
+       : null;
+   ```
+
+3. **`MyPageServiceImplTest` / `MemberControllerTest`** — 검증 케이스 추가:
+   - STUDENT 응답 JSON 에 `jobPosts` 키 **없음** (`jsonPath("$.result.jobPosts").doesNotExist()`)
+   - GRADUATE 응답 JSON 에 `targetJobs` 키 **없음**
+   - STUDENT 의 `targetJobs` 가 0개일 때 `[]` 로 **유지** (null 아님)
+   - GRADUATE 의 `jobPosts` 가 0개일 때 `[]` 로 **유지**
+   - UNKNOWN 역할은 양쪽 다 키 없음
+
+#### 문서 갱신 (`backend.md`)
+
+마이페이지 섹션의 다음 줄:
+> `targetJobs` 는 `STUDENT`, `jobPosts` 는 `GRADUATE` 역할에서만 채워지고 그 외 역할에선 빈 리스트.
+
+→ 다음으로 교체:
+> `targetJobs` 는 `STUDENT`, `jobPosts` 는 `GRADUATE` 역할에서만 채워진다. **그 외 역할에서는 `null` 로 두어 `@JsonInclude(NON_NULL)` 가 응답 JSON 에서 키 자체를 제외한다** (빈 배열 `[]` 는 "역할 맞지만 0개" 의미로 보존). `jobPosts` 는 `JobPostService.getMyJobPosts` (졸업생 매핑이 없으면 빈 리스트).
+
+#### 프론트 호환성
+
+- `?.length === 0` / `arr.length === 0` 체크: 필드 자체가 없어지면 `undefined` 도 falsy → 동일 동작
+- `arr.map(...)` 직접 호출: 옵셔널 체이닝(`arr?.map(...)`) 필요. 프론트가 이미 사용 중이면 영향 없음.
+- TypeScript 타입: `targetJobs?: TargetJobResponse[]` / `jobPosts?: JobPostResponse[]` 로 변경 권장
+
+#### 의존성·머지 우선순위
+
+- **독립 TODO** — L~R 통합 머지 전략(4개 PR)과 충돌 없음
+- 단, `MyPageResponse` + `MyPageServiceImpl.buildResponse` 가 PR2 (L+P) 에서 마지막으로 수정되는 파일이므로 **PR2 머지 후 진행이 안전**
+- 추정 작업 범위: 코드 ~10줄 + 테스트 4~6 케이스 + 문서 1줄 — **단독 PR 권장 (소규모)**
+
+#### 커밋 메시지 예시
+
+```
+refactor(member): MyPageResponse 역할별 필드 응답 제외 (TODO S)
+
+- STUDENT 응답에서 jobPosts 키 제외 (null + @JsonInclude NON_NULL)
+- GRADUATE 응답에서 targetJobs 키 제외
+- "비해당 필드(null)" vs "있지만 0개([])" 의미 분리
+- backend.md 마이페이지 섹션 갱신
+```
