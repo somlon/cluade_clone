@@ -46,6 +46,7 @@ public interface QuestionSwagger {
             description = "로그인한 회원이 작성한 질문만 조회합니다. 마이페이지의 '질문 수' 카드를 클릭해 진입하는 '나의 활동/Q&A' 화면용. "
                     + "전체 질문 목록(GET /api/v1/questions)과 분리된 엔드포인트로, 응답 DTO 는 동일합니다."
     )
+    @Tag(name = "나의 활동")
     @GetMapping("/me")
     ApiResponse<List<QuestionResponse>> getMyQuestions(
             @Parameter(hidden = true) @LoginMember Member member);
