@@ -143,7 +143,7 @@ PR4 (N+O+Q, 파일 업로드 3종)
 | `profile` | `jobType` | ❌ 없음 | **null** | ✓ | 값 | STUDENT 는 응답 제외 |
 | `profile` | `company` | ❌ 없음 | **null** | ✓ | 값 | STUDENT 는 응답 제외 |
 | `profile` | `careerYear` | ❌ 없음 | **null** | ✓ | 값 | STUDENT 는 응답 제외 |
-| `profile` | `point` | ❌ 없음 | **null** | ❌ 없음 | **null** | 향후 구현 예정 — null 이면 응답 제외 |
+| `profile` | `point` | ❌ 없음 | **null** | ❌ 없음 | **null** | **마이페이지에선 항상 제외** (향후 값이 채워져도 mypage 응답엔 미포함) |
 
 #### 목표
 
@@ -176,30 +176,51 @@ PR4 (N+O+Q, 파일 업로드 3종)
    ) {}
    ```
 
-3. **`MemberResponse.java`** (record) — `@JsonInclude(NON_NULL)` 추가:
+3. **`MemberResponse.java`** (record) — `@JsonInclude(NON_NULL)` 추가 + 마이페이지용 헬퍼 메서드:
    ```java
    @JsonInclude(JsonInclude.Include.NON_NULL)
    public record MemberResponse(
-       Long id, String email, ..., Long point,  // point: 향후 구현, null 이면 제외
+       Long id, String email, ..., Long point,  // 다른 엔드포인트에선 노출 가능, null 이면 제외
        MemberRole role,
        Integer grade,                            // STUDENT 전용
        String businessCardImage, JobType jobType, String company, Integer careerYear  // GRADUATE 전용
-   ) {}
+   ) {
+       /** 마이페이지 응답용 — point 를 항상 제외 (마이페이지에선 노출하지 않는 정책) */
+       public MemberResponse withoutPoint() {
+           return new MemberResponse(id, email, name, nickname, studentNumber, department,
+               githubLink, linkedinLink, portfolio, profileImage, null, role,
+               grade, businessCardImage, jobType, company, careerYear);
+       }
+   }
    ```
-   → 기존 정적 팩토리 (`from(Member, Student)`, `from(Member, Graduate)`) 가 이미 비해당 필드를 `null` 로 채우고 있어 어노테이션만 추가하면 자동 동작. **메서드 본문 변경 없음.**
+   → 기존 정적 팩토리 (`from(Member, Student)`, `from(Member, Graduate)`) 는 비해당 역할 필드를 `null` 로 채우고 있어 어노테이션만으로 자동 동작. `point` 만 별도 처리 (`withoutPoint()` 헬퍼). **`GET /me` 등 다른 엔드포인트는 영향 없음** — 그쪽은 정적 팩토리 결과 그대로 사용해 향후 `point` 값이 들어가면 노출.
 
-4. **`MyPageServiceImpl.buildResponse`** — 역할별 null 설정:
+4. **`MyPageServiceImpl.buildResponse`** — 역할별 null 설정 + `point` 제외:
    ```java
-   Long roadmapCount = member.getRole() == MemberRole.STUDENT
-       ? roadmapService.countMyRoadmaps(member)
-       : null;   // long 0L 대신 Long null
+   private MyPageResponse buildResponse(Member member, MemberResponse profile) {
+       // 마이페이지에선 point 를 노출하지 않음 (다른 엔드포인트는 영향 없음)
+       MemberResponse profileForMyPage = profile.withoutPoint();
 
-   List<TargetJobResponse> targetJobs = member.getRole() == MemberRole.STUDENT
-       ? targetJobService.getMyTargetJobs(member)
-       : null;
-   List<JobPostResponse> jobPosts = member.getRole() == MemberRole.GRADUATE
-       ? jobPostService.getMyJobPosts(member)
-       : null;
+       Long roadmapCount = member.getRole() == MemberRole.STUDENT
+           ? roadmapService.countMyRoadmaps(member)
+           : null;   // long 0L 대신 Long null
+
+       List<TargetJobResponse> targetJobs = member.getRole() == MemberRole.STUDENT
+           ? targetJobService.getMyTargetJobs(member)
+           : null;
+       List<JobPostResponse> jobPosts = member.getRole() == MemberRole.GRADUATE
+           ? jobPostService.getMyJobPosts(member)
+           : null;
+
+       MyPageResponse.ActivityStats activity = new MyPageResponse.ActivityStats(
+           coffeeChatService.countMyAcceptedCoffeeChats(member),
+           roadmapCount,
+           questionService.countMyQuestions(member)
+       );
+
+       return new MyPageResponse(profileForMyPage, activity,
+           techStackService.getMyTechStacks(member), targetJobs, jobPosts);
+   }
    ```
 
 #### 테스트 보강
@@ -209,7 +230,8 @@ PR4 (N+O+Q, 파일 업로드 3종)
   - GRADUATE 응답에 `targetJobs` / `grade` / `activity.roadmapCount` 키 **없음**
   - STUDENT 의 `targetJobs` 가 0개일 때 `[]` 로 **유지** (null 아님)
   - GRADUATE 의 `jobPosts` 가 0개일 때 `[]` 로 **유지**
-  - `point` 가 null 이면 양쪽 다 키 **없음** (향후 값 들어가면 자연스럽게 포함)
+  - **마이페이지 응답에선 `point` 키가 항상 없음** (값이 채워져도 미포함, `withoutPoint()` 적용)
+  - 다른 엔드포인트(`GET /me` 등)에선 `point` 가 null 이면 응답에서 제외, 값 있으면 포함 (정책 분리 검증)
   - UNKNOWN 역할은 양쪽 필드 모두 키 없음
 
 #### 문서 갱신 (`backend.md`)
@@ -218,7 +240,7 @@ PR4 (N+O+Q, 파일 업로드 3종)
 > `targetJobs` 는 `STUDENT`, `jobPosts` 는 `GRADUATE` 역할에서만 채워지고 그 외 역할에선 빈 리스트.
 
 → 다음으로 교체:
-> **응답 contract**: 역할별 비해당 필드는 `null` 로 두고 `@JsonInclude(NON_NULL)` 가 응답 JSON 에서 키 자체를 제외한다. `targetJobs` 는 STUDENT 전용, `jobPosts` 는 GRADUATE 전용. `activity.roadmapCount` 는 STUDENT 전용 (GRADUATE 는 응답에서 제외). `MemberResponse` 의 `grade` (STUDENT 전용) / `businessCardImage`·`jobType`·`company`·`careerYear` (GRADUATE 전용) / `point` (향후 도입) 도 동일 패턴. **빈 배열 `[]` 는 "역할 맞지만 0개" 의미로 보존**.
+> **응답 contract**: 역할별 비해당 필드는 `null` 로 두고 `@JsonInclude(NON_NULL)` 가 응답 JSON 에서 키 자체를 제외한다. `targetJobs` 는 STUDENT 전용, `jobPosts` 는 GRADUATE 전용. `activity.roadmapCount` 는 STUDENT 전용 (GRADUATE 는 응답에서 제외). `MemberResponse` 의 `grade` (STUDENT 전용) / `businessCardImage`·`jobType`·`company`·`careerYear` (GRADUATE 전용) 도 동일 패턴. **`point` 는 마이페이지에선 항상 제외** (`MemberResponse.withoutPoint()` 헬퍼로 명시 null 처리, 향후 값이 채워져도 mypage 응답엔 미포함). 다른 엔드포인트(`GET /me` 등)에선 `point` 가 null 이면 제외, 값 있으면 포함. **빈 배열 `[]` 는 "역할 맞지만 0개" 의미로 보존**.
 
 #### 프론트 호환성
 
@@ -240,8 +262,9 @@ refactor(member): 마이페이지 응답 역할별 필드 전면 정리 (TODO S)
 - MyPageResponse + ActivityStats + MemberResponse 에 @JsonInclude NON_NULL
 - ActivityStats.roadmapCount: long → Long (GRADUATE 는 null)
 - targetJobs(GRADUATE) / jobPosts(STUDENT) / grade(GRADUATE) /
-  businessCardImage·jobType·company·careerYear(STUDENT) / point(null 일 때)
-  모두 응답에서 키 자체 제외
+  businessCardImage·jobType·company·careerYear(STUDENT) 모두 응답에서 키 자체 제외
+- MemberResponse.withoutPoint() 헬퍼 신설 — 마이페이지에선 point 항상 제외
+  (다른 엔드포인트는 정책 유지: null 일 때만 제외)
 - "비해당 필드(null)" vs "있지만 0개([])" 의미 분리
 - backend.md 마이페이지 섹션 갱신
 ```
