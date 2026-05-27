@@ -25,12 +25,12 @@ public class RoadmapController implements RoadmapSwagger {
 
     private final RoadmapService roadmapService;
 
-    /** 로드맵 생성 (Create) — memberId 와 입력 폼 6필드로 데이터 파트 AI 호출 후 저장 */
+    /** 로드맵 생성 (Create) — 로그인 회원과 입력 폼 6필드로 데이터 파트 AI 호출 후 저장 */
     @PostMapping
     public ApiResponse<RoadmapResponse> createRoadmap(
-            @RequestParam Long memberId,
+            @Parameter(hidden = true) @LoginMember Member member,
             @RequestBody CreateRoadmapRequest request) {
-        return ApiResponse.onSuccess(roadmapService.create(memberId, request));
+        return ApiResponse.onSuccess(roadmapService.create(member.getId(), request));
     }
 
     /** 로드맵 목록 조회 (Read) — 로그인 회원이 생성한 로드맵만 최신순 반환. GRADUATE 는 차단. */

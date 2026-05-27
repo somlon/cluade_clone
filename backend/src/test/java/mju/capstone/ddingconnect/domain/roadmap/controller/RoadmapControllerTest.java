@@ -58,22 +58,21 @@ class RoadmapControllerTest {
     void tearDown() { WithMockLoginMember.clear(); }
 
     @Test
-    @DisplayName("POST /api/v1/roadmaps?memberId= - 입력 폼으로 로드맵 생성")
+    @DisplayName("POST /api/v1/roadmaps - 입력 폼으로 로드맵 생성 (로그인 회원 식별)")
     void createRoadmap() throws Exception {
         CreateRoadmapRequest req = new CreateRoadmapRequest(3, 4.0, "응용소프트웨어학과",
                 TargetJobCategory.BACKEND, List.of(TechStackName.JAVA, TechStackName.SPRING), "카카오");
-        given(roadmapService.create(eq(MEMBER_ID), any()))
+        given(roadmapService.create(eq(WithMockLoginMember.STUDENT_ID), any()))
                 .willReturn(new RoadmapResponse(1L, MEMBER_ID, GENERATED_CONTENT, CREATED_AT));
 
         mockMvc.perform(post(BASE_URL)
-                        .param("memberId", String.valueOf(MEMBER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result.id").value(1L))
                 .andExpect(jsonPath("$.result.content").value(GENERATED_CONTENT));
 
-        verify(roadmapService).create(eq(MEMBER_ID), any(CreateRoadmapRequest.class));
+        verify(roadmapService).create(eq(WithMockLoginMember.STUDENT_ID), any(CreateRoadmapRequest.class));
     }
 
     @Test
