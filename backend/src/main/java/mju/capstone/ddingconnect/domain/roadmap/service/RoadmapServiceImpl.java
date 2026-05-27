@@ -10,6 +10,7 @@ import mju.capstone.ddingconnect.domain.roadmap.domain.repository.RoadmapAlarmRe
 import mju.capstone.ddingconnect.domain.roadmap.domain.repository.RoadmapRepository;
 import mju.capstone.ddingconnect.domain.roadmap.dto.request.CreateRoadmapRequest;
 import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapDownloadResponse;
+import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapListResponse;
 import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapResponse;
 import mju.capstone.ddingconnect.global.aws.S3Service;
 import mju.capstone.ddingconnect.global.response.code.status.ErrorStatus;
@@ -96,9 +97,9 @@ public class RoadmapServiceImpl implements RoadmapService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<RoadmapResponse> getList(Member member) {
+    public List<RoadmapListResponse> getList(Member member) {
         return roadmapRepository.findByMemberIdOrderByCreatedAtDesc(member.getId())
-                .stream().map(RoadmapResponse::from).toList();
+                .stream().map(RoadmapListResponse::from).toList();
     }
 
     @Override

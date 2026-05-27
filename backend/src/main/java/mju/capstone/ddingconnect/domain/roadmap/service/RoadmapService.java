@@ -3,6 +3,7 @@ package mju.capstone.ddingconnect.domain.roadmap.service;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.domain.roadmap.dto.request.CreateRoadmapRequest;
 import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapDownloadResponse;
+import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapListResponse;
 import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapResponse;
 
 import java.util.List;
@@ -17,8 +18,11 @@ public interface RoadmapService {
      */
     RoadmapResponse create(Long memberId, CreateRoadmapRequest request);
 
-    /** 로그인 회원이 생성한 로드맵 목록을 최신순으로 조회한다. */
-    List<RoadmapResponse> getList(Member member);
+    /**
+     * 로그인 회원이 생성한 로드맵 목록을 최신순으로 조회한다.
+     * 카드 화면 전용 경량 DTO 만 반환 — {@code content} JSON 통째 미포함.
+     */
+    List<RoadmapListResponse> getList(Member member);
 
     /** 로드맵 상세 조회 — 본인 소유만 허용. 타인 소유 시 {@code ROADMAP_UNAUTHORIZED}. */
     RoadmapResponse getOne(Member member, Long roadmapId);

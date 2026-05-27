@@ -9,6 +9,7 @@ import mju.capstone.ddingconnect.domain.roadmap.domain.repository.RoadmapAlarmRe
 import mju.capstone.ddingconnect.domain.roadmap.domain.repository.RoadmapRepository;
 import mju.capstone.ddingconnect.domain.roadmap.dto.request.CreateRoadmapRequest;
 import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapDownloadResponse;
+import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapListResponse;
 import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapResponse;
 import mju.capstone.ddingconnect.domain.techstack.domain.TechStackName;
 import mju.capstone.ddingconnect.global.alarm.AlarmType;
@@ -136,14 +137,29 @@ class RoadmapServiceImplTest {
     }
 
     @Test
-    @DisplayName("getList - 본인이 생성한 로드맵만 최신순으로 반환한다")
+    @DisplayName("getList - 본인이 생성한 로드맵을 카드 화면 경량 DTO 로 반환 (content JSON 의 roadmap_title 추출)")
     void getListReturnsMyRoadmaps() {
         when(roadmapRepository.findByMemberIdOrderByCreatedAtDesc(MEMBER_ID)).thenReturn(List.of(roadmap));
 
-        List<RoadmapResponse> result = roadmapService.getList(author);
+        List<RoadmapListResponse> result = roadmapService.getList(author);
 
         assertThat(result).hasSize(1);
-        assertThat(result.get(0).memberId()).isEqualTo(MEMBER_ID);
+        assertThat(result.get(0).id()).isEqualTo(ROADMAP_ID);
+        assertThat(result.get(0).title()).isEqualTo("백엔드 개발자 로드맵");
+        assertThat(result.get(0).createdAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("getList - content JSON 이 망가져 title 추출 불가하면 폴백 \"로드맵\"")
+    void getListFallbackTitleWhenContentBroken() {
+        Roadmap broken = Roadmap.builder().member(author).content("not-a-json").build();
+        ReflectionTestUtils.setField(broken, "id", 99L);
+        when(roadmapRepository.findByMemberIdOrderByCreatedAtDesc(MEMBER_ID)).thenReturn(List.of(broken));
+
+        List<RoadmapListResponse> result = roadmapService.getList(author);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).title()).isEqualTo("로드맵");
     }
 
     @Test

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import mju.capstone.ddingconnect.domain.interested_job.domain.TargetJobCategory;
 import mju.capstone.ddingconnect.domain.roadmap.dto.request.CreateRoadmapRequest;
 import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapDownloadResponse;
+import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapListResponse;
 import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapResponse;
 import mju.capstone.ddingconnect.domain.roadmap.service.RoadmapService;
 import mju.capstone.ddingconnect.domain.techstack.domain.TechStackName;
@@ -76,17 +77,19 @@ class RoadmapControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/v1/roadmaps - 본인이 생성한 로드맵 목록 (createdAt 포함)")
+    @DisplayName("GET /api/v1/roadmaps - 본인 로드맵 카드 목록 (id/title/createdAt 만, content 미포함)")
     void getRoadmapList() throws Exception {
         given(roadmapService.getList(any()))
-                .willReturn(List.of(new RoadmapResponse(2L, MEMBER_ID, GENERATED_CONTENT, CREATED_AT)));
+                .willReturn(List.of(new RoadmapListResponse(2L, "백엔드 개발자 로드맵", CREATED_AT)));
 
         mockMvc.perform(get(BASE_URL))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result").isArray())
                 .andExpect(jsonPath("$.result[0].id").value(2L))
-                .andExpect(jsonPath("$.result[0].memberId").value(MEMBER_ID))
-                .andExpect(jsonPath("$.result[0].createdAt").exists());
+                .andExpect(jsonPath("$.result[0].title").value("백엔드 개발자 로드맵"))
+                .andExpect(jsonPath("$.result[0].createdAt").exists())
+                .andExpect(jsonPath("$.result[0].content").doesNotExist())
+                .andExpect(jsonPath("$.result[0].memberId").doesNotExist());
 
         verify(roadmapService).getList(any());
     }

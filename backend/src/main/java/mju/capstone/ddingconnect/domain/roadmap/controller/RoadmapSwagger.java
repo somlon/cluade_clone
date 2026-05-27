@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.domain.roadmap.dto.request.CreateRoadmapRequest;
 import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapDownloadResponse;
+import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapListResponse;
 import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapResponse;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMember;
 import mju.capstone.ddingconnect.global.response.exception.handler.ApiResponse;
@@ -57,11 +58,14 @@ public interface RoadmapSwagger {
 
     @Operation(
             summary = "내 로드맵 목록 조회",
-            description = "로그인한 회원이 생성한 로드맵 목록을 최신순(createdAt 내림차순)으로 조회합니다."
+            description = "로그인한 회원이 생성한 로드맵 목록을 최신순(createdAt 내림차순)으로 조회합니다.\n\n" +
+                    "카드 화면 전용 경량 응답 — `id` / `title` / `createdAt` 3 필드만 반환합니다.\n" +
+                    "`title` 은 저장된 `content` JSON 에서 `roadmap_title` 만 추출한 값이며, 추출 실패·빈 제목 시 `\"로드맵\"` 폴백.\n" +
+                    "전체 본문(`content`)이 필요하면 단건 조회(`GET /api/v1/roadmaps/{roadmapId}`)를 호출하세요."
     )
     @Tag(name = "나의 활동")
     @GetMapping
-    ApiResponse<List<RoadmapResponse>> getRoadmaps(
+    ApiResponse<List<RoadmapListResponse>> getRoadmaps(
             @Parameter(hidden = true) @LoginMember Member member);
 
 

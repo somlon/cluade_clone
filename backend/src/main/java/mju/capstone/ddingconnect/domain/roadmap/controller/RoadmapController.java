@@ -6,6 +6,7 @@ import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.domain.member.domain.MemberRole;
 import mju.capstone.ddingconnect.domain.roadmap.dto.request.CreateRoadmapRequest;
 import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapDownloadResponse;
+import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapListResponse;
 import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapResponse;
 import mju.capstone.ddingconnect.domain.roadmap.service.RoadmapService;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMember;
@@ -34,10 +35,9 @@ public class RoadmapController implements RoadmapSwagger {
 
     /** 로드맵 목록 조회 (Read) — 로그인 회원이 생성한 로드맵만 최신순 반환. GRADUATE 는 차단. */
     @GetMapping
-    public ApiResponse<List<RoadmapResponse>> getRoadmaps(
+    public ApiResponse<List<RoadmapListResponse>> getRoadmaps(
             @Parameter(hidden = true) @LoginMember Member member) {
         // 졸업생 마이페이지/나의 활동엔 로드맵 탭 자체가 없다. 프론트가 호출하지 않더라도 서버 일관성을 위해 차단.
-        // 단건 조회(/{roadmapId})는 다른 사람 로드맵을 볼 수 있어야 하므로 가드 적용 안 함.
         if (member.getRole() == MemberRole.GRADUATE) {
             throw new MemberHandler(ErrorStatus.MEMBER_FIELD_ROLE_MISMATCH);
         }
