@@ -13,6 +13,8 @@
 - Spring Data JPA + MySQL (`mysql-connector-j`)
 - Spring Security + JWT (`jjwt 0.12.6`, HS512)
 - Swagger (`springdoc-openapi-starter-webmvc-ui 2.7.0`)
+- AWS S3 (`software.amazon.awssdk:s3 2.25.61` — `S3Client` + `S3Presigner` 포함)
+- PDF 렌더 (`com.github.librepdf:openpdf 1.3.34` — LGPL/MPL, iText 7 AGPL 미채택; 로드맵 다운로드용)
 - Lombok, Validation, `spring-dotenv` (`.env`)
 - 테스트: JUnit 5, `spring-security-test`
 
@@ -63,6 +65,7 @@ mju.capstone.ddingconnect
 - **졸업생 명함 이미지 업로드 (`PATCH /api/v1/members/me/business-card`, GRADUATE 전용)**: 졸업생 마이페이지의 명함 영역에 사진을 업로드/교체하는 전용 엔드포인트. `@RequestPart("image") MultipartFile`. `MemberServiceImpl.updateBusinessCard` 가 (1) `member.getRole() == GRADUATE` 진입 가드(STUDENT/UNKNOWN 모두 `MEMBER_FIELD_ROLE_MISMATCH`) → (2) content-type 화이트리스트(`image/png`·`image/jpeg`·`image/webp`) + 5MB 검증 → (3) `Graduate` 조회 후 기존 `businessCardImage` 가 있으면 `s3Service.deleteImage(old)` → (4) `s3Service.uploadImage(image)` → (5) `Graduate.businessCardImage` 만 갱신해 저장 (다른 GRADUATE 전용 필드는 보존) → 갱신된 `MemberResponse` 반환. 검증 실패는 `ErrorStatus._FILE_TYPE_NOT_ALLOWED`/`_FILE_TOO_LARGE` 로 400. 프로필 이미지(`updateProfileImage`)와 동일한 멀티파트 S3 업로드 패턴을 공유한다.
 - **포트폴리오 PDF 업로드 (`PATCH /api/v1/members/me/portfolio`)**: 마이페이지 포트폴리오 영역에 PDF 파일을 업로드/교체. `@RequestPart("file") MultipartFile`. `MemberServiceImpl.updatePortfolio` 가 (1) 기존 `Member.portfolio` 가 있으면 `s3Service.deleteImage(old)` 로 S3 cleanup → (2) `s3Service.uploadFile(file, PORTFOLIO_CONTENT_TYPES, PORTFOLIO_MAX_BYTES)` 호출(`application/pdf` 화이트리스트 + 20MB 제한이 S3Service 진입부에서 검증) → (3) `Member.portfolio` 만 갱신해 저장 → 갱신된 `MemberResponse` 반환. 파일 자체는 S3 에 저장되고 DB(`Member.portfolio`, `varchar(255)`) 에는 public URL 문자열만 들어간다.
 - **`S3Service` 일반화 (`global/aws/S3Service`)**: `uploadFile(MultipartFile, Set<String> allowedContentTypes, long maxBytes)` 메서드를 추가해 content-type 화이트리스트 + 크기 제한을 진입부에서 강제하는 일반 파일 업로드 진입점을 제공. 신규 호출처(포트폴리오 PDF, 그 외 명시적 타입 업로드)는 이 메서드를 사용한다. 기존 `uploadImage(MultipartFile)` 는 회원가입 증명서 흐름(`AuthServiceImpl.signup`)이 PDF 도 통과시키는 동작에 의존 중이라 **검증 없는 원본 패턴 그대로 유지** (위임 재구성 안 함). 신규 코드는 가능한 한 `uploadFile` 을 사용해 명시적 화이트리스트를 둔다. `deleteImage(String url)` 는 임의 key 삭제 가능하므로 이름과 무관하게 PDF 삭제에도 그대로 재사용한다(rename 보류).
+- **`S3Service` 서버 생성 파일 + presigned URL 확장 (로드맵 PDF 다운로드용)**: `MultipartFile` 외 서버가 직접 만든 바이트 배열 업로드용으로 `uploadBytes(byte[], key, contentType)` 추가, GET 다운로드 URL 발급용으로 `generatePresignedUrl(key, Duration ttl, fileName)` 추가. 후자는 응답 헤더 오버라이드(`response-content-disposition: attachment; filename="..."`) 를 함께 지정해 브라우저 다운로드를 강제한다. presigner 빈은 `S3Config.s3Presigner()` 가 `S3Client` 와 동일 region/credentials 로 생성(`software.amazon.awssdk:s3` 에 `S3Presigner` 포함 — 별도 `s3-presigner` artifact 추가 없음). 기존 `uploadFile`/`uploadImage`/`deleteImage` 시그니처 전부 유지 — 포트폴리오 PDF·프로필/명함 이미지·증명서 흐름 영향 없음.
 
 ### 마이페이지 (member)
 - **`GET /api/v1/members/mypage`** — 마이페이지 화면을 1회 호출로 렌더링하기 위한 통합 조회. 컨트롤러는 `MemberController`, 서비스는 `MyPageService(Impl)`.
@@ -187,7 +190,13 @@ mju.capstone.ddingconnect
 - **입력 6필드 미저장**: 현재 결정은 결과 `content` 만 저장하고 입력 폼 원본은 저장하지 않는다. 재생성·입력 이력·수정 화면 프리필이 필요해지면 별도 컬럼/엔티티 추가 검토 — 제품 요구 확정 후 결정.
 - update API 미지원 (재생성 = 새 create + 기존 delete)
 - 삭제는 소유자(member.id 일치)만 가능 (`ROADMAP_UNAUTHORIZED`)
-- **삭제 캐스케이드 (서비스 레벨)**: `RoadmapServiceImpl.delete` 에서 `RoadmapAlarm` 먼저 `deleteByRoadmapId` 로 정리 → `Roadmap` 삭제. `RoadmapAlarm.roadmap` 이 `nullable = false` FK 라 정리 없이는 MySQL FK constraint 위반.
+- **삭제 캐스케이드 (서비스 레벨)**: `RoadmapServiceImpl.delete` 에서 `RoadmapAlarm` 먼저 `deleteByRoadmapId` 로 정리 → `Roadmap` 삭제. `RoadmapAlarm.roadmap` 이 `nullable = false` FK 라 정리 없이는 MySQL FK constraint 위반. 본체 정리 후 S3 객체(`roadmaps/{id}.pdf`) 도 `s3Service.deleteImage(buildKey(id))` 로 best-effort 삭제(try/catch + `log.warn`) — 실패 시 트랜잭션 영향 없음, dangling S3 객체는 후속 cleanup job 도입 검토(범위 밖).
+- **PDF 다운로드 — 파일 URL 반환 (`GET /api/v1/roadmaps/{roadmapId}/download`)**: 백엔드는 파일 바이너리 직접 반환(`ResponseEntity<byte[]>`) 이나 리다이렉트가 아닌 **JSON 으로 S3 presigned URL** 을 반환한다. 응답 `RoadmapDownloadResponse(fileUrl, fileName, expiresAt)`. 프론트는 `fileUrl` 을 받아 `<a href download>` 또는 `window.location.href` 로 호출해 PDF 를 받아간다. 권한 검증은 `delete()` 와 동일 — 본인 소유 X → `ROADMAP_UNAUTHORIZED`(403), 미존재 → `ROADMAP_NOT_FOUND`(404). 컨트롤러는 `@LoginMember Member` 사용.
+- **PDF 렌더링 — 생성 시 1회 (`RoadmapPdfRenderer`)**: 로드맵 **생성 직후** (`RoadmapServiceImpl.create` 의 `roadmapRepository.save(...)` 직후) 같은 `@Transactional` 안에서 PDF 1회 렌더 + S3 업로드. 다운로드 요청마다 재렌더링하지 않고 S3 객체를 재사용 → 다운로드 응답 지연 최소화. PDF 렌더·S3 업로드 실패 시 본체 저장도 함께 롤백(dangling DB row 방지). 외부 IO(S3) 가 트랜잭션 안에 포함되는 점은 `RoadmapAiClient.generate` 와 동일 패턴. 라이브러리는 `com.github.librepdf:openpdf 1.3.34` (LGPL/MPL, iText 7 AGPL 미채택). 렌더는 데이터 파트 `RoadmapResponse` 스키마와 1:1 매핑되는 내부 `record`(`@JsonProperty` snake_case 매핑)로 JSON 파싱 후 표지(`roadmap_title`) → 3단계 step 카드(파란 `phase_badge` 칩 + `title` + `카테고리 · 내용` 행) → 추천 자격증·활동 2열 회색 칩 → 마지막 페이지 `summary_advice` 순으로 그린다.
+- **한글 폰트 vendoring (`classpath:fonts/NotoSansKR-Regular.ttf`, SIL OFL 1.1)**: OpenPDF 기본 폰트는 한글이 깨지므로 Google Fonts 의 Noto Sans KR Regular 정식 static TTF 를 `src/main/resources/fonts/` 에 레포에 정적으로 포함하고 `BaseFont.createFont(name, IDENTITY_H, EMBEDDED, NOT_CACHED, fontBytes, null)` 로 임베딩. 로드는 `@PostConstruct` 1회만(메모리 캐시). 빌드 시 외부 다운로드 방식·후속 PR 보강 방식은 미채택 — 외부 URL 의존 회피 + 1차 빌드부터 동작 보장. 폰트 라이선스 SIL OFL 1.1 (상업 사용 자유).
+- **S3 키 규약 (`roadmaps/{roadmapId}.pdf`)**: 결정론적 키라 별도 `Roadmap.contentUrl` 컬럼 신설 불필요. `RoadmapServiceImpl.S3_KEY_PREFIX = "roadmaps/"` 상수 + `buildKey(roadmapId)` 헬퍼로 캡슐화.
+- **다운로드 파일명 (sanitize + 폴백)**: `Roadmap.content` JSON 에서 `roadmap_title` 추출 후 Windows/macOS 금지문자(`\/:*?"<>|` + 제어문자) 를 정규식 제거하고 `"{title}.pdf"` 로 반환. JSON 파싱 실패·빈 제목 시 `"roadmap-{id}.pdf"` 폴백. 이 파일명은 presigned URL 의 `response-content-disposition` 쿼리(`attachment; filename="..."`)로 함께 지정돼 브라우저가 동일 이름으로 저장하도록 강제.
+- **presigned URL TTL — 짧게**: `aws.s3.download-presign-ttl` (ISO-8601 `Duration`, 기본 `PT5M`) 로 `application-s3.yml` 에서 외부화. URL 유출 시 노출 시간 최소화 목적. 응답 `expiresAt = now + TTL`.
 - **데이터 파트 rate limit 주의**: 데이터 파트 `/generate` 의 rate limit 은 `member_id` 를 URL 쿼리로만 받고 limiter 키로 쓰지 않아 IP 기준으로 동작 → 백엔드가 단일 IP 로 호출하면 전체 사용자가 한도를 공유한다. 회원별 제한이 필요하면 limiter 키 용도로 `X-User-Id` 헤더 병행 전송을 검토(범위 밖).
 
 ## 공통 패턴
