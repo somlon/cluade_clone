@@ -39,7 +39,7 @@
 - 신규 컴포넌트: `RoadmapPdfRenderer` (`backend/src/main/java/mju/capstone/ddingconnect/domain/roadmap/service/RoadmapPdfRenderer.java`) — 메서드 `byte[] render(String content)` 가 `Roadmap.content`(JSON 문자열)를 PDF 바이트 배열로 변환.
 - JSON 파싱: 데이터 파트 `RoadmapResponse` 스키마와 정합 — `roadmap_title` / `steps[].phase_badge` / `steps[].title` / `steps[].details[].category` / `steps[].details[].content` / `recommended_certifications` / `recommended_activities` / `summary_advice`. `ObjectMapper` 로 내부 record 매핑.
 - 레이아웃: Figma 결과 화면 카드 형식을 PDF 페이지로 옮긴다 — (1) 표지 제목 = `roadmap_title`, (2) 3단계 step 카드 = `phase_badge` 칩 + `title` + `details` 항목 리스트, (3) 추천 자격증·활동 칩 영역, (4) 마지막 페이지에 `summary_advice` 한마디.
-- 한글 폰트 필수: `backend/src/main/resources/fonts/NotoSansKR-Regular.ttf` 추가 후 `BaseFont.createFont(...)` 로 등록 — 미설정 시 한글이 깨진다.
+- **한글 폰트 (2026-05-27 사용자 확정 — A안 레포 vendoring)**: `backend/src/main/resources/fonts/NotoSansKR-Regular.ttf` 를 레포에 커밋 (1.5MB+). [Google Fonts > Noto Sans KR](https://fonts.google.com/noto/specimen/Noto+Sans+KR) 의 static Regular ttf 사용 (라이선스 **SIL OFL 1.1**, 상업 사용 자유, `OFL.txt` 동봉 선택). 코드는 `BaseFont.createFont("classpath:fonts/NotoSansKR-Regular.ttf", BaseFont.IDENTITY_H, BaseFont.EMBEDDED)` 로 등록 — 미설정 시 한글 깨짐. B안(빌드 시 다운로드)·C안(후속 PR 보강)은 미채택 — 외부 URL 의존 회피 + 1차 PR 안에서 동작 보장.
 - 호출 시점: 로드맵 생성 직후(`RoadmapServiceImpl.create`)에 **1회만** 렌더링해 S3 업로드(TODO W). 이후 다운로드 요청은 S3 객체 재사용 → 매 요청마다 PDF 렌더링하지 않음(생성 시 dependency, 다운로드 응답 지연 최소화).
 - 의존: 없음 (단독 렌더링 모듈)
 - 머지 순서: 1순위
