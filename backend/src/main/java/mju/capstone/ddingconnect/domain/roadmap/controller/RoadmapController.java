@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.domain.member.domain.MemberRole;
 import mju.capstone.ddingconnect.domain.roadmap.dto.request.CreateRoadmapRequest;
+import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapDownloadResponse;
 import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapResponse;
 import mju.capstone.ddingconnect.domain.roadmap.service.RoadmapService;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMember;
@@ -56,5 +57,13 @@ public class RoadmapController implements RoadmapSwagger {
             @PathVariable Long roadmapId) {
         roadmapService.delete(member, roadmapId);
         return ApiResponse.onSuccess(SuccessMessage.ROADMAP_DELETED);
+    }
+
+    /** 로드맵 PDF 다운로드 URL 발급 — 본인 소유 로드맵에 대해 짧은 만료의 S3 presigned URL 반환 */
+    @GetMapping("/{roadmapId}/download")
+    public ApiResponse<RoadmapDownloadResponse> downloadRoadmap(
+            @Parameter(hidden = true) @LoginMember Member member,
+            @PathVariable Long roadmapId) {
+        return ApiResponse.onSuccess(roadmapService.getDownloadUrl(member, roadmapId));
     }
 }

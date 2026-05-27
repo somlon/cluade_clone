@@ -8,10 +8,14 @@ import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.*;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Set;
 import java.util.UUID;
 
@@ -32,6 +36,7 @@ import static mju.capstone.ddingconnect.global.response.code.status.ErrorStatus.
 public class S3Service {
 
     private final S3Client s3Client;
+    private final S3Presigner s3Presigner;
 
 
     @Value("${s3.public-bucket}")
@@ -118,6 +123,59 @@ public class S3Service {
         }
         /* 1‑3. 업로드한 파일의 public URL 반환 */
         return getUrl(key);
+    }
+
+    /**
+     * 원시 바이트 배열을 지정한 키로 S3 에 업로드한다. (MultipartFile 경로 외, 서버가 생성한 파일용)
+     * 로드맵 PDF 다운로드 흐름에서 {@link mju.capstone.ddingconnect.domain.roadmap.service.RoadmapPdfRenderer} 결과를 업로드하는 데 사용한다.
+     *
+     * @param bytes        업로드할 바이트 배열
+     * @param key          저장할 S3 객체 키 (예: "roadmaps/123.pdf")
+     * @param contentType  Content-Type (예: "application/pdf")
+     * @return 업로드된 객체의 public URL
+     */
+    public String uploadBytes(byte[] bytes, String key, String contentType) {
+        if (bytes == null || bytes.length == 0) {
+            throw new S3Handler(_FILE_UPLOAD_FAILED);
+        }
+        try {
+            PutObjectRequest request = PutObjectRequest.builder()
+                    .bucket(publicBucketName)
+                    .key(key)
+                    .contentType(contentType)
+                    .build();
+            s3Client.putObject(request, RequestBody.fromBytes(bytes));
+        } catch (Exception e) {
+            throw new S3Handler(_FILE_UPLOAD_FAILED);
+        }
+        return getUrl(key);
+    }
+
+    /**
+     * 지정 키에 대한 GET presigned URL 을 발급한다.
+     * 다운로드 강제(`Content-Disposition: attachment; filename="..."`)를 위해 응답 헤더 오버라이드를 함께 지정한다.
+     *
+     * @param key       S3 객체 키
+     * @param ttl       URL 유효 기간
+     * @param fileName  브라우저 저장 시 사용할 파일명 (특수문자 처리 권장)
+     * @return presigned URL 문자열
+     */
+    public String generatePresignedUrl(String key, Duration ttl, String fileName) {
+        String contentDisposition = "attachment; filename=\"" + fileName.replace("\"", "") + "\"";
+
+        GetObjectRequest getObjectRequest = GetObjectRequest.builder()
+                .bucket(publicBucketName)
+                .key(key)
+                .responseContentDisposition(contentDisposition)
+                .build();
+
+        GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
+                .signatureDuration(ttl)
+                .getObjectRequest(getObjectRequest)
+                .build();
+
+        PresignedGetObjectRequest presigned = s3Presigner.presignGetObject(presignRequest);
+        return presigned.url().toString();
     }
 
     /**

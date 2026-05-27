@@ -3,6 +3,7 @@ package mju.capstone.ddingconnect.domain.roadmap.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import mju.capstone.ddingconnect.domain.interested_job.domain.TargetJobCategory;
 import mju.capstone.ddingconnect.domain.roadmap.dto.request.CreateRoadmapRequest;
+import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapDownloadResponse;
 import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapResponse;
 import mju.capstone.ddingconnect.domain.roadmap.service.RoadmapService;
 import mju.capstone.ddingconnect.domain.techstack.domain.TechStackName;
@@ -132,5 +133,24 @@ class RoadmapControllerTest {
         mockMvc.perform(get(BASE_URL + "/1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result.id").value(1L));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/roadmaps/{id}/download - 다운로드 URL 발급 (fileUrl/fileName/expiresAt)")
+    void downloadRoadmap() throws Exception {
+        LocalDateTime expiresAt = CREATED_AT.plusMinutes(5);
+        given(roadmapService.getDownloadUrl(any(), eq(1L)))
+                .willReturn(new RoadmapDownloadResponse(
+                        "https://signed.example/roadmaps/1.pdf?X-Amz-Expires=300",
+                        "백엔드 로드맵.pdf",
+                        expiresAt));
+
+        mockMvc.perform(get(BASE_URL + "/1/download"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.fileUrl").value("https://signed.example/roadmaps/1.pdf?X-Amz-Expires=300"))
+                .andExpect(jsonPath("$.result.fileName").value("백엔드 로드맵.pdf"))
+                .andExpect(jsonPath("$.result.expiresAt").exists());
+
+        verify(roadmapService).getDownloadUrl(any(), eq(1L));
     }
 }
