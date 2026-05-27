@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.domain.roadmap.dto.request.CreateRoadmapRequest;
+import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapDownloadResponse;
 import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapResponse;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMember;
 import mju.capstone.ddingconnect.global.response.exception.handler.ApiResponse;
@@ -86,6 +87,55 @@ public interface RoadmapSwagger {
     ApiResponse<String> deleteRoadmap(
             @Parameter(hidden = true) @LoginMember Member member,
             @Parameter(description = "삭제할 로드맵 ID")
+            @PathVariable Long roadmapId);
+
+
+
+
+    @Operation(
+            summary = "로드맵 PDF 다운로드 URL 발급",
+            description = "본인이 생성한 로드맵의 PDF 다운로드 URL 을 발급합니다. " +
+                    "응답의 `fileUrl` 은 S3 presigned GET URL (만료 짧음, 기본 5분) 이며, " +
+                    "프론트는 이 URL 을 `<a href download>` 또는 `window.location.href` 로 호출해 PDF 를 받아갑니다.\n\n" +
+                    "본인 소유 X → 403 `ROADMAP_UNAUTHORIZED`, 미존재 → 404 `ROADMAP_NOT_FOUND`.",
+            responses = {
+                    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                            responseCode = "200",
+                            description = "다운로드 URL 발급 성공",
+                            content = @Content(
+                                    mediaType = "application/json",
+                                    schema = @Schema(implementation = RoadmapDownloadResponse.class),
+                                    examples = @ExampleObject(
+                                            name = "성공 예시",
+                                            value = """
+                                                    {
+                                                      "isSuccess": true,
+                                                      "code": "COMMON200",
+                                                      "message": "성공입니다.",
+                                                      "result": {
+                                                        "fileUrl": "https://<bucket>.s3.<region>.amazonaws.com/roadmaps/123.pdf?X-Amz-Algorithm=...&X-Amz-Expires=300&...",
+                                                        "fileName": "백엔드 개발자 로드맵.pdf",
+                                                        "expiresAt": "2026-05-27T10:35:00"
+                                                      }
+                                                    }
+                                                    """
+                                    )
+                            )
+                    ),
+                    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                            responseCode = "403",
+                            description = "ROADMAP_UNAUTHORIZED — 본인 소유 로드맵이 아님"
+                    ),
+                    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                            responseCode = "404",
+                            description = "ROADMAP_NOT_FOUND — 존재하지 않는 로드맵"
+                    )
+            }
+    )
+    @GetMapping("/{roadmapId}/download")
+    ApiResponse<RoadmapDownloadResponse> downloadRoadmap(
+            @Parameter(hidden = true) @LoginMember Member member,
+            @Parameter(description = "다운로드할 로드맵 ID")
             @PathVariable Long roadmapId);
 
 }

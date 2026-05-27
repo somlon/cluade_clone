@@ -2,6 +2,7 @@ package mju.capstone.ddingconnect.domain.roadmap.service;
 
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.domain.roadmap.dto.request.CreateRoadmapRequest;
+import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapDownloadResponse;
 import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapResponse;
 
 import java.util.List;
@@ -25,4 +26,10 @@ public interface RoadmapService {
 
     /** 본인이 생성한 로드맵 수 */
     long countMyRoadmaps(Member member);
+
+    /**
+     * 로드맵 PDF 다운로드 URL 발급. 본인 소유 로드맵에만 허용.
+     * 응답의 {@code fileUrl} 은 짧은 만료의 S3 presigned URL 이다.
+     */
+    RoadmapDownloadResponse getDownloadUrl(Member member, Long roadmapId);
 }

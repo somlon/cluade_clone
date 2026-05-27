@@ -9,3 +9,9 @@ cloud:
 
 s3:
   public-bucket: ${AWS_S3_PUBLIC_BUCKET}
+
+
+aws:
+  s3:
+    # 로드맵 PDF 다운로드 presigned URL 의 만료(초). 짧게 둬서 URL 유출 시 노출 시간을 최소화한다.
+    download-presign-ttl: PT5M
