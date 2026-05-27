@@ -20,7 +20,8 @@ public interface RoadmapService {
     /** 로그인 회원이 생성한 로드맵 목록을 최신순으로 조회한다. */
     List<RoadmapResponse> getList(Member member);
 
-    RoadmapResponse getOne(Long roadmapId);
+    /** 로드맵 상세 조회 — 본인 소유만 허용. 타인 소유 시 {@code ROADMAP_UNAUTHORIZED}. */
+    RoadmapResponse getOne(Member member, Long roadmapId);
 
     void delete(Member member, Long roadmapId);
 

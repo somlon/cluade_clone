@@ -147,14 +147,23 @@ class RoadmapServiceImplTest {
     }
 
     @Test
-    @DisplayName("getOne - 존재하는 로드맵을 반환한다")
+    @DisplayName("getOne - 본인 소유 로드맵을 반환한다")
     void getOneReturnsRoadmap() {
         when(roadmapRepository.findById(ROADMAP_ID)).thenReturn(Optional.of(roadmap));
 
-        RoadmapResponse response = roadmapService.getOne(ROADMAP_ID);
+        RoadmapResponse response = roadmapService.getOne(author, ROADMAP_ID);
 
         assertThat(response.id()).isEqualTo(ROADMAP_ID);
         assertThat(response.content()).isEqualTo(GENERATED_CONTENT);
+    }
+
+    @Test
+    @DisplayName("getOne - 본인 소유가 아니면 ROADMAP_UNAUTHORIZED 예외")
+    void getOneThrowsWhenUnauthorized() {
+        when(roadmapRepository.findById(ROADMAP_ID)).thenReturn(Optional.of(roadmap));
+
+        assertThatThrownBy(() -> roadmapService.getOne(other, ROADMAP_ID))
+                .isInstanceOf(RoadmapHandler.class);
     }
 
     @Test
@@ -162,7 +171,7 @@ class RoadmapServiceImplTest {
     void getOneThrowsWhenNotFound() {
         when(roadmapRepository.findById(999L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> roadmapService.getOne(999L))
+        assertThatThrownBy(() -> roadmapService.getOne(author, 999L))
                 .isInstanceOf(RoadmapHandler.class);
     }
 

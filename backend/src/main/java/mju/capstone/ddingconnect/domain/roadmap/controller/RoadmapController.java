@@ -44,10 +44,12 @@ public class RoadmapController implements RoadmapSwagger {
         return ApiResponse.onSuccess(roadmapService.getList(member));
     }
 
-    /** 로드맵 상세 조회 (Read - 로드맵 카드를 클릭했을 때 AI가 생성한 JSON 로드맵 전체 내용 반환) */
+    /** 로드맵 상세 조회 (Read - 본인 소유 로드맵만, AI 생성 JSON 전체 반환) */
     @GetMapping("/{roadmapId}")
-    public ApiResponse<RoadmapResponse> getRoadmap(@PathVariable Long roadmapId) {
-        return ApiResponse.onSuccess(roadmapService.getOne(roadmapId));
+    public ApiResponse<RoadmapResponse> getRoadmap(
+            @LoginMember Member member,
+            @PathVariable Long roadmapId) {
+        return ApiResponse.onSuccess(roadmapService.getOne(member, roadmapId));
     }
 
     /** 로드맵 삭제 (Delete) */

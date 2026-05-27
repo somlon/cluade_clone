@@ -69,10 +69,17 @@ public interface RoadmapSwagger {
 
     @Operation(
             summary = "로드맵 상세 조회",
-            description = "로드맵 ID 로 저장된 로드맵을 조회합니다. content 는 데이터 파트 AI 가 생성한 로드맵 JSON 문자열로, 저장된 값을 그대로 반환합니다."
+            description = "본인이 생성한 로드맵을 ID 로 조회합니다. content 는 데이터 파트 AI 가 생성한 로드맵 JSON 문자열로, 저장된 값을 그대로 반환합니다.\n\n" +
+                    "본인 소유 X → 403 `ROADMAP_UNAUTHORIZED`, 미존재 → 404 `ROADMAP_NOT_FOUND`.",
+            responses = {
+                    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
+                    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "ROADMAP_UNAUTHORIZED — 본인 소유 로드맵이 아님"),
+                    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "ROADMAP_NOT_FOUND — 존재하지 않는 로드맵")
+            }
     )
     @GetMapping("/{roadmapId}")
     ApiResponse<RoadmapResponse> getRoadmap(
+            @Parameter(hidden = true) @LoginMember Member member,
             @Parameter(description = "조회할 로드맵 ID")
             @PathVariable Long roadmapId);
 

@@ -103,9 +103,12 @@ public class RoadmapServiceImpl implements RoadmapService {
 
     @Override
     @Transactional(readOnly = true)
-    public RoadmapResponse getOne(Long roadmapId) {
+    public RoadmapResponse getOne(Member member, Long roadmapId) {
         Roadmap roadmap = roadmapRepository.findById(roadmapId)
                 .orElseThrow(() -> new RoadmapHandler(ErrorStatus.ROADMAP_NOT_FOUND));
+        if (!roadmap.getMember().getId().equals(member.getId())) {
+            throw new RoadmapHandler(ErrorStatus.ROADMAP_UNAUTHORIZED);
+        }
         return RoadmapResponse.from(roadmap);
     }
 

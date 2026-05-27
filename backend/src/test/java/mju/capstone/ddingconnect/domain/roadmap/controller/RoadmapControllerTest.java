@@ -92,9 +92,9 @@ class RoadmapControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/v1/roadmaps/{id} - 로드맵 상세")
+    @DisplayName("GET /api/v1/roadmaps/{id} - 로드맵 상세 (본인 소유)")
     void getRoadmapDetail() throws Exception {
-        given(roadmapService.getOne(1L))
+        given(roadmapService.getOne(any(), eq(1L)))
                 .willReturn(new RoadmapResponse(1L, MEMBER_ID, GENERATED_CONTENT, CREATED_AT));
 
         mockMvc.perform(get(BASE_URL + "/1"))
@@ -124,10 +124,10 @@ class RoadmapControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/v1/roadmaps/{id} - GRADUATE 도 단건 조회는 허용된다 (가드는 목록만 적용)")
+    @DisplayName("GET /api/v1/roadmaps/{id} - GRADUATE 도 본인 소유 단건 조회는 허용된다 (역할 가드는 목록만 적용)")
     void getRoadmapDetailAllowedForGraduate() throws Exception {
         WithMockLoginMember.loginAsGraduate();
-        given(roadmapService.getOne(1L))
+        given(roadmapService.getOne(any(), eq(1L)))
                 .willReturn(new RoadmapResponse(1L, MEMBER_ID, GENERATED_CONTENT, CREATED_AT));
 
         mockMvc.perform(get(BASE_URL + "/1"))
