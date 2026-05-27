@@ -161,7 +161,12 @@ public class S3Service {
      * @return presigned URL 문자열
      */
     public String generatePresignedUrl(String key, Duration ttl, String fileName) {
-        String contentDisposition = "attachment; filename=\"" + fileName.replace("\"", "") + "\"";
+        // HTTP 헤더(ISO-8859-1)에 한글 등 비ASCII 문자가 들어가지 못하므로 RFC 5987 형식으로 인코딩한다.
+        // ASCII 폴백(filename=) + UTF-8 표기(filename*=) 두 가지를 함께 둬 구형 클라이언트와도 호환한다.
+        String sanitized = fileName.replace("\"", "").replace("\r", "").replace("\n", "");
+        String asciiFallback = sanitized.replaceAll("[^\\x20-\\x7E]", "_");
+        String utf8Encoded = URLEncoder.encode(sanitized, StandardCharsets.UTF_8).replace("+", "%20");
+        String contentDisposition = "attachment; filename=\"" + asciiFallback + "\"; filename*=UTF-8''" + utf8Encoded;
 
         GetObjectRequest getObjectRequest = GetObjectRequest.builder()
                 .bucket(publicBucketName)
