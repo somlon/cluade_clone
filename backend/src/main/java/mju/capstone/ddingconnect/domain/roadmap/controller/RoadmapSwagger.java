@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.domain.roadmap.dto.request.CreateRoadmapRequest;
 import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapDownloadResponse;
+import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapListResponse;
 import mju.capstone.ddingconnect.domain.roadmap.dto.response.RoadmapResponse;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMember;
 import mju.capstone.ddingconnect.global.response.exception.handler.ApiResponse;
@@ -57,11 +58,14 @@ public interface RoadmapSwagger {
 
     @Operation(
             summary = "내 로드맵 목록 조회",
-            description = "로그인한 회원이 생성한 로드맵 목록을 최신순(createdAt 내림차순)으로 조회합니다."
+            description = "로그인한 회원이 생성한 로드맵 목록을 최신순(createdAt 내림차순)으로 조회합니다.\n\n" +
+                    "카드 화면 전용 경량 응답 — `id` / `title` / `createdAt` 3 필드만 반환합니다.\n" +
+                    "`title` 은 저장된 `content` JSON 에서 `roadmap_title` 만 추출한 값이며, 추출 실패·빈 제목 시 `\"로드맵\"` 폴백.\n" +
+                    "전체 본문(`content`)이 필요하면 단건 조회(`GET /api/v1/roadmaps/{roadmapId}`)를 호출하세요."
     )
     @Tag(name = "나의 활동")
     @GetMapping
-    ApiResponse<List<RoadmapResponse>> getRoadmaps(
+    ApiResponse<List<RoadmapListResponse>> getRoadmaps(
             @Parameter(hidden = true) @LoginMember Member member);
 
 
@@ -69,10 +73,17 @@ public interface RoadmapSwagger {
 
     @Operation(
             summary = "로드맵 상세 조회",
-            description = "로드맵 ID 로 저장된 로드맵을 조회합니다. content 는 데이터 파트 AI 가 생성한 로드맵 JSON 문자열로, 저장된 값을 그대로 반환합니다."
+            description = "본인이 생성한 로드맵을 ID 로 조회합니다. content 는 데이터 파트 AI 가 생성한 로드맵 JSON 문자열로, 저장된 값을 그대로 반환합니다.\n\n" +
+                    "본인 소유 X → 403 `ROADMAP_UNAUTHORIZED`, 미존재 → 404 `ROADMAP_NOT_FOUND`.",
+            responses = {
+                    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
+                    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "ROADMAP_UNAUTHORIZED — 본인 소유 로드맵이 아님"),
+                    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "ROADMAP_NOT_FOUND — 존재하지 않는 로드맵")
+            }
     )
     @GetMapping("/{roadmapId}")
     ApiResponse<RoadmapResponse> getRoadmap(
+            @Parameter(hidden = true) @LoginMember Member member,
             @Parameter(description = "조회할 로드맵 ID")
             @PathVariable Long roadmapId);
 
