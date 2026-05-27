@@ -57,7 +57,7 @@ class RoadmapControllerTest {
     void tearDown() { WithMockLoginMember.clear(); }
 
     @Test
-    @DisplayName("POST /api/v1/roadmaps?memberId= - 입력 폼으로 로드맵 등록")
+    @DisplayName("POST /api/v1/roadmaps?memberId= - 입력 폼으로 로드맵 생성")
     void createRoadmap() throws Exception {
         CreateRoadmapRequest req = new CreateRoadmapRequest(3, 4.0, "응용소프트웨어학과",
                 TargetJobCategory.BACKEND, List.of(TechStackName.JAVA, TechStackName.SPRING), "카카오");

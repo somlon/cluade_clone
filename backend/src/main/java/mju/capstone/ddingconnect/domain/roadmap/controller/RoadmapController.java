@@ -24,7 +24,7 @@ public class RoadmapController implements RoadmapSwagger {
 
     private final RoadmapService roadmapService;
 
-    /** 로드맵 등록 (Create) — memberId 와 입력 폼 6필드로 데이터 파트 AI 호출 후 저장 */
+    /** 로드맵 생성 (Create) — memberId 와 입력 폼 6필드로 데이터 파트 AI 호출 후 저장 */
     @PostMapping
     public ApiResponse<RoadmapResponse> createRoadmap(
             @RequestParam Long memberId,

@@ -20,7 +20,7 @@ import java.util.List;
 public interface RoadmapSwagger {
 
     @Operation(
-            summary = "로드맵 등록",
+            summary = "로드맵 생성",
             description = "입력 폼 6필드와 회원 ID(memberId)를 받아 데이터 파트 AI 로 로드맵을 생성·저장합니다. " +
                     "응답으로 받은 로드맵 ID 로 상세 조회(GET /api/v1/roadmaps/{roadmapId})를 호출하면 생성 결과를 볼 수 있습니다."
     )
