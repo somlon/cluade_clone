@@ -33,7 +33,7 @@
 
 ### TODO V — 로드맵 PDF 변환 로직
 
-> **결정**: 다운로드 파일 포맷은 **PDF**. JSON 텍스트 다운로드는 채택하지 않는다(사용자 가독성·표준 다운로드 경험 우선).
+> **결정 (2026-05-27 사용자 확정)**: 다운로드 파일 포맷은 **PDF**. (JSON 텍스트·기타 포맷은 채택하지 않음 — 재검토 불필요.)
 
 - 라이브러리: `backend/build.gradle` 에 OpenPDF 의존성 추가 — `com.github.librepdf:openpdf:1.3.x` (LGPL/MPL, 상업 사용 자유). iText 7 는 AGPL 부담으로 미채택.
 - 신규 컴포넌트: `RoadmapPdfRenderer` (`backend/src/main/java/mju/capstone/ddingconnect/domain/roadmap/service/RoadmapPdfRenderer.java`) — 메서드 `byte[] render(String content)` 가 `Roadmap.content`(JSON 문자열)를 PDF 바이트 배열로 변환.
