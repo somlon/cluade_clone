@@ -67,6 +67,9 @@ class RoadmapServiceImplTest {
         author = Member.builder().id(MEMBER_ID).email("a@mju.ac.kr").nickname("작성자").build();
         other = Member.builder().id(2L).email("o@mju.ac.kr").nickname("타인").build();
         roadmap = Roadmap.builder().id(ROADMAP_ID).member(author).content(GENERATED_CONTENT).build();
+        // BaseEntity.createdAt 은 JPA AuditingEntityListener 가 영속화 시점에 채우는데
+        // 단위 테스트(Mockito) 는 영속화하지 않으므로 fixture 에서 직접 세팅 (Lombok @Builder 는 부모 필드 미포함)
+        ReflectionTestUtils.setField(roadmap, "createdAt", java.time.LocalDateTime.now());
         // @Value 주입 필드는 Mockito @InjectMocks 가 채우지 못하므로 직접 세팅
         ReflectionTestUtils.setField(roadmapService, "downloadPresignTtl", PRESIGN_TTL);
     }
