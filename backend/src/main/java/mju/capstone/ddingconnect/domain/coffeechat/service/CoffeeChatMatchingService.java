@@ -3,6 +3,7 @@ package mju.capstone.ddingconnect.domain.coffeechat.service;
 import mju.capstone.ddingconnect.domain.coffeechat.dto.request.MatchingRequest;
 import mju.capstone.ddingconnect.domain.coffeechat.dto.response.MatchedCandidateDetailResponse;
 import mju.capstone.ddingconnect.domain.coffeechat.dto.response.MatchedCandidateResponse;
+import mju.capstone.ddingconnect.domain.coffeechat.dto.response.MyActivityCoffeeChatResponse;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 
 import java.util.List;
@@ -34,10 +35,11 @@ public interface CoffeeChatMatchingService {
     MatchedCandidateDetailResponse getCandidateDetail(Long memberId);
 
     /**
-     * "나의 활동 › 커피챗" — 로그인 회원이 신청자이고 status=ACCEPTED 인 커피챗 상대 목록을 반환한다.
+     * "나의 활동 › 커피챗" — 로그인 회원이 신청자이고 status=ACCEPTED 인 커피챗 상대 목록을
+     * 카드 UI 전용 경량 DTO 로 반환한다.
      *
      * @param member 로그인 회원(신청자)
-     * @return 수락된 커피챗 상대의 상세 응답 리스트, 없으면 빈 리스트
+     * @return 수락된 커피챗 상대의 경량 카드 응답 리스트, 없으면 빈 리스트
      */
-    List<MatchedCandidateDetailResponse> getMyActivity(Member member);
+    List<MyActivityCoffeeChatResponse> getMyActivity(Member member);
 }

@@ -3,6 +3,8 @@ package mju.capstone.ddingconnect.domain.coffeechat;
 import mju.capstone.ddingconnect.domain.coffeechat.dto.request.MatchingRequest;
 import mju.capstone.ddingconnect.domain.coffeechat.dto.response.MatchedCandidateDetailResponse;
 import mju.capstone.ddingconnect.domain.coffeechat.dto.response.MatchedCandidateResponse;
+import mju.capstone.ddingconnect.domain.coffeechat.dto.response.MyActivityCoffeeChatResponse;
+import mju.capstone.ddingconnect.domain.job_post.domain.JobType;
 import mju.capstone.ddingconnect.domain.member.domain.MemberRole;
 
 import java.util.List;
@@ -38,6 +40,12 @@ public final class CoffeeChatMatchingTestConstants {
     private static final String CANDIDATE_NICKNAME = "매칭후보";
     private static final String CANDIDATE_DEPARTMENT = "응용소프트웨어학과";
 
+    // "나의 활동 › 커피챗" 경량 카드 더미값 (jobType·company 는 노출 검증에 쓰여 public)
+    private static final String CANDIDATE_ENROLLMENT_YEAR = "18";
+    public static final String CANDIDATE_COMPANY = "네이버";
+    public static final JobType CANDIDATE_JOB_TYPE = JobType.BACKEND;
+    private static final Integer CANDIDATE_CAREER_YEAR = 3;
+
     /** 매칭 폼 6필드를 모두 채운 샘플 요청 */
     public static MatchingRequest sampleForm() {
         return new MatchingRequest(FORM_GRADE, FORM_GPA, FORM_MAJOR,
@@ -48,14 +56,22 @@ public final class CoffeeChatMatchingTestConstants {
     public static MatchedCandidateResponse candidateCard(Long memberId) {
         return new MatchedCandidateResponse(memberId, MemberRole.GRADUATE,
                 CANDIDATE_NICKNAME, CANDIDATE_DEPARTMENT,
-                List.of(), List.of(), null, null, null, null, null);
+                List.of(), List.of(), null, null, null, null);
     }
 
     /** memberId 만 의미 있는 매칭 후보 상세 픽스처 */
     public static MatchedCandidateDetailResponse candidateDetail(Long memberId) {
         return new MatchedCandidateDetailResponse(memberId, MemberRole.GRADUATE,
                 CANDIDATE_NICKNAME, CANDIDATE_DEPARTMENT,
-                List.of(), List.of(), null, null, null, null, null,
+                List.of(), List.of(), null, null, null, null,
                 null, null, null, null, null);
+    }
+
+    /** "나의 활동 › 커피챗" 경량 카드 픽스처 — jobType 등 GRADUATE 부가 필드를 채운다 */
+    public static MyActivityCoffeeChatResponse myActivityCard(Long memberId) {
+        return new MyActivityCoffeeChatResponse(memberId,
+                CANDIDATE_NICKNAME, CANDIDATE_DEPARTMENT,
+                CANDIDATE_ENROLLMENT_YEAR, CANDIDATE_COMPANY,
+                CANDIDATE_JOB_TYPE, CANDIDATE_CAREER_YEAR, List.of());
     }
 }

@@ -6,6 +6,7 @@ import mju.capstone.ddingconnect.domain.coffeechat.domain.repository.CoffeeChatR
 import mju.capstone.ddingconnect.domain.coffeechat.dto.request.MatchingRequest;
 import mju.capstone.ddingconnect.domain.coffeechat.dto.response.MatchedCandidateDetailResponse;
 import mju.capstone.ddingconnect.domain.coffeechat.dto.response.MatchedCandidateResponse;
+import mju.capstone.ddingconnect.domain.coffeechat.dto.response.MyActivityCoffeeChatResponse;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -84,8 +85,8 @@ class CoffeeChatMatchingServiceImplTest {
     }
 
     @Test
-    @DisplayName("getMyActivity - 신청자=본인 & status=ACCEPTED 커피챗의 수신자를 상세 DTO 로 조립한다")
-    void getMyActivityReturnsAcceptedReceiverDetails() {
+    @DisplayName("getMyActivity - 신청자=본인 & status=ACCEPTED 커피챗의 수신자를 경량 카드 DTO 로 조립한다 (jobType 포함, 상세 조립기 미사용)")
+    void getMyActivityReturnsAcceptedReceiverCards() {
         Member candidate1 = Member.builder().id(CANDIDATE_ID_1).build();
         Member candidate2 = Member.builder().id(CANDIDATE_ID_2).build();
         CoffeeChat chat1 = CoffeeChat.builder().requester(requester).receiver(candidate1)
@@ -94,15 +95,18 @@ class CoffeeChatMatchingServiceImplTest {
                 .status(CoffeeChatStatus.ACCEPTED).build();
         when(coffeeChatRepository.findByRequesterIdAndStatus(REQUESTER_ID, CoffeeChatStatus.ACCEPTED))
                 .thenReturn(List.of(chat1, chat2));
-        when(candidateProfileAssembler.assembleDetail(CANDIDATE_ID_1))
-                .thenReturn(candidateDetail(CANDIDATE_ID_1));
-        when(candidateProfileAssembler.assembleDetail(CANDIDATE_ID_2))
-                .thenReturn(candidateDetail(CANDIDATE_ID_2));
+        when(candidateProfileAssembler.assembleMyActivityCard(CANDIDATE_ID_1))
+                .thenReturn(myActivityCard(CANDIDATE_ID_1));
+        when(candidateProfileAssembler.assembleMyActivityCard(CANDIDATE_ID_2))
+                .thenReturn(myActivityCard(CANDIDATE_ID_2));
 
-        List<MatchedCandidateDetailResponse> result = matchingService.getMyActivity(requester);
+        List<MyActivityCoffeeChatResponse> result = matchingService.getMyActivity(requester);
 
-        assertThat(result).extracting(MatchedCandidateDetailResponse::memberId)
+        assertThat(result).extracting(MyActivityCoffeeChatResponse::memberId)
                 .containsExactly(CANDIDATE_ID_1, CANDIDATE_ID_2);
+        assertThat(result).extracting(MyActivityCoffeeChatResponse::jobType)
+                .containsOnly(CANDIDATE_JOB_TYPE);
+        verify(candidateProfileAssembler, never()).assembleDetail(any());
     }
 
     @Test
@@ -111,7 +115,7 @@ class CoffeeChatMatchingServiceImplTest {
         when(coffeeChatRepository.findByRequesterIdAndStatus(REQUESTER_ID, CoffeeChatStatus.ACCEPTED))
                 .thenReturn(List.of());
 
-        List<MatchedCandidateDetailResponse> result = matchingService.getMyActivity(requester);
+        List<MyActivityCoffeeChatResponse> result = matchingService.getMyActivity(requester);
 
         assertThat(result).isEmpty();
     }

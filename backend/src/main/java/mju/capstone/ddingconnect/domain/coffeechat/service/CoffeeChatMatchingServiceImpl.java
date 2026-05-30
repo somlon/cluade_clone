@@ -6,6 +6,7 @@ import mju.capstone.ddingconnect.domain.coffeechat.domain.repository.CoffeeChatR
 import mju.capstone.ddingconnect.domain.coffeechat.dto.request.MatchingRequest;
 import mju.capstone.ddingconnect.domain.coffeechat.dto.response.MatchedCandidateDetailResponse;
 import mju.capstone.ddingconnect.domain.coffeechat.dto.response.MatchedCandidateResponse;
+import mju.capstone.ddingconnect.domain.coffeechat.dto.response.MyActivityCoffeeChatResponse;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,7 +21,7 @@ import java.util.List;
  *   <li>{@code match} — 매칭 폼을 {@link MatchingAlgorithmClient} 로 외부 알고리즘에 전달해
  *       후보 회원 ID 리스트를 받고, 각 ID 를 {@link CandidateProfileAssembler} 로 카드 DTO 조립</li>
  *   <li>{@code getCandidateDetail} — memberId 로 후보 상세 DTO 조립</li>
- *   <li>{@code getMyActivity} — 신청자=본인 & status=ACCEPTED 커피챗의 수신자를 상세 DTO 조립</li>
+ *   <li>{@code getMyActivity} — 신청자=본인 & status=ACCEPTED 커피챗의 수신자를 경량 카드 DTO 조립</li>
  * </ul>
  *
  * <p>{@code match} 는 외부 HTTP 호출을 포함하므로 트랜잭션으로 감싸지 않는다 —
@@ -48,10 +49,10 @@ public class CoffeeChatMatchingServiceImpl implements CoffeeChatMatchingService 
 
     @Override
     @Transactional(readOnly = true)
-    public List<MatchedCandidateDetailResponse> getMyActivity(Member member) {
+    public List<MyActivityCoffeeChatResponse> getMyActivity(Member member) {
         return coffeeChatRepository.findByRequesterIdAndStatus(member.getId(), CoffeeChatStatus.ACCEPTED)
                 .stream()
-                .map(coffeeChat -> candidateProfileAssembler.assembleDetail(coffeeChat.getReceiver().getId()))
+                .map(coffeeChat -> candidateProfileAssembler.assembleMyActivityCard(coffeeChat.getReceiver().getId()))
                 .toList();
     }
 }

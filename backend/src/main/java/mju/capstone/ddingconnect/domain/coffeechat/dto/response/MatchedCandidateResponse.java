@@ -12,7 +12,6 @@ import java.util.List;
  * 한 record에 역할별 전용 필드를 두며, 해당 역할이 아니면 null (MemberResponse 패턴).
  * - GRADUATE 전용: enrollmentYear, company, careerYear
  * - STUDENT 전용: grade
- * region은 소스 미확정 상태로 항상 null.
  */
 public record MatchedCandidateResponse(
         // 공통 필드
@@ -31,8 +30,5 @@ public record MatchedCandidateResponse(
 
         // GRADUATE 전용
         String company,
-        Integer careerYear,
-
-        // 소스 미확정 — 항상 null
-        String region
+        Integer careerYear
 ) {}
