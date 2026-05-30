@@ -9,64 +9,6 @@
 > **관찰 (의도 확인 필요)**: `ErrorStatus.getReason()`/`getReasonHttpStatus()` 가 실패 코드 enum 인데 `ErrorReasonDTO` 를 `.isSuccess(true)` 로 고정 생성한다(`SuccessStatus` 와 대비). 현재 `ApiResponse.onFailure` 가 `isSuccess=false` 를 따로 지정하므로 실제 응답엔 영향 없으나, 오해를 부르는 죽은 설정값이다 — 의도 확인 후 정리 여부 결정.
 
 
-### TODO AA — 회원가입 시 증명서 OCR 추출 정보(이름·학과·학년) 자동 저장
-
-**배경**
-- 데이터 파트(`ddingconnect-data`)가 PR #13(`main` 반영, 2026-05-30)으로 OCR 증명서에서 **이름·학과·학년**까지 파싱하도록 확장됐다. `POST /api/data/verify` 응답이 다음 형태로 바뀌었다(읽기 확인 완료):
-  ```jsonc
-  { "status": "success", "user_id": 1, "is_approved": true,
-    "message": "...",
-    "student_info": {
-      "type": "재학생" | "졸업생",   // 재학증명서/졸업증명서 종류
-      "name": "홍길동",
-      "department": "데이터사이언스전공",
-      "grade": "4"                  // 재학생일 때만 포함(문자열). 졸업생은 키 없음
-    } }
-  // 미승인: { "status":"fail", "is_approved":false, "details":{ is_myongji, is_certificate } }
-  ```
-- 그러나 백엔드 회원가입(`AuthServiceImpl.signup`)은 **OCR 을 호출하지 않고** 증명서를 S3 에 올려 `Member.certificate`(URL)만 저장한다. `Member.name`·`Member.department` 는 비고, `Student.grade` 도 비어 있다(`SignupRequest`·`AuthServiceImpl` 에 `//TODO 재학증명서` 주석만 존재). 마이페이지·커피챗 카드·로드맵 등에서 이름/학과/학년이 빠져 보이는 근본 원인.
-- 목표: 회원가입 시 데이터 파트 OCR 추출값을 받아 **`Member.name`·`Member.department`(공통) + `Student.grade`(재학생만)** 에 저장한다. 졸업생은 학년 개념이 없으므로 `Graduate` 가 아닌 **멤버 공통 2필드만** 채운다.
-
-**설계 제약 (먼저 확정 필요 — 구현 전 사용자 확인)**
-- ⚠️ **`/api/data/verify` 는 `X-User-Id` 헤더(= 이미 존재하는 회원) 인증을 요구**한다(`get_current_user`). 즉 "회원가입 *도중*" 호출하려면 **member 를 먼저 저장해 PK 를 얻은 뒤** 그 id 로 `X-User-Id` 를 붙여 호출해야 한다. 단일 `signup` 트랜잭션 안에서 (1) member/role 레코드 저장 → (2) 외부 OCR 호출 → (3) 추출값으로 member/student 갱신 순서가 된다(로드맵 `create` 가 트랜잭션 안에서 외부 HTTP 를 호출하는 선례와 동일).
-- ⚠️ **`/verify` 는 PDF 멀티파트(`file`) 를 받는다.** 백엔드 `signup` 도 이미 `certificate` 멀티파트를 받으므로 같은 파일 바이트를 데이터 파트로 전달(멀티파트 relay)해야 한다. (현재 `signup` 은 그 파일을 S3 업로드에만 쓰고 OCR 엔 안 보냄.)
-- ⚠️ **`/verify` rate limit = 5/day(IP 기준)**. 백엔드가 단일 IP 로 호출하면 전체 가입자가 한도를 공유 → 가입 실패 위험. 운영 영향 큼.
-- ⚠️ **데이터 파트 의존성 추가**: 회원가입이 데이터 파트(8000) 가용성에 묶인다. 데이터 파트 다운 시 가입 전체가 막히면 안 되므로 **실패 정책(승인 거부 vs name/department 만 비우고 가입 허용)** 을 정해야 한다.
-
-**결정 (디폴트 — 사용자가 바꾸지 않으면 이대로)**
-- 신규 클라이언트 `CertificateOcrClient`(`global/auth` 또는 `global` 하위) — 커피챗 `MatchingAlgorithmClient`/로드맵 `RoadmapAiClient` 와 동일한 얇은 `RestClient` 패턴. base-url 은 기존 `data.base-url`(env `DATA_BASE_URL`, 기본 `http://localhost:8000`) 재사용. `POST /api/data/verify` 멀티파트 전송 + `X-User-Id` 헤더(저장된 member.id).
-- 응답 DTO(record): `CertificateVerifyResponse(status, isApproved, StudentInfo studentInfo)` / `StudentInfo(type, name, department, grade)`. snake_case 매핑(`@JsonProperty("student_info")` 등). `grade` 는 문자열로 받아 `Integer.parseInt` 변환(파싱 실패 시 null).
-- `AuthServiceImpl.signup` 흐름: role 검증 → 이메일 중복 → **member + role 레코드 저장(기존)** → 증명서 S3 업로드(기존) → **OCR `verify` 호출** → `is_approved=true` 면 `Member.name`/`department` 갱신, role=STUDENT 면 `Student.grade` 도 갱신(`MemberServiceImpl.sanitizeGrade` 와 동일한 1~4 클램프/검증 재사용). role=GRADUATE 면 학년 무시.
-- **실패 정책(디폴트)**: OCR 호출 실패·`is_approved=false` 여도 **가입 자체는 성공** 처리하고 name/department/grade 만 비워 둔다(추후 마이페이지 수정 가능). 즉 OCR 은 best-effort 자동 채움이며 가입의 차단 조건이 아니다. (증명서 미승인 시 가입을 막아야 한다면 이 결정을 뒤집어야 하므로 **사용자 확인 항목**.)
-- 졸업생은 `Graduate` 에 학년 필드가 없으므로 멤버 공통(name/department)만 채운다.
-
-**변경 (요지)**
-- 신규: `CertificateOcrClient`(인터페이스) + `CertificateOcrClientImpl`(RestClient, 멀티파트+`X-User-Id`) + 응답 record DTO.
-- 수정: `AuthServiceImpl.signup` — member 저장 후 OCR 호출·추출값 반영. `Student.grade` 갱신을 위해 `studentRepository` 재조회/저장 또는 `createRoleRecord` 시점에 grade 주입하도록 순서 조정.
-- 수정(가능): `Student` 생성 시 grade 를 받도록 `createRoleRecord` 시그니처 조정. `Member.name`/`department` 는 빌더에 추가(엔티티 컬럼은 이미 존재 — 스키마 변경 없음).
-- (선택) `application.yml`/`data.yml` 에 OCR 호출용 타임아웃 등 설정 — 기존 `data.base-url` 재사용이라 신규 설정 최소.
-
-**파일 (신규 ~3, 수정 ~2)**
-- 신규: `global/auth/service/CertificateOcrClient.java` · `CertificateOcrClientImpl.java`
-- 신규: `global/auth/dto/response/CertificateVerifyResponse.java`(+ 내부 `StudentInfo`)
-- 수정: `global/auth/service/AuthServiceImpl.java` — OCR 호출·추출값 저장 로직
-- 수정(가능): `AuthServiceImpl.createRoleRecord` 또는 `Student` 저장부 — grade 주입
-
-**테스트**
-- `AuthServiceImplTest`(신규/확장) — OCR mock(`CertificateOcrClient` stub)으로: (1) 재학생 가입 시 name/department/grade 저장, (2) 졸업생 가입 시 name/department 만 저장(grade 미적용), (3) OCR 실패/미승인 시 가입은 성공하고 name/department/grade 는 비어 있음(실패 정책), (4) grade 문자열 파싱·1~4 클램프.
-- `CertificateOcrClientImplTest` — `MockRestServiceServer` 로 `/api/data/verify` 멀티파트 요청·`X-User-Id` 헤더·응답 파싱(`student_info` snake_case, 재학생 grade 유무) 검증. (매칭/로드맵 클라이언트 테스트 선례 동일.)
-- 하드코딩 금지 — 경로(`/api/data/verify`)·헤더명(`X-User-Id`)·grade 범위는 상수/기존 심볼 참조.
-
-**문서 갱신 (구현 PR 에서 동반)**
-- `docs/agent/backend.md` `### 회원 (Member)` 또는 `### 인증/JWT` — 회원가입이 OCR 추출값(name/department/grade)을 자동 저장하는 플로우, 데이터 파트 의존·실패 정책 명시.
-- `docs/agent/data.md` `### POST /api/data/verify` — 현재 문서의 응답 스키마(구: `extracted_name`/`raw_text`)를 PR #13 의 신 스키마(`student_info{type,name,department,grade}`)로 갱신. 백엔드 연동 계약(멀티파트 relay + `X-User-Id` + rate limit 한계) 추가.
-- 완료(머지) 후 본 TODO 항목은 이 파일에서 삭제.
-
-**Breaking change / 주의**
-- 회원가입이 **데이터 파트(8000) 가용성에 의존**하게 된다(실패 정책으로 가입 차단은 회피하되, 데이터 파트 다운 시 자동 채움 미동작). `verify` 5/day rate limit 이 가입 흐름에 영향을 줄 수 있어 **운영 전 limit 정책 재협의 필요**.
-- 데이터 파트 `/verify` 가 `X-User-Id` 인증·멀티파트라 "가입 전" 호출이 불가 → member 선저장 후 호출하는 순서가 강제됨(위 설계 제약).
-
-
 ### TODO Y — 나의 활동 커피챗 응답 카드 경량 DTO + `jobType` 노출 + `region` 필드 전면 제거
 
 **배경**

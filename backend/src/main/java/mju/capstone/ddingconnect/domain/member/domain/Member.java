@@ -90,4 +90,18 @@ public class Member extends BaseEntity {
     @Column(length = 20, nullable = false)
     @Builder.Default
     private MemberRole role = UNKNOWN; // 회원 역할 (UNKNOWN/STUDENT/GRADUATE)
+
+    /**
+     * 회원가입 증명서 OCR 로 추출한 이름·학과를 채운다(STUDENT/GRADUATE 공통, best-effort).
+     * 추출 실패로 값이 비어 있으면(null/blank) 해당 필드는 건드리지 않는다.
+     * 가입 트랜잭션 안에서 막 저장된 영속 엔티티에 호출돼 dirty checking 으로 반영된다.
+     */
+    public void applyVerifiedProfile(String name, String department) {
+        if (name != null && !name.isBlank()) {
+            this.name = name;
+        }
+        if (department != null && !department.isBlank()) {
+            this.department = department;
+        }
+    }
 }
