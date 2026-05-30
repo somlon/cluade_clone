@@ -33,6 +33,7 @@ import mju.capstone.ddingconnect.domain.roadmap.domain.repository.RoadmapReposit
 import mju.capstone.ddingconnect.domain.roadmap.service.RoadmapService;
 import mju.capstone.ddingconnect.domain.techstack.domain.repository.TechStackRepository;
 import mju.capstone.ddingconnect.global.aws.S3Service;
+import mju.capstone.ddingconnect.global.aws.UploadType;
 import mju.capstone.ddingconnect.global.response.code.status.ErrorStatus;
 import mju.capstone.ddingconnect.global.response.exception.handler.MemberHandler;
 import mju.capstone.ddingconnect.global.response.exception.handler.S3Handler;

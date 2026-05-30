@@ -41,6 +41,7 @@ mju.capstone.ddingconnect
 └── global/
     ├── alarm/           # 통합 알람 조회(4종 목록/상세/읽음) + 상대시간 포맷
     ├── auth/            # 회원가입/로그인, JWT 필터, @LoginMember
+    ├── aws/             # S3 업로드/삭제·presigned URL (FileController: 범용 업로드 presigned PUT, UploadType)
     ├── common/          # BaseEntity (createdAt/updatedAt), SuccessMessage (성공 메시지 상수)
     ├── config/          # Security, Swagger, JpaAuditing, WebMvc, Mail, Sse
     ├── jwt/             # JwtUtil(Impl)
@@ -66,6 +67,14 @@ mju.capstone.ddingconnect
 - **포트폴리오 PDF 업로드 (`PATCH /api/v1/members/me/portfolio`)**: 마이페이지 포트폴리오 영역에 PDF 파일을 업로드/교체. `@RequestPart("file") MultipartFile`. `MemberServiceImpl.updatePortfolio` 가 (1) 기존 `Member.portfolio` 가 있으면 `s3Service.deleteImage(old)` 로 S3 cleanup → (2) `s3Service.uploadFile(file, PORTFOLIO_CONTENT_TYPES, PORTFOLIO_MAX_BYTES)` 호출(`application/pdf` 화이트리스트 + 20MB 제한이 S3Service 진입부에서 검증) → (3) `Member.portfolio` 만 갱신해 저장 → 갱신된 `MemberResponse` 반환. 파일 자체는 S3 에 저장되고 DB(`Member.portfolio`, `varchar(255)`) 에는 public URL 문자열만 들어간다.
 - **`S3Service` 일반화 (`global/aws/S3Service`)**: `uploadFile(MultipartFile, Set<String> allowedContentTypes, long maxBytes)` 메서드를 추가해 content-type 화이트리스트 + 크기 제한을 진입부에서 강제하는 일반 파일 업로드 진입점을 제공. 신규 호출처(포트폴리오 PDF, 그 외 명시적 타입 업로드)는 이 메서드를 사용한다. 기존 `uploadImage(MultipartFile)` 는 회원가입 증명서 흐름(`AuthServiceImpl.signup`)이 PDF 도 통과시키는 동작에 의존 중이라 **검증 없는 원본 패턴 그대로 유지** (위임 재구성 안 함). 신규 코드는 가능한 한 `uploadFile` 을 사용해 명시적 화이트리스트를 둔다. `deleteImage(String url)` 는 임의 key 삭제 가능하므로 이름과 무관하게 PDF 삭제에도 그대로 재사용한다(rename 보류).
 - **`S3Service` 서버 생성 파일 + presigned URL 확장 (로드맵 PDF 다운로드용)**: `MultipartFile` 외 서버가 직접 만든 바이트 배열 업로드용으로 `uploadBytes(byte[], key, contentType)` 추가, GET 다운로드 URL 발급용으로 `generatePresignedUrl(key, Duration ttl, fileName)` 추가. 후자는 응답 헤더 오버라이드(`response-content-disposition: attachment; filename="..."`) 를 함께 지정해 브라우저 다운로드를 강제한다. presigner 빈은 `S3Config.s3Presigner()` 가 `S3Client` 와 동일 region/credentials 로 생성(`software.amazon.awssdk:s3` 에 `S3Presigner` 포함 — 별도 `s3-presigner` artifact 추가 없음). 기존 `uploadFile`/`uploadImage`/`deleteImage` 시그니처 전부 유지 — 포트폴리오 PDF·프로필/명함 이미지·증명서 흐름 영향 없음.
+- **범용 파일 업로드 (presigned PUT URL) — 명함·포트폴리오·이미지 공통 (`POST /api/v1/files/presigned-url`)**: 브라우저가 S3 로 **직접 PUT** 하도록 백엔드가 presigned PUT URL + 최종 public URL 만 발급하는 범용 업로드 엔드포인트. 컨트롤러는 `global/aws/controller/FileController`(`@LoginMember` 인증 필수), 발급 로직은 `S3Service` 에 둔다. 요청 `PresignedUploadRequest(uploadType, fileName, contentType)`, 응답 `ApiResponse<PresignedUploadResponse(uploadUrl, fileUrl, key, expiresAt)>`.
+  - **용도 enum `global/aws/UploadType`**: `IMAGE`={image/png, image/jpeg, image/webp} / `PORTFOLIO`={application/pdf}. content-type 화이트리스트를 **단일 정의로 보유**하며, `MemberServiceImpl.PROFILE_IMAGE_CONTENT_TYPES`·`BUSINESS_CARD_CONTENT_TYPES`·`PORTFOLIO_CONTENT_TYPES` 도 이 값을 참조(중복·하드코딩 제거). 크기 제한(`*_MAX_BYTES`)은 멀티파트 직접 업로드 경로 전용이라 `MemberServiceImpl` 에만 둔다.
+  - **`S3Service.createUploadPresign(originalFilename, contentType, allowedContentTypes)`**: content-type 화이트리스트 검증(불일치 `_FILE_TYPE_NOT_ALLOWED`) → `convertToSaveName` 키 생성 → `generateUploadPresignedUrl` 발급 → `getUrl(key)` 최종 URL + `expiresAt(now+ttl)` 담은 `PresignedUploadResponse` 반환. `generateUploadPresignedUrl(key, contentType, ttl)` 은 AWS SDK v2 `S3Presigner.presignPutObject`(`PutObjectPresignRequest`/`PutObjectRequest(bucket,key,contentType)`) 사용 — content-type 이 presign 에 서명되므로 실제 PUT 요청 `Content-Type` 헤더가 동일해야 S3 가 수락. 발급 자체 실패는 `_FILE_PRESIGN_FAILED`(S3500, 신규). 기존 GET 다운로드용 `generatePresignedUrl` 은 그대로 두고 PUT 발급만 신설.
+  - **2-step 계약**: ① `POST /files/presigned-url {uploadType, fileName, contentType}` → `{uploadUrl, fileUrl, key, expiresAt}` ② 받은 `uploadUrl` 로 파일 바이트 **PUT**(헤더 `Content-Type` = 1번 contentType) ③ 업로드 성공 후 `fileUrl` 을 `PATCH /api/v1/members/mypage/graduate` 의 `businessCardImage`(명함)·`portfolio`(포폴) string 필드에 저장.
+  - **설정**: `aws.s3.upload-presign-ttl`(ISO-8601 `Duration`, 기본 `PT5M`) 을 `application-s3.yml` 에 외부화(`download-presign-ttl` 선례와 동일), `S3Service` 에 `@Value` 주입. URL 유출 시 노출 시간 최소화 목적.
+  - **S3 버킷 CORS (인프라 선행 필수)**: 브라우저 직접 PUT 을 위해 public 버킷 CORS 허용 필요 — `AllowedMethods:[PUT]`, `AllowedOrigins:[http://localhost:5173, <운영 도메인>]`, `AllowedHeaders:["*"]`, `ExposeHeaders:[ETag]`. 미설정 시 브라우저 PUT 이 CORS 로 차단(코드 외 작업).
+  - **크기 강제 한계**: presigned PUT 은 서버측 크기 강제가 불가 — 1차는 프론트 클라이언트단 검증, 엄격 강제 필요 시 presigned POST(`content-length-range`) 또는 업로드 후 HEAD 검증으로 후속 보강(범위 밖). content-type 화이트리스트 + presign content-type 핀까지만 강제.
+  - **비파괴**: 기존 멀티파트 엔드포인트(`PATCH /me/business-card`·`/me/portfolio`·`/me/profile-image`)는 유지 — 신규 범용 업로드와 병존하며, 명함/포폴 저장 플로우만 "파일 업로드(presigned) → string URL 필드 PATCH" 로 일원화.
 
 ### 마이페이지 (member)
 - **`GET /api/v1/members/mypage`** — 마이페이지 화면을 1회 호출로 렌더링하기 위한 통합 조회. 컨트롤러는 `MemberController`, 서비스는 `MyPageService(Impl)`.
@@ -86,6 +95,7 @@ mju.capstone.ddingconnect
   - 진입부 가드 — 컨트롤러는 `@LoginMember` 만 받고, 역할 검증은 서비스 진입부(`MyPageServiceImpl.update*MyPage`)에서 수행. `member.getRole()` 이 해당 역할이 아니면 즉시 `MEMBER_FIELD_ROLE_MISMATCH`(UNKNOWN 도 거부).
 - **역할별 DTO 4개**: `UpdateStudentMyPageRequest(@Valid UpdateStudentProfileRequest profile, List<TechStackName> techStacks, List<TargetJobCategory> targetJobs)`, `UpdateGraduateMyPageRequest(@Valid UpdateGraduateProfileRequest profile, List<TechStackName> techStacks, @Valid List<CreateJobPostLinkRequest> jobPostsToAdd, List<Long> jobPostIdsToDelete)`. 프로필은 `UpdateStudentProfileRequest`(공통 9필드 + `grade`) / `UpdateGraduateProfileRequest`(공통 9필드 + GRADUATE 4필드)로 분리해 각 역할 필드만 노출 — 역할 외 필드는 record 정의 자체에 없어 클라이언트가 보낼 수 없다. **부분 수정 규약** — 필드가 `null` 이면 그 항목은 미변경(`profile` 이 null 이면 수정 대신 조회로 최신 프로필을 채움), 리스트가 빈 값이면 그 항목 전부 삭제(replace 규약).
 - **수정도 애그리게이터**: 각 도메인의 **기존 수정 API** 에 위임한다 — 프로필 `MemberService.updateMyProfile`(역할별 프로필 DTO 의 `toUpdateMemberRequest()` 어댑터를 거쳐 호출), 기술 스택 `TechStackService.replace`, 관심 직군 `TargetJobService.replace`(STUDENT 경로), 졸업생 구직 공고 `JobPostService.createFromLink`/`delete`(GRADUATE 경로). 위임 후 `getMyPage` 와 공유하는 `buildResponse` 헬퍼로 최신 `MyPageResponse` 를 반환한다.
+- **명함/포트폴리오 저장 = 파일 업로드(presigned) → string URL PATCH**: 졸업생 마이페이지의 명함(`businessCardImage`)·포트폴리오(`portfolio`)는 `PATCH /api/v1/members/mypage/graduate`(및 `/me`)의 **string(URL) 필드**다. 프론트는 파일을 직접 싣지 않고 `POST /api/v1/files/presigned-url` 로 받은 `fileUrl` 을 이 string 필드에 넣어 저장한다(2-step, 위 회원 도메인 'presigned PUT URL' 단락 참조). blob URL 직접 전송 문제를 이 플로우로 해소. 멀티파트 전용 엔드포인트(`PATCH /me/business-card`·`/me/portfolio`)도 병존하나 마이페이지 저장은 string URL 방식으로 일원화.
 - **졸업생 구직 공고는 링크 전용 추가·삭제만** 위임 — `jobPostIdsToDelete`(삭제)를 먼저, `jobPostsToAdd`(`CreateJobPostLinkRequest` 리스트, 추가)를 나중에 처리. 추가는 `JobPostService.createFromLink`(`detailUrl` 만 채운 `PostContents` 저장 + `GraduateJobPost` 매핑, `jobType=null` 이므로 알람 분기 스킵)로 진행. 기존 11필드 공고 본문 편집은 범위 밖이며 개별 편집은 `PATCH /api/v1/job-post/{id}` 사용. 졸업생 권한·소유자 검증은 위임 메서드가 그대로 수행한다.
 - **'수정 완료' = 원자성**: `updateStudentMyPage`/`updateGraduateMyPage` 는 단일 `@Transactional`. 위임 도메인 수정 메서드가 모두 `@Transactional`(전파 REQUIRED)이라 애그리게이터 트랜잭션에 참여 → 일부라도 실패하면 전체 롤백, 부분 저장 없음.
 - **'취소' = 클라이언트 임시저장**: 편집 임시상태는 프론트가 보관, 취소 시 서버 호출 없이 폼을 버리고 조회 데이터로 복원. 별도 취소 엔드포인트 없음(서버 무상태).
@@ -238,6 +248,8 @@ mju.capstone.ddingconnect
 
 - `src/test/java/.../EntityIntegrationTest.java` — 엔티티 관계 통합 검증 (649 lines)
 - 도메인별 `*ControllerTest`, `*ServiceImplTest`
+- `global/aws/S3ServiceTest` — `createUploadPresign` content-type 화이트리스트·presigned PUT URL 발급·최종 `fileUrl`(`getUrl(key)`) 규약·ttl 반영 검증 (`@Mock S3Presigner`, `ReflectionTestUtils` 로 `@Value` 필드 주입)
+- `global/aws/controller/FileControllerTest` — `POST /files/presigned-url` 인증 가드·`uploadType` 분기·응답 jsonPath·비허용 content-type 400·요청 검증 실패 시 서비스 미호출
 - `support/WithMockLoginMember` — `@LoginMember` 인증 mock 어노테이션
 - 테스트 설정: `src/test/resources/application.properties`, `logback-test.xml`
 

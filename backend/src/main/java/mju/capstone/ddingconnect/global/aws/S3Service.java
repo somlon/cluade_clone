@@ -1,6 +1,7 @@
 package mju.capstone.ddingconnect.global.aws;
 
 import lombok.RequiredArgsConstructor;
+import mju.capstone.ddingconnect.global.aws.dto.PresignedUploadResponse;
 import mju.capstone.ddingconnect.global.response.exception.handler.S3Handler;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -11,15 +12,19 @@ import software.amazon.awssdk.services.s3.model.*;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
 
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.Set;
 import java.util.UUID;
 
 import static mju.capstone.ddingconnect.global.response.code.status.ErrorStatus._FILE_DELETE_FAILED;
+import static mju.capstone.ddingconnect.global.response.code.status.ErrorStatus._FILE_PRESIGN_FAILED;
 import static mju.capstone.ddingconnect.global.response.code.status.ErrorStatus._FILE_TOO_LARGE;
 import static mju.capstone.ddingconnect.global.response.code.status.ErrorStatus._FILE_TYPE_NOT_ALLOWED;
 import static mju.capstone.ddingconnect.global.response.code.status.ErrorStatus._FILE_UPLOAD_FAILED;
@@ -44,6 +49,10 @@ public class S3Service {
 
     @Value("${cloud.aws.region.static}")
     private String region;
+
+    // 범용 파일 업로드(presigned PUT) URL 의 만료(ISO-8601 Duration, 기본 PT5M) — 외부 설정
+    @Value("${aws.s3.upload-presign-ttl}")
+    private Duration uploadPresignTtl;
 
 
     /**
@@ -181,6 +190,59 @@ public class S3Service {
 
         PresignedGetObjectRequest presigned = s3Presigner.presignGetObject(presignRequest);
         return presigned.url().toString();
+    }
+
+    /**
+     * 범용 업로드 presigned 발급 진입점.
+     * content-type 화이트리스트 검증 → 저장 키 생성 → presigned PUT URL + 최종 public URL 발급을 한 번에 수행한다.
+     * 명함·포트폴리오·이미지 공통(브라우저가 S3 로 직접 PUT 하는 2-step 플로우).
+     *
+     * @param originalFilename    원본 파일명(확장자 포함) — 저장 키 생성에 사용
+     * @param contentType         업로드할 파일의 Content-Type
+     * @param allowedContentTypes 허용 content-type 화이트리스트 (예: {@link UploadType#allowedContentTypes()})
+     * @return uploadUrl(presigned PUT) + fileUrl(최종 public URL) + key + expiresAt
+     * @throws S3Handler content-type 미허용 시 {@code _FILE_TYPE_NOT_ALLOWED}, 발급 실패 시 {@code _FILE_PRESIGN_FAILED}
+     */
+    public PresignedUploadResponse createUploadPresign(String originalFilename, String contentType,
+                                                       Set<String> allowedContentTypes) {
+        if (contentType == null || !allowedContentTypes.contains(contentType)) {
+            throw new S3Handler(_FILE_TYPE_NOT_ALLOWED);
+        }
+        String key = convertToSaveName(originalFilename);
+        String uploadUrl = generateUploadPresignedUrl(key, contentType, uploadPresignTtl);
+        String fileUrl = getUrl(key);
+        LocalDateTime expiresAt = LocalDateTime.now().plus(uploadPresignTtl);
+        return new PresignedUploadResponse(uploadUrl, fileUrl, key, expiresAt);
+    }
+
+    /**
+     * 지정 키·content-type 에 대한 PUT presigned URL 을 발급한다(브라우저 직접 업로드용).
+     * content-type 이 presign 에 서명되므로, 실제 PUT 요청의 Content-Type 헤더가 동일해야 S3 가 수락한다.
+     *
+     * @param key         저장할 S3 객체 키
+     * @param contentType 업로드할 파일의 Content-Type
+     * @param ttl         URL 유효 기간
+     * @return presigned PUT URL 문자열
+     * @throws S3Handler 발급 실패 시 {@code _FILE_PRESIGN_FAILED}
+     */
+    public String generateUploadPresignedUrl(String key, String contentType, Duration ttl) {
+        try {
+            PutObjectRequest putObjectRequest = PutObjectRequest.builder()
+                    .bucket(publicBucketName)
+                    .key(key)
+                    .contentType(contentType)
+                    .build();
+
+            PutObjectPresignRequest presignRequest = PutObjectPresignRequest.builder()
+                    .signatureDuration(ttl)
+                    .putObjectRequest(putObjectRequest)
+                    .build();
+
+            PresignedPutObjectRequest presigned = s3Presigner.presignPutObject(presignRequest);
+            return presigned.url().toString();
+        } catch (Exception e) {
+            throw new S3Handler(_FILE_PRESIGN_FAILED);
+        }
     }
 
     /**
