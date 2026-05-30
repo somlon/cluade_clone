@@ -15,3 +15,5 @@ aws:
   s3:
     # 로드맵 PDF 다운로드 presigned URL 의 만료(초). 짧게 둬서 URL 유출 시 노출 시간을 최소화한다.
     download-presign-ttl: PT5M
+    # 범용 파일 업로드(presigned PUT) URL 의 만료. 짧게 둬서 URL 유출 시 노출 시간을 최소화한다.
+    upload-presign-ttl: PT5M
