@@ -49,9 +49,9 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class MemberServiceImpl implements MemberService {
 
-    // 학년 허용 범위 (sanitizeGrade) — 테스트도 동일 상수를 참조한다
-    static final int MIN_GRADE = 1;
-    static final int MAX_GRADE = 4;
+    // 학년 허용 범위 (sanitizeGrade) — 단일 정의는 Student 엔티티가 보유, 여기선 재참조(테스트도 이 상수 참조)
+    static final int MIN_GRADE = Student.MIN_GRADE;
+    static final int MAX_GRADE = Student.MAX_GRADE;
 
     // 프로필 이미지 업로드 제약 — 테스트도 동일 상수를 참조한다
     static final Set<String> PROFILE_IMAGE_CONTENT_TYPES =

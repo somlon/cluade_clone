@@ -28,6 +28,7 @@ public enum ErrorStatus implements BaseErrorCode {
     EXPIRED_TOKEN(HttpStatus.UNAUTHORIZED, "AUTH401","만료된 토큰입니다."),
     MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "AUTH404","존재하지 않는 회원입니다."),
     INVALID_ROLE(HttpStatus.BAD_REQUEST, "AUTH404","유효하지 않은 역할입니다. STUDENT 또는 GRADUATE만 가능합니다."),
+    CERTIFICATE_OCR_FAILED(HttpStatus.BAD_GATEWAY, "AUTH502", "증명서 OCR 인증 호출에 실패했습니다."),
 
 
     // Member

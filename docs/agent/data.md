@@ -115,9 +115,33 @@ ddingconnect-data/
 `routers/ocr_router.py`. **인증 필수**(`X-User-Id` 헤더 → `get_current_user`), **요청 제한 `5/day`**(IP 기준, slowapi).
 
 - 요청: `multipart/form-data`, 필드 `file`. **PDF 만 허용** — 확장자 `.pdf` + `python-magic` 의 실제 MIME(`application/pdf`) 이중 검증.
-- 처리: 파일 바이트를 네이버 OCR 로 전송 → 텍스트 파싱 → 로그인 유저 닉네임(`current_user.nickname`)과 증명서 추출 실명 대조. 승인 시 `Member.certificate` 를 `"VERIFIED"` 로 갱신·커밋.
-- 응답 dict: `is_approved:bool`, `extracted_name:str|None`, `is_myongji:bool`, `is_certificate:bool`, `raw_text:str`.
+- 처리: 파일 바이트를 네이버 OCR 로 전송 → 텍스트 파싱(`ocr_service.parse_ocr_result`) → 명지대 + 재학/졸업증명서 키워드 + 성명/학과/학년 정규식 추출.
+- **응답 스키마 (PR #13, 2026-05-30 `main` 반영)** — 승인 시 추출 정보(`student_info`)를 함께 내려준다:
+  ```jsonc
+  // 승인
+  { "status": "success", "user_id": 1, "is_approved": true,
+    "message": "명지대학교 재학생 인증이 완료되었습니다.",
+    "student_info": {
+      "type": "재학생" | "졸업생",   // 재학증명서/졸업증명서
+      "name": "홍길동",              // 추출 실패 시 null 가능(승인이어도)
+      "department": "데이터사이언스전공",
+      "grade": "4"                  // 재학생일 때만 포함(문자열, 정규식 [1-4]). 졸업생은 키 자체 없음
+    } }
+  // 미승인
+  { "status": "fail", "user_id": 1, "is_approved": false,
+    "message": "...", "details": { "is_myongji": false, "is_certificate": true } }
+  ```
+- (구 스키마 `extracted_name`/`raw_text` 평면 dict 는 PR #13 으로 위 `student_info` 중첩 구조로 교체됨.)
 - 에러: 비 PDF → 400, 그 외 → 500.
+
+#### 백엔드 연동 (회원가입 자동 채움)
+
+`backend.md` 의 `### 인증/JWT` 회원가입 OCR 자동 채움(`CertificateOcrClient`)과의 계약:
+
+- **멀티파트 relay + `X-User-Id`**: 백엔드 `signup` 이 업로드된 증명서 PDF 바이트를 그대로 `file` 파트로 전달하고, 막 저장한 `member.id` 를 `X-User-Id` 헤더로 보낸다(데이터 파트 `get_current_user` 인증). 데이터 파트가 파일명 `.pdf` 확장자를 검사하므로 백엔드는 `.pdf` 아닌 원본명을 `certificate.pdf` 로 대체해 보낸다.
+- **사용 필드**: 백엔드는 `is_approved` + `student_info{type,name,department,grade}` 만 사용(`name`/`department` → `Member`, `grade` → 재학생 `Student`). `user_id`/`message`/`details` 는 무시.
+- **rate limit 한계**: `5/day(IP 기준)` — 백엔드 단일 IP 호출이라 전체 가입자가 한도 공유. 한도 초과·데이터 파트 다운 시 백엔드는 **best-effort 로 가입을 통과**시키고 자동 채움만 생략한다(증명서 미승인도 동일).
+- **트랜잭션 가시성 주의**: `/verify` 의 `get_current_user` 가 (공용 DB 전제 시) 별도 커넥션으로 member 를 조회하는데, 백엔드 가입 트랜잭션이 커밋되기 전이라 막 INSERT 한 member 가 안 보여 404 가 날 수 있다. 이 경우에도 백엔드는 best-effort 로 가입을 통과시킨다. 엄격 채움이 필요하면 member 선커밋 또는 인증 방식 재협의 필요(범위 밖).
 
 ### POST /api/data/generate — 커리어 로드맵 AI 생성
 
