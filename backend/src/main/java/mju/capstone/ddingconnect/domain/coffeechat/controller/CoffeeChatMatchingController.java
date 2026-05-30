@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import mju.capstone.ddingconnect.domain.coffeechat.dto.request.MatchingRequest;
 import mju.capstone.ddingconnect.domain.coffeechat.dto.response.MatchedCandidateDetailResponse;
 import mju.capstone.ddingconnect.domain.coffeechat.dto.response.MatchedCandidateResponse;
+import mju.capstone.ddingconnect.domain.coffeechat.dto.response.MyActivityCoffeeChatResponse;
 import mju.capstone.ddingconnect.domain.coffeechat.service.CoffeeChatMatchingService;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMember;
@@ -37,7 +38,7 @@ public class CoffeeChatMatchingController implements CoffeeChatMatchingSwagger {
 
     /** 나의 활동 › 커피챗 조회 */
     @GetMapping("/my-activity")
-    public ApiResponse<List<MatchedCandidateDetailResponse>> getMyActivity(
+    public ApiResponse<List<MyActivityCoffeeChatResponse>> getMyActivity(
             @Parameter(hidden = true) @LoginMember Member member) {
         return ApiResponse.onSuccess(coffeeChatMatchingService.getMyActivity(member));
     }

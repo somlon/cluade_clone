@@ -9,42 +9,6 @@
 > **관찰 (의도 확인 필요)**: `ErrorStatus.getReason()`/`getReasonHttpStatus()` 가 실패 코드 enum 인데 `ErrorReasonDTO` 를 `.isSuccess(true)` 로 고정 생성한다(`SuccessStatus` 와 대비). 현재 `ApiResponse.onFailure` 가 `isSuccess=false` 를 따로 지정하므로 실제 응답엔 영향 없으나, 오해를 부르는 죽은 설정값이다 — 의도 확인 후 정리 여부 결정.
 
 
-### TODO Y — 나의 활동 커피챗 응답 카드 경량 DTO + `jobType` 노출 + `region` 필드 전면 제거
-
-**배경**
-- 프론트 '나의 활동 > 커피챗' 카드 UI 는 회원당 다음 7+1 필드만 표시한다: `nickname`("이선배"), `department`+`enrollmentYear`("컴퓨터공학과 '18"), `company`+`jobType`("네이버 • 백엔드 개발자"), `careerYear`("경력 3년"), `techStacks`(칩), 상세 진입용 `memberId`(선배 페이지 둘러보기 버튼).
-- 그러나 `GET /api/v1/coffeechat/my-activity` 는 매칭 상세 화면용 `MatchedCandidateDetailResponse` 를 그대로 반환해 화면이 안 쓰는 필드(`portfolio`/`githubLink`/`linkedinLink`/`businessCardImage`/`jobPosts`/`jobCategories`/`grade`)를 통째로 내려 보낸다. 페이로드 비대화 + 의도 모호.
-- 또한 화면에 필수인 **`jobType`(예: "백엔드 개발자")** 이 응답 어디에도 없다 — `MatchedCandidateResponse`/`MatchedCandidateDetailResponse` 둘 다 `Graduate.jobType` 을 노출하지 않는다(현재 `enrollmentYear`/`company`/`careerYear` 만 채움).
-- `region` 은 `CandidateProfileAssembler` 가 항상 `null` 로 채우는 "소스 미확정" 더미 필드 — UI 가 지역을 표시하지 않기로 확정됐으므로 DTO 에서 **전면 제거**(키 자체 삭제) 한다.
-
-**변경 (요지)**
-- **신규 경량 DTO `MyActivityCoffeeChatResponse`** — `(memberId, nickname, department, enrollmentYear, company, jobType, careerYear, techStacks)` 8필드. `/my-activity` 전용. 매칭 카드/상세 DTO 와는 분리해 책임 명확화.
-- `CoffeeChatMatchingService.getMyActivity` 리턴 타입 `List<MatchedCandidateDetailResponse>` → `List<MyActivityCoffeeChatResponse>`. `CoffeeChatMatchingServiceImpl.getMyActivity` 는 `assembleDetail` 대신 신규 조립 헬퍼 사용.
-- `CandidateProfileAssembler` 에 `MyActivityCoffeeChatResponse assembleMyActivityCard(Long memberId)` 신설 — GRADUATE 가드 후 `Graduate.jobType` 포함해 8필드 채움. (현재 `getMyActivity` 로직상 receiver 는 항상 졸업생이지만 안전 가드는 명시한다.)
-- **`region` 필드 전면 제거** — `MatchedCandidateResponse.region` · `MatchedCandidateDetailResponse.region` 필드와 `CandidateProfileAssembler.assembleCard`/`assembleDetail` 의 `null` 채움 자리 모두 삭제. 어차피 항상 null 이라 매칭 카드/상세 화면도 시각적 영향 없음.
-
-**파일 (수정 6, 신규 1)**
-- 신규: `src/main/java/mju/capstone/ddingconnect/domain/coffeechat/dto/response/MyActivityCoffeeChatResponse.java`
-- 수정: `src/main/java/mju/capstone/ddingconnect/domain/coffeechat/dto/response/MatchedCandidateResponse.java` — `region` 필드 제거
-- 수정: `src/main/java/mju/capstone/ddingconnect/domain/coffeechat/dto/response/MatchedCandidateDetailResponse.java` — `region` 필드 제거
-- 수정: `src/main/java/mju/capstone/ddingconnect/domain/coffeechat/service/CandidateProfileAssembler.java` — `assembleMyActivityCard` 신설, 기존 두 메서드의 `region` 인자 제거
-- 수정: `src/main/java/mju/capstone/ddingconnect/domain/coffeechat/service/CoffeeChatMatchingService.java` — `getMyActivity` 시그니처 갱신
-- 수정: `src/main/java/mju/capstone/ddingconnect/domain/coffeechat/service/CoffeeChatMatchingServiceImpl.java` — `assembleMyActivityCard` 위임
-- 수정: `src/main/java/mju/capstone/ddingconnect/domain/coffeechat/controller/CoffeeChatMatchingController.java` + `CoffeeChatMatchingSwagger.java` — 엔드포인트 리턴 타입 갱신
-
-**테스트**
-- 신규/갱신: `CoffeeChatMatchingServiceImplTest` — `getMyActivity` 가 새 DTO 로 반환되고, `jobType` 이 정상 채워지며, `region`/상세 전용 필드는 노출되지 않음 검증
-- 갱신: `CoffeeChatMatchingControllerTest` — `my-activity` jsonPath `$.result[0].jobType` 노출 검증 + `region`/`portfolio`/`githubLink`/`linkedinLink`/`businessCardImage`/`jobPosts` 미노출 검증
-- 갱신: 매칭 카드/상세 테스트 — `region` 필드 expectation 제거
-
-**Breaking change**
-- 프론트 응답 스키마 변경: `/my-activity` 응답이 8필드 슬림 카드로 축소 + `jobType` 신규 노출, `region` 제거. 매칭 카드/상세는 `region` 만 제거(항상 null 이라 화면 영향 없음).
-
-**문서 갱신**
-- `docs/agent/backend.md` 의 "후보 프로필 조립 (`CandidateProfileAssembler`)" 섹션 — `region` 관련 문장 삭제, `jobType` 노출 명시, `getMyActivity` 가 카드 경량 DTO 반환으로 변경됐음 추가
-- `docs/agent/backend.md` 의 마이페이지/나의 활동 섹션 — `/my-activity` 응답 contract 변경 사실 명시
-
-
 ### TODO Z — 범용 파일 업로드 (presigned PUT URL) — 명함·포트폴리오·이미지 공통
 
 **배경**

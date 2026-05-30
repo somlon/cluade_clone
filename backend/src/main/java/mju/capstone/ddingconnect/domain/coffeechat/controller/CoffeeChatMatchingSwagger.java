@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import mju.capstone.ddingconnect.domain.coffeechat.dto.request.MatchingRequest;
 import mju.capstone.ddingconnect.domain.coffeechat.dto.response.MatchedCandidateDetailResponse;
 import mju.capstone.ddingconnect.domain.coffeechat.dto.response.MatchedCandidateResponse;
+import mju.capstone.ddingconnect.domain.coffeechat.dto.response.MyActivityCoffeeChatResponse;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMember;
 import mju.capstone.ddingconnect.global.response.exception.handler.ApiResponse;
@@ -43,10 +44,10 @@ public interface CoffeeChatMatchingSwagger {
 
     @Operation(
             summary = "나의 활동 › 커피챗 조회",
-            description = "로그인된 회원이 신청자이고 수락(ACCEPTED)된 커피챗 상대 목록을 상세 프로필로 조회합니다. 없으면 빈 리스트를 반환합니다."
+            description = "로그인된 회원이 신청자이고 수락(ACCEPTED)된 커피챗 상대 목록을 카드 UI 전용 경량 DTO(memberId·nickname·department·enrollmentYear·company·jobType·careerYear·techStacks 8필드)로 조회합니다. 없으면 빈 리스트를 반환합니다."
     )
     @GetMapping("/my-activity")
-    ApiResponse<List<MatchedCandidateDetailResponse>> getMyActivity(
+    ApiResponse<List<MyActivityCoffeeChatResponse>> getMyActivity(
             @Parameter(hidden = true) @LoginMember Member member);
 
 }

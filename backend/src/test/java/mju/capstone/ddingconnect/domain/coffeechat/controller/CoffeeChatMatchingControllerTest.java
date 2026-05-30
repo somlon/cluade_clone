@@ -70,14 +70,25 @@ class CoffeeChatMatchingControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/v1/coffeechat/my-activity - 수락된 커피챗 상대 리스트 반환")
+    @DisplayName("GET /api/v1/coffeechat/my-activity - 경량 카드 리스트 반환 (jobType 노출, 상세 전용 필드 미노출)")
     void getMyActivity() throws Exception {
         given(coffeeChatMatchingService.getMyActivity(any()))
-                .willReturn(List.of(candidateDetail(CANDIDATE_ID_1)));
+                .willReturn(List.of(myActivityCard(CANDIDATE_ID_1)));
 
         mockMvc.perform(get(MY_ACTIVITY_URL))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result").isArray())
-                .andExpect(jsonPath("$.result[0].memberId").value(CANDIDATE_ID_1.intValue()));
+                .andExpect(jsonPath("$.result[0].memberId").value(CANDIDATE_ID_1.intValue()))
+                .andExpect(jsonPath("$.result[0].jobType").value(CANDIDATE_JOB_TYPE.name()))
+                .andExpect(jsonPath("$.result[0].company").value(CANDIDATE_COMPANY))
+                // 매칭 카드/상세 전용 필드는 경량 DTO 에 없어 노출되지 않는다
+                .andExpect(jsonPath("$.result[0].region").doesNotExist())
+                .andExpect(jsonPath("$.result[0].portfolio").doesNotExist())
+                .andExpect(jsonPath("$.result[0].githubLink").doesNotExist())
+                .andExpect(jsonPath("$.result[0].linkedinLink").doesNotExist())
+                .andExpect(jsonPath("$.result[0].businessCardImage").doesNotExist())
+                .andExpect(jsonPath("$.result[0].jobPosts").doesNotExist())
+                .andExpect(jsonPath("$.result[0].jobCategories").doesNotExist())
+                .andExpect(jsonPath("$.result[0].grade").doesNotExist());
     }
 }

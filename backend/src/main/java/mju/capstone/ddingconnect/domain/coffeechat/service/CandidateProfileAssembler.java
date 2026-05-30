@@ -3,6 +3,7 @@ package mju.capstone.ddingconnect.domain.coffeechat.service;
 import lombok.RequiredArgsConstructor;
 import mju.capstone.ddingconnect.domain.coffeechat.dto.response.MatchedCandidateDetailResponse;
 import mju.capstone.ddingconnect.domain.coffeechat.dto.response.MatchedCandidateResponse;
+import mju.capstone.ddingconnect.domain.coffeechat.dto.response.MyActivityCoffeeChatResponse;
 import mju.capstone.ddingconnect.domain.interested_job.domain.TargetJob;
 import mju.capstone.ddingconnect.domain.interested_job.domain.TargetJobCategory;
 import mju.capstone.ddingconnect.domain.interested_job.domain.repository.TargetJobRepository;
@@ -39,7 +40,7 @@ import java.util.List;
  *       상세는 businessCardImage · 공고 리스트 추가</li>
  *   <li>STUDENT — grade</li>
  * </ul>
- * 직군·기술스택은 역할 무관 공통 필드로 0개면 빈 리스트, region 은 소스 미확정으로 항상 null.
+ * 직군·기술스택은 역할 무관 공통 필드로 0개면 빈 리스트.
  *
  * <p>커피챗 도메인이 회원·기술스택·직군·공고 등 타 도메인 레포지토리를 직접 주입하는 것은
  * 조회 전용 조립 목적이며 CLAUDE.md QnA 선례상 허용된다.
@@ -82,8 +83,7 @@ public class CandidateProfileAssembler {
                 graduate != null ? enrollmentYearOf(member.getStudentNumber()) : null,
                 student != null ? student.getGrade() : null,
                 graduate != null ? graduate.getCompany() : null,
-                graduate != null ? graduate.getCareerYear() : null,
-                null  // region — 소스 미확정으로 항상 null
+                graduate != null ? graduate.getCareerYear() : null
         );
     }
 
@@ -111,12 +111,37 @@ public class CandidateProfileAssembler {
                 student != null ? student.getGrade() : null,
                 graduate != null ? graduate.getCompany() : null,
                 graduate != null ? graduate.getCareerYear() : null,
-                null,  // region — 소스 미확정으로 항상 null
                 member.getPortfolio(),
                 member.getGithubLink(),
                 member.getLinkedinLink(),
                 graduate != null ? graduate.getBusinessCardImage() : null,
                 graduate != null ? jobPostsOf(graduate) : null
+        );
+    }
+
+    /**
+     * "나의 활동 › 커피챗" 카드(경량 8필드)를 조립한다.
+     * getMyActivity 의 상대(receiver)는 항상 졸업생이지만, 안전 가드로 GRADUATE 가 아니면
+     * 졸업생 부가 필드(enrollmentYear · company · jobType · careerYear)는 null 로 둔다.
+     *
+     * @param memberId 후보(커피챗 상대) 회원 ID
+     * @return 나의 활동 커피챗 카드 응답
+     * @throws MemberHandler 회원이 존재하지 않으면 MEMBER_NOT_FOUND
+     */
+    @Transactional(readOnly = true)
+    public MyActivityCoffeeChatResponse assembleMyActivityCard(Long memberId) {
+        Member member = findMember(memberId);
+        Graduate graduate = findGraduate(member);
+
+        return new MyActivityCoffeeChatResponse(
+                member.getId(),
+                member.getNickname(),
+                member.getDepartment(),
+                graduate != null ? enrollmentYearOf(member.getStudentNumber()) : null,
+                graduate != null ? graduate.getCompany() : null,
+                graduate != null ? graduate.getJobType() : null,
+                graduate != null ? graduate.getCareerYear() : null,
+                techStackNamesOf(memberId)
         );
     }
 
