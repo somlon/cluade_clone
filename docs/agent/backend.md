@@ -75,6 +75,20 @@ mju.capstone.ddingconnect
   - **이력 (대체·제거)**: 과거 멀티파트 업로드(`PATCH /me/profile-image`·`/me/business-card`·`/me/portfolio` + `MemberServiceImpl.updateProfileImage`/`updateBusinessCard`/`updatePortfolio`, `S3Service.uploadFile`)와 범용 단일 발급 엔드포인트(`POST /api/v1/files/presigned-url` + `FileController`/`FileSwagger`, `PresignedUploadRequest.uploadType`)는 본 용도별 presigned 발급으로 통합·대체되어 제거됨. `S3Service.uploadImage` 는 회원가입 증명서 흐름(`AuthServiceImpl.signup`)이 계속 사용하므로 유지.
 - **`S3Service` 서버 생성 파일 + presigned URL 확장 (로드맵 PDF 다운로드용)**: `MultipartFile` 외 서버가 직접 만든 바이트 배열 업로드용으로 `uploadBytes(byte[], key, contentType)` 추가, GET 다운로드 URL 발급용으로 `generatePresignedUrl(key, Duration ttl, fileName)` 추가. 후자는 응답 헤더 오버라이드(`response-content-disposition: attachment; filename="..."`) 를 함께 지정해 브라우저 다운로드를 강제한다. presigner 빈은 `S3Config.s3Presigner()` 가 `S3Client` 와 동일 region/credentials 로 생성(`software.amazon.awssdk:s3` 에 `S3Presigner` 포함 — 별도 `s3-presigner` artifact 추가 없음). 업로드 PUT 발급(`createUploadPresign`/`generateUploadPresignedUrl`)·GET 다운로드 발급(`generatePresignedUrl`)·`uploadImage`·`uploadBytes`·`deleteImage` 시그니처 유지 — 로드맵 다운로드·증명서 흐름 영향 없음.
 
+### 홈 화면 (member)
+- **`GET /api/v1/members/me/home`** — 홈 화면을 1회 호출로 렌더링하기 위한 통합 조회. 컨트롤러는 `MemberController`, 서비스는 `HomeService(Impl)`.
+- **응답 `HomeResponse`** = `point`(보유 P) + `nickname` + `department` + `role` + `grade`(STUDENT 전용) + `career(jobType/company/careerYear)`(GRADUATE 전용) + `activity(coffeeChatCount, roadmapCount, questionCount)`. `MyPageResponse` 와 마찬가지로 `@JsonInclude(NON_NULL)` 로 역할별 비해당 필드(STUDENT 의 `career`, GRADUATE 의 `grade`/`activity.roadmapCount`)는 응답에서 키 자체 제외.
+- **활동 카운트는 마이페이지와 동일 집계 기준 재사용** — `HomeServiceImpl` 은 `CoffeeChatService.countMyAcceptedCoffeeChats` / `RoadmapService.countMyRoadmaps`(STUDENT 만 호출, GRADUATE/UNKNOWN 은 null) / `QuestionService.countMyQuestions` 를 그대로 호출한다. 새 집계 로직을 만들지 않고 `MyPageServiceImpl.buildResponse` 와 같은 메서드를 공유 (집계 기준 단일화).
+- **애그리게이터 패턴** (`MyPageServiceImpl` 과 동일) — `HomeServiceImpl` 은 항목별 도메인 서비스(`CoffeeChatService`/`RoadmapService`/`QuestionService`) + 역할별 `StudentRepository.findByMemberId`/`GraduateRepository.findByMemberId` 를 in-process 로 조합. 별도 엔티티/집계 컬럼 없음.
+- **`Member.point` 노출 정책 분리**: 홈 응답은 `point` 를 항상 노출(우측 상단 P 뱃지용), 마이페이지 응답은 `MemberResponse.withoutPoint()` 로 항상 제외(기존 정책). 두 응답이 서로 영향 없음.
+- **GRADUATE 의 학년 자리 = 경력 객체**: STUDENT 가 `grade`(예 3) 한 필드로 표현되는 학년 자리에, GRADUATE 는 `career.{jobType, company, careerYear}` 객체로 직무·회사명·경력 연차를 표시한다(프론트가 `role` 분기로 렌더).
+- **추가 포인트/충전 엔드포인트 — 홈 모달·충전 페이지용**:
+  - `GET /api/v1/members/me/point` — 보유 P만 반환(`PointBalanceResponse(point)`). 홈 화면 포인트 모달이 열릴 때마다 호출해 최신 P 갱신 용도. 컨트롤러에서 `new PointBalanceResponse(member.getPoint())` 로 직접 응답(서비스 없음).
+  - `GET /api/v1/members/me/point/products` — 보유 P + 충전 상품 카드 리스트(`PointChargeResponse(point, products: [{id, points, price, recommended}])`). 컨트롤러에서 `PointChargeResponse.of(member.getPoint())` 로 직접 응답(서비스 없음). 상품 매핑은 `PointChargeResponse.of` 정적 팩토리가 `PointProduct.values()` 를 변환.
+- **포인트 상품 정적 관리 (`PointProduct` enum)**: 충전 상품 6건(10/30/50추천/100/300/500 P)을 enum 상수로 보유 (id/points/price/recommended). 운영 중 가격·추천 뱃지 위치 변경 시 enum 만 수정. 별도 `PointProduct` 테이블/엔티티 없음(현 정책 — 변경 빈도 낮음 가정).
+- **단위 통일 = P**: 응답 필드는 `point`/`points` (Long/Integer) 로 통일. 프론트의 "토큰" 라벨은 동일 값을 다른 표기로만 렌더링 (1 P = 1 토큰). 백엔드 단에서 토큰 단위 별도 보유하지 않는다.
+- **(미구현) 결제·충전 처리·포인트 이력**: 충전 상품을 선택해 실제 결제하는 API, 결제 PG 연동, `PointHistory` (충전/사용/환불 추적) 엔티티는 아직 없다. 현재는 `Member.point` 단일 컬럼만 증감 가능 — 누가 언제 얼마를 어떻게 변동했는지 추적 불가. 결제 흐름·이력 도입은 별도 작업으로 분리.
+
 ### 마이페이지 (member)
 - **`GET /api/v1/members/mypage`** — 마이페이지 화면을 1회 호출로 렌더링하기 위한 통합 조회. 컨트롤러는 `MemberController`, 서비스는 `MyPageService(Impl)`.
 - **나의 활동 페이지 (`MyActivityController` + 도메인별 분산)**: 마이페이지 활동 통계 카드를 클릭해 진입하는 '나의 활동' 페이지는 도메인별 본인 스코프 목록을 별도 엔드포인트로 노출한다. 도메인별 배치:
@@ -229,7 +243,8 @@ mju.capstone.ddingconnect
 | 화면 섹션 | 백엔드 도메인 |
 |---|---|
 | 인증/온보딩 | `global/auth` + `member` |
-| 홈/알람 패널 | `global/sse` (4종 통합 조회 + SSE 실시간 푸시) |
+| 홈 화면 (포인트/인사/활동 카운트) | `member`(`HomeService` 애그리게이터) — 활동 카운트는 마이페이지와 동일 집계 기준 재사용. 포인트 모달·충전 페이지 데이터(`PointBalanceResponse`/`PointChargeResponse`)도 같은 컨트롤러에서 노출. |
+| 홈/알람 패널 (종 아이콘) | `global/sse` (4종 통합 조회 + SSE 실시간 푸시) |
 | 폼 입력 (보라/초록) | `roadmap` / `techstack` / `interested_job` 등록·수정 |
 | Q&A 스레드 (핑크) | `qna/question` + `qna/answer` |
 | 구직 공고 (파랑) | `job_post` |

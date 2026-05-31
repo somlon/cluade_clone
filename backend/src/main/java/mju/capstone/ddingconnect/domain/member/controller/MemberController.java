@@ -7,8 +7,12 @@ import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.domain.member.dto.request.UpdateGraduateMyPageRequest;
 import mju.capstone.ddingconnect.domain.member.dto.request.UpdateMemberRequest;
 import mju.capstone.ddingconnect.domain.member.dto.request.UpdateStudentMyPageRequest;
+import mju.capstone.ddingconnect.domain.member.dto.response.HomeResponse;
 import mju.capstone.ddingconnect.domain.member.dto.response.MemberResponse;
 import mju.capstone.ddingconnect.domain.member.dto.response.MyPageResponse;
+import mju.capstone.ddingconnect.domain.member.dto.response.PointBalanceResponse;
+import mju.capstone.ddingconnect.domain.member.dto.response.PointChargeResponse;
+import mju.capstone.ddingconnect.domain.member.service.HomeService;
 import mju.capstone.ddingconnect.domain.member.service.MemberService;
 import mju.capstone.ddingconnect.domain.member.service.MyPageService;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMember;
@@ -25,6 +29,7 @@ public class MemberController implements MemberSwagger {
 
     private final MemberService memberService;
     private final MyPageService myPageService;
+    private final HomeService homeService;
 
     /** JWT 인증 테스트용 엔드포인트 (기존 코드 유지) */
     @GetMapping("/test")
@@ -38,6 +43,27 @@ public class MemberController implements MemberSwagger {
     public ApiResponse<MemberResponse> getMyProfile(
             @Parameter(hidden = true) @LoginMember Member member) {
         return ApiResponse.onSuccess(memberService.getMyProfile(member));
+    }
+
+    /** 홈 화면 조회 (Read) — 포인트/닉네임/학과/학년 또는 경력/활동 카운트 통합 응답 */
+    @GetMapping("/me/home")
+    public ApiResponse<HomeResponse> getHome(
+            @Parameter(hidden = true) @LoginMember Member member) {
+        return ApiResponse.onSuccess(homeService.getHome(member));
+    }
+
+    /** 포인트 잔액 조회 (Read) — 홈 포인트 모달 진입 시 최신 P 갱신용 */
+    @GetMapping("/me/point")
+    public ApiResponse<PointBalanceResponse> getMyPoint(
+            @Parameter(hidden = true) @LoginMember Member member) {
+        return ApiResponse.onSuccess(new PointBalanceResponse(member.getPoint()));
+    }
+
+    /** 포인트 충전 페이지 데이터 (Read) — 보유 P + 충전 상품 목록 */
+    @GetMapping("/me/point/products")
+    public ApiResponse<PointChargeResponse> getPointProducts(
+            @Parameter(hidden = true) @LoginMember Member member) {
+        return ApiResponse.onSuccess(PointChargeResponse.of(member.getPoint()));
     }
 
     /** 회원 정보 수정 (Update) */

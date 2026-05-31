@@ -9,8 +9,10 @@ import mju.capstone.ddingconnect.domain.member.dto.request.UpdateGraduateProfile
 import mju.capstone.ddingconnect.domain.member.dto.request.UpdateMemberRequest;
 import mju.capstone.ddingconnect.domain.member.dto.request.UpdateStudentMyPageRequest;
 import mju.capstone.ddingconnect.domain.member.dto.request.UpdateStudentProfileRequest;
+import mju.capstone.ddingconnect.domain.member.dto.response.HomeResponse;
 import mju.capstone.ddingconnect.domain.member.dto.response.MemberResponse;
 import mju.capstone.ddingconnect.domain.member.dto.response.MyPageResponse;
+import mju.capstone.ddingconnect.domain.member.service.HomeService;
 import mju.capstone.ddingconnect.domain.member.service.MemberService;
 import mju.capstone.ddingconnect.domain.member.service.MyPageService;
 import mju.capstone.ddingconnect.domain.techstack.domain.TechStackName;
@@ -54,6 +56,7 @@ class MemberControllerTest {
     @Autowired ObjectMapper objectMapper;
     @MockitoBean MemberService memberService;
     @MockitoBean MyPageService myPageService;
+    @MockitoBean HomeService homeService;
 
     @BeforeEach
     void setUp() { WithMockLoginMember.loginAsStudent(); }
@@ -382,5 +385,84 @@ class MemberControllerTest {
                 .andExpect(status().isBadRequest());
 
         verify(memberService, never()).createProfileImageUploadUrl(any());
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/members/me/home - STUDENT: point/grade/activity 노출, career 키 제외")
+    void getHome_student() throws Exception {
+        HomeResponse res = new HomeResponse(
+                1_250L, "띵지대님", "컴퓨터공학과", MemberRole.STUDENT,
+                3, null,
+                new HomeResponse.ActivityCounts(12L, 3L, 5L)
+        );
+        given(homeService.getHome(any())).willReturn(res);
+
+        mockMvc.perform(get(BASE_URL + "/me/home"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.point").value(1250))
+                .andExpect(jsonPath("$.result.nickname").value("띵지대님"))
+                .andExpect(jsonPath("$.result.department").value("컴퓨터공학과"))
+                .andExpect(jsonPath("$.result.role").value("STUDENT"))
+                .andExpect(jsonPath("$.result.grade").value(3))
+                .andExpect(jsonPath("$.result.career").doesNotExist())
+                .andExpect(jsonPath("$.result.activity.coffeeChatCount").value(12))
+                .andExpect(jsonPath("$.result.activity.roadmapCount").value(3))
+                .andExpect(jsonPath("$.result.activity.questionCount").value(5));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/members/me/home - GRADUATE: career 노출, grade/roadmapCount 키 제외")
+    void getHome_graduate() throws Exception {
+        WithMockLoginMember.loginAsGraduate();
+
+        HomeResponse res = new HomeResponse(
+                1_250L, "졸업생", "컴퓨터공학과", MemberRole.GRADUATE,
+                null,
+                new HomeResponse.CareerInfo(
+                        mju.capstone.ddingconnect.domain.job_post.domain.JobType.BACKEND,
+                        "Naver", 3),
+                new HomeResponse.ActivityCounts(7L, null, 4L)
+        );
+        given(homeService.getHome(any())).willReturn(res);
+
+        mockMvc.perform(get(BASE_URL + "/me/home"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.role").value("GRADUATE"))
+                .andExpect(jsonPath("$.result.grade").doesNotExist())
+                .andExpect(jsonPath("$.result.career.jobType").value("BACKEND"))
+                .andExpect(jsonPath("$.result.career.company").value("Naver"))
+                .andExpect(jsonPath("$.result.career.careerYear").value(3))
+                .andExpect(jsonPath("$.result.activity.coffeeChatCount").value(7))
+                .andExpect(jsonPath("$.result.activity.roadmapCount").doesNotExist())
+                .andExpect(jsonPath("$.result.activity.questionCount").value(4));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/members/me/point - 로그인 회원의 보유 P 반환")
+    void getMyPoint() throws Exception {
+        WithMockLoginMember.loginAs(10L, MemberRole.STUDENT);
+        // loginAs 가 만든 Member 의 point 는 0 — 컨트롤러는 member.getPoint() 를 그대로 반환
+
+        mockMvc.perform(get(BASE_URL + "/me/point"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.point").value(0));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/members/me/point/products - 보유 P + 충전 상품 6건(50P 추천) 반환")
+    void getPointProducts() throws Exception {
+        mockMvc.perform(get(BASE_URL + "/me/point/products"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.point").value(0))
+                .andExpect(jsonPath("$.result.products.length()").value(6))
+                .andExpect(jsonPath("$.result.products[0].id").value(1))
+                .andExpect(jsonPath("$.result.products[0].points").value(10))
+                .andExpect(jsonPath("$.result.products[0].price").value(1000))
+                .andExpect(jsonPath("$.result.products[0].recommended").value(false))
+                .andExpect(jsonPath("$.result.products[2].points").value(50))
+                .andExpect(jsonPath("$.result.products[2].price").value(5000))
+                .andExpect(jsonPath("$.result.products[2].recommended").value(true))
+                .andExpect(jsonPath("$.result.products[5].points").value(500))
+                .andExpect(jsonPath("$.result.products[5].price").value(50000));
     }
 }
