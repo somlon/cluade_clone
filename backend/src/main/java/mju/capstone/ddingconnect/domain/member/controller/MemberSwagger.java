@@ -8,8 +8,11 @@ import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.domain.member.dto.request.UpdateGraduateMyPageRequest;
 import mju.capstone.ddingconnect.domain.member.dto.request.UpdateMemberRequest;
 import mju.capstone.ddingconnect.domain.member.dto.request.UpdateStudentMyPageRequest;
+import mju.capstone.ddingconnect.domain.member.dto.response.HomeResponse;
 import mju.capstone.ddingconnect.domain.member.dto.response.MemberResponse;
 import mju.capstone.ddingconnect.domain.member.dto.response.MyPageResponse;
+import mju.capstone.ddingconnect.domain.member.dto.response.PointBalanceResponse;
+import mju.capstone.ddingconnect.domain.member.dto.response.PointChargeResponse;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMember;
 import mju.capstone.ddingconnect.global.aws.dto.PresignedUploadRequest;
 import mju.capstone.ddingconnect.global.aws.dto.PresignedUploadResponse;
@@ -37,6 +40,48 @@ public interface MemberSwagger {
     )
     @GetMapping("/me")
     ApiResponse<MemberResponse> getMyProfile(
+            @Parameter(hidden = true) @LoginMember Member member);
+
+
+
+
+    @Operation(
+            summary = "홈 화면 조회",
+            description = "로그인된 회원의 홈 화면 정보를 한 번에 조회합니다. "
+                    + "보유 포인트(P), 닉네임, 학과, 역할에 따라 학년(STUDENT) 또는 경력(GRADUATE), "
+                    + "그리고 활동 카운트(커피챗/로드맵/QnA)를 포함합니다. "
+                    + "활동 카운트는 마이페이지와 동일 집계 기준을 재사용합니다. "
+                    + "로드맵 카운트는 STUDENT 전용 — GRADUATE 응답에선 키 자체가 제외됩니다. "
+                    + "career 객체와 grade 도 비해당 역할에선 키 자체가 제외됩니다."
+    )
+    @GetMapping("/me/home")
+    ApiResponse<HomeResponse> getHome(
+            @Parameter(hidden = true) @LoginMember Member member);
+
+
+
+
+    @Operation(
+            summary = "포인트 잔액 조회",
+            description = "로그인된 회원의 현재 보유 포인트(P)만 조회합니다. "
+                    + "홈 화면에서 우측 상단 포인트 뱃지를 눌렀을 때 뜨는 모달에서 사용합니다. "
+                    + "충전 직후 등 최신 P 값이 필요한 시점에 호출하세요."
+    )
+    @GetMapping("/me/point")
+    ApiResponse<PointBalanceResponse> getMyPoint(
+            @Parameter(hidden = true) @LoginMember Member member);
+
+
+
+
+    @Operation(
+            summary = "포인트 충전 페이지 데이터 조회",
+            description = "포인트 충전 페이지 렌더링용 통합 응답을 반환합니다. "
+                    + "보유 포인트(P)와 충전 상품 카드 리스트(상품 id, 충전 P, 결제 금액(원), 추천 뱃지 여부)를 함께 제공합니다. "
+                    + "상품 목록은 서버 상수(PointProduct enum)로 관리되며 단위는 P로 통일됩니다 (프론트의 '토큰' 라벨은 동일 값을 다른 라벨로 표기)."
+    )
+    @GetMapping("/me/point/products")
+    ApiResponse<PointChargeResponse> getPointProducts(
             @Parameter(hidden = true) @LoginMember Member member);
 
 
