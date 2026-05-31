@@ -79,7 +79,8 @@ public class Member extends BaseEntity {
     @Column(length = 255)
     private String profileImage;    // 프로필이미지
 
-    private Long point;             // 포인트
+    @Builder.Default
+    private Long point = 0L;        // 포인트 (가입 시 0 으로 초기화)
 
     @Column(length = 255)
     private String certificate;     // 인증서
