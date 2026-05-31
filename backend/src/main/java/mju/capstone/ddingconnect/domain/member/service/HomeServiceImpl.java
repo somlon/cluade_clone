@@ -32,20 +32,22 @@ public class HomeServiceImpl implements HomeService {
     @Override
     @Transactional(readOnly = true)
     public HomeResponse getHome(Member member) {
-        // 역할별 학년/경력 — STUDENT 면 grade, GRADUATE 면 CareerInfo, 비해당은 null
+        // 역할별 학과/학년 자리 표시 필드
+        //   STUDENT  : department + grade        채움, company/careerYear 는 null
+        //   GRADUATE : company   + careerYear    채움, department/grade   는 null
+        String department = null;
+        String company = null;
         Integer grade = null;
-        HomeResponse.CareerInfo career = null;
+        Integer careerYear = null;
         if (member.getRole() == MemberRole.STUDENT) {
+            department = member.getDepartment();
             Student student = studentRepository.findByMemberId(member.getId()).orElse(null);
             grade = student != null ? student.getGrade() : null;
         } else if (member.getRole() == MemberRole.GRADUATE) {
             Graduate graduate = graduateRepository.findByMemberId(member.getId()).orElse(null);
             if (graduate != null) {
-                career = new HomeResponse.CareerInfo(
-                        graduate.getJobType(),
-                        graduate.getCompany(),
-                        graduate.getCareerYear()
-                );
+                company = graduate.getCompany();
+                careerYear = graduate.getCareerYear();
             }
         }
 
@@ -64,10 +66,11 @@ public class HomeServiceImpl implements HomeService {
         return new HomeResponse(
                 member.getPoint(),
                 member.getNickname(),
-                member.getDepartment(),
+                department,
+                company,
                 member.getRole(),
                 grade,
-                career,
+                careerYear,
                 activity
         );
     }

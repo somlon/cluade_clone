@@ -77,11 +77,11 @@ mju.capstone.ddingconnect
 
 ### 홈 화면 (member)
 - **`GET /api/v1/members/me/home`** — 홈 화면을 1회 호출로 렌더링하기 위한 통합 조회. 컨트롤러는 `MemberController`, 서비스는 `HomeService(Impl)`.
-- **응답 `HomeResponse`** = `point`(보유 P) + `nickname` + `department` + `role` + `grade`(STUDENT 전용) + `career(jobType/company/careerYear)`(GRADUATE 전용) + `activity(coffeeChatCount, roadmapCount, questionCount)`. `MyPageResponse` 와 마찬가지로 `@JsonInclude(NON_NULL)` 로 역할별 비해당 필드(STUDENT 의 `career`, GRADUATE 의 `grade`/`activity.roadmapCount`)는 응답에서 키 자체 제외.
+- **응답 `HomeResponse`** = `point`(보유 P) + `nickname` + 학과 자리(STUDENT `department` / GRADUATE `company`) + `role` + 학년 자리(STUDENT `grade` / GRADUATE `careerYear`) + `activity(coffeeChatCount, roadmapCount, questionCount)`. **STUDENT 와 GRADUATE 가 같은 UI 슬롯(학과·학년 자리)을 서로 다른 키로 채운다** — 평면 필드 `department`/`company`/`grade`/`careerYear` 4개를 두고, 비해당 역할 필드는 모두 null 로 채워 `@JsonInclude(NON_NULL)` 가 응답에서 키 자체를 제외한다. 결과적으로 STUDENT 응답엔 `{department, grade}` 만, GRADUATE 응답엔 `{company, careerYear}` 만 노출. `activity.roadmapCount` 도 GRADUATE 응답에선 키 자체 제외.
 - **활동 카운트는 마이페이지와 동일 집계 기준 재사용** — `HomeServiceImpl` 은 `CoffeeChatService.countMyAcceptedCoffeeChats` / `RoadmapService.countMyRoadmaps`(STUDENT 만 호출, GRADUATE/UNKNOWN 은 null) / `QuestionService.countMyQuestions` 를 그대로 호출한다. 새 집계 로직을 만들지 않고 `MyPageServiceImpl.buildResponse` 와 같은 메서드를 공유 (집계 기준 단일화).
 - **애그리게이터 패턴** (`MyPageServiceImpl` 과 동일) — `HomeServiceImpl` 은 항목별 도메인 서비스(`CoffeeChatService`/`RoadmapService`/`QuestionService`) + 역할별 `StudentRepository.findByMemberId`/`GraduateRepository.findByMemberId` 를 in-process 로 조합. 별도 엔티티/집계 컬럼 없음.
 - **`Member.point` 노출 정책 분리**: 홈 응답은 `point` 를 항상 노출(우측 상단 P 뱃지용), 마이페이지 응답은 `MemberResponse.withoutPoint()` 로 항상 제외(기존 정책). 두 응답이 서로 영향 없음.
-- **GRADUATE 의 학년 자리 = 경력 객체**: STUDENT 가 `grade`(예 3) 한 필드로 표현되는 학년 자리에, GRADUATE 는 `career.{jobType, company, careerYear}` 객체로 직무·회사명·경력 연차를 표시한다(프론트가 `role` 분기로 렌더).
+- **GRADUATE 의 학과·학년 자리 = 회사·연차 평면 필드**: STUDENT 가 `{department, grade}` 평면 필드로 표현되는 학과·학년 슬롯에, GRADUATE 는 같은 슬롯을 `{company, careerYear}` 평면 필드로 채운다(프론트가 키 존재 여부로 렌더, role 분기 불필요). 직무(`jobType`)·명함(`businessCardImage`) 같은 졸업생 부가 정보는 홈 응답에 노출하지 않으며 필요하면 마이페이지에서 조회한다.
 - **추가 포인트/충전 엔드포인트 — 홈 모달·충전 페이지용**:
   - `GET /api/v1/members/me/point` — 보유 P만 반환(`PointBalanceResponse(point)`). 홈 화면 포인트 모달이 열릴 때마다 호출해 최신 P 갱신 용도. 컨트롤러에서 `new PointBalanceResponse(member.getPoint())` 로 직접 응답(서비스 없음).
   - `GET /api/v1/members/me/point/products` — 보유 P + 충전 상품 카드 리스트(`PointChargeResponse(point, products: [{id, points, price, recommended}])`). 컨트롤러에서 `PointChargeResponse.of(member.getPoint())` 로 직접 응답(서비스 없음). 상품 매핑은 `PointChargeResponse.of` 정적 팩토리가 `PointProduct.values()` 를 변환.

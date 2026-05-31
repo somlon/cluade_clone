@@ -388,10 +388,10 @@ class MemberControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/v1/members/me/home - STUDENT: point/grade/activity 노출, career 키 제외")
+    @DisplayName("GET /api/v1/members/me/home - STUDENT: department/grade 노출, company/careerYear 키 제외")
     void getHome_student() throws Exception {
         HomeResponse res = new HomeResponse(
-                1_250L, "띵지대님", "컴퓨터공학과", MemberRole.STUDENT,
+                1_250L, "띵지대님", "컴퓨터공학과", null, MemberRole.STUDENT,
                 3, null,
                 new HomeResponse.ActivityCounts(12L, 3L, 5L)
         );
@@ -402,25 +402,23 @@ class MemberControllerTest {
                 .andExpect(jsonPath("$.result.point").value(1250))
                 .andExpect(jsonPath("$.result.nickname").value("띵지대님"))
                 .andExpect(jsonPath("$.result.department").value("컴퓨터공학과"))
+                .andExpect(jsonPath("$.result.company").doesNotExist())
                 .andExpect(jsonPath("$.result.role").value("STUDENT"))
                 .andExpect(jsonPath("$.result.grade").value(3))
-                .andExpect(jsonPath("$.result.career").doesNotExist())
+                .andExpect(jsonPath("$.result.careerYear").doesNotExist())
                 .andExpect(jsonPath("$.result.activity.coffeeChatCount").value(12))
                 .andExpect(jsonPath("$.result.activity.roadmapCount").value(3))
                 .andExpect(jsonPath("$.result.activity.questionCount").value(5));
     }
 
     @Test
-    @DisplayName("GET /api/v1/members/me/home - GRADUATE: career 노출, grade/roadmapCount 키 제외")
+    @DisplayName("GET /api/v1/members/me/home - GRADUATE: company/careerYear 노출, department/grade/roadmapCount 키 제외")
     void getHome_graduate() throws Exception {
         WithMockLoginMember.loginAsGraduate();
 
         HomeResponse res = new HomeResponse(
-                1_250L, "졸업생", "컴퓨터공학과", MemberRole.GRADUATE,
-                null,
-                new HomeResponse.CareerInfo(
-                        mju.capstone.ddingconnect.domain.job_post.domain.JobType.BACKEND,
-                        "Naver", 3),
+                1_250L, "졸업생", null, "Naver", MemberRole.GRADUATE,
+                null, 3,
                 new HomeResponse.ActivityCounts(7L, null, 4L)
         );
         given(homeService.getHome(any())).willReturn(res);
@@ -428,10 +426,10 @@ class MemberControllerTest {
         mockMvc.perform(get(BASE_URL + "/me/home"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result.role").value("GRADUATE"))
+                .andExpect(jsonPath("$.result.department").doesNotExist())
+                .andExpect(jsonPath("$.result.company").value("Naver"))
                 .andExpect(jsonPath("$.result.grade").doesNotExist())
-                .andExpect(jsonPath("$.result.career.jobType").value("BACKEND"))
-                .andExpect(jsonPath("$.result.career.company").value("Naver"))
-                .andExpect(jsonPath("$.result.career.careerYear").value(3))
+                .andExpect(jsonPath("$.result.careerYear").value(3))
                 .andExpect(jsonPath("$.result.activity.coffeeChatCount").value(7))
                 .andExpect(jsonPath("$.result.activity.roadmapCount").doesNotExist())
                 .andExpect(jsonPath("$.result.activity.questionCount").value(4));
