@@ -48,11 +48,12 @@ public interface MemberSwagger {
     @Operation(
             summary = "홈 화면 조회",
             description = "로그인된 회원의 홈 화면 정보를 한 번에 조회합니다. "
-                    + "보유 포인트(P), 닉네임, 학과, 역할에 따라 학년(STUDENT) 또는 경력(GRADUATE), "
-                    + "그리고 활동 카운트(커피챗/로드맵/QnA)를 포함합니다. "
-                    + "활동 카운트는 마이페이지와 동일 집계 기준을 재사용합니다. "
-                    + "로드맵 카운트는 STUDENT 전용 — GRADUATE 응답에선 키 자체가 제외됩니다. "
-                    + "career 객체와 grade 도 비해당 역할에선 키 자체가 제외됩니다."
+                    + "보유 포인트(P), 닉네임, 역할별 학과/학년 자리 표시 필드, 활동 카운트(커피챗/로드맵/QnA)를 포함합니다. "
+                    + "학과 자리: STUDENT 는 department, GRADUATE 는 company. "
+                    + "학년 자리: STUDENT 는 grade, GRADUATE 는 careerYear. "
+                    + "비해당 역할 필드(STUDENT 의 company/careerYear, GRADUATE 의 department/grade, "
+                    + "GRADUATE 의 activity.roadmapCount)는 응답에서 키 자체가 제외됩니다. "
+                    + "활동 카운트는 마이페이지와 동일 집계 기준을 재사용합니다."
     )
     @GetMapping("/me/home")
     ApiResponse<HomeResponse> getHome(
