@@ -3,7 +3,8 @@ package mju.capstone.ddingconnect.domain.member.service;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.domain.member.dto.request.UpdateMemberRequest;
 import mju.capstone.ddingconnect.domain.member.dto.response.MemberResponse;
-import org.springframework.web.multipart.MultipartFile;
+import mju.capstone.ddingconnect.global.aws.dto.PresignedUploadRequest;
+import mju.capstone.ddingconnect.global.aws.dto.PresignedUploadResponse;
 
 public interface MemberService {
 
@@ -17,27 +18,24 @@ public interface MemberService {
     void withdraw(Member member);
 
     /**
-     * 프로필 이미지 업로드/교체.
-     * - content-type 화이트리스트: image/png, image/jpeg, image/webp (위반 시 _FILE_TYPE_NOT_ALLOWED)
-     * - 크기 제한: 5MB (위반 시 _FILE_TOO_LARGE)
-     * - 기존 profileImage URL 이 있으면 S3 에서 삭제 후 새 이미지 업로드 → Member.profileImage 갱신
+     * 프로필 사진 업로드용 presigned PUT URL 발급.
+     * - content-type 화이트리스트: image/png, image/jpeg, image/webp ({@code UploadType.IMAGE}) — 위반 시 _FILE_TYPE_NOT_ALLOWED(400)
+     * - 발급만 수행(2-step): 프론트가 받은 uploadUrl 로 S3 에 직접 PUT 한 뒤, fileUrl 을 {@code PATCH /me} 의 profileImage 필드에 저장한다.
      */
-    MemberResponse updateProfileImage(Member member, MultipartFile image);
+    PresignedUploadResponse createProfileImageUploadUrl(PresignedUploadRequest request);
 
     /**
-     * 졸업생 명함 이미지 업로드/교체 (GRADUATE 전용).
+     * 졸업생 명함 사진 업로드용 presigned PUT URL 발급 (GRADUATE 전용).
      * - 진입 가드: STUDENT/UNKNOWN 호출 시 MEMBER_FIELD_ROLE_MISMATCH 로 거부
-     * - content-type 화이트리스트: image/png, image/jpeg, image/webp (위반 시 _FILE_TYPE_NOT_ALLOWED)
-     * - 크기 제한: 5MB (위반 시 _FILE_TOO_LARGE)
-     * - 기존 businessCardImage URL 이 있으면 S3 에서 삭제 후 새 이미지 업로드 → Graduate.businessCardImage 갱신
+     * - content-type 화이트리스트: image/png, image/jpeg, image/webp ({@code UploadType.IMAGE}) — 위반 시 _FILE_TYPE_NOT_ALLOWED(400)
+     * - 발급만 수행(2-step): fileUrl 을 {@code PATCH /mypage/graduate} 의 businessCardImage 필드에 저장한다.
      */
-    MemberResponse updateBusinessCard(Member member, MultipartFile image);
+    PresignedUploadResponse createBusinessCardUploadUrl(Member member, PresignedUploadRequest request);
 
     /**
-     * 포트폴리오 PDF 업로드/교체.
-     * - content-type: application/pdf (위반 시 _FILE_TYPE_NOT_ALLOWED)
-     * - 크기 제한: 20MB (위반 시 _FILE_TOO_LARGE)
-     * - 기존 portfolio URL 이 있으면 S3 에서 삭제 후 새 PDF 업로드 → Member.portfolio 갱신
+     * 포트폴리오 파일 업로드용 presigned PUT URL 발급.
+     * - content-type 화이트리스트: application/pdf ({@code UploadType.PORTFOLIO}) — 위반 시 _FILE_TYPE_NOT_ALLOWED(400)
+     * - 발급만 수행(2-step): fileUrl 을 {@code PATCH /me} 의 portfolio 필드에 저장한다.
      */
-    MemberResponse updatePortfolio(Member member, MultipartFile file);
+    PresignedUploadResponse createPortfolioUploadUrl(PresignedUploadRequest request);
 }

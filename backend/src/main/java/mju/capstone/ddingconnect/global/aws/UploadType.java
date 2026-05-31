@@ -3,11 +3,11 @@ package mju.capstone.ddingconnect.global.aws;
 import java.util.Set;
 
 /**
- * [범용 파일 업로드 용도 구분]
+ * [파일 업로드 용도별 content-type 화이트리스트]
  *
- * presigned PUT 업로드 엔드포인트({@code POST /api/v1/files/presigned-url})가 받는 업로드 용도.
- * 용도별 content-type 화이트리스트를 단일 정의로 보유한다 — 회원 도메인의
- * 프로필/명함/포트폴리오 업로드 검증도 이 값을 참조해 중복·하드코딩을 막는다.
+ * 용도별 presigned PUT 업로드 엔드포인트(프로필 사진·명함: {@link #IMAGE}, 포트폴리오: {@link #PORTFOLIO})가
+ * 참조하는 content-type 화이트리스트를 단일 정의로 보유한다 — 회원 도메인의 프로필/명함/포트폴리오
+ * presigned 발급(`MemberServiceImpl.create*UploadUrl`)이 이 값을 참조해 중복·하드코딩을 막는다.
  *
  * <ul>
  *   <li>{@link #IMAGE} — 프로필 사진·명함 이미지 등: png/jpeg/webp</li>

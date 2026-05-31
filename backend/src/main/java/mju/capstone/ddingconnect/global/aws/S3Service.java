@@ -25,7 +25,6 @@ import java.util.UUID;
 
 import static mju.capstone.ddingconnect.global.response.code.status.ErrorStatus._FILE_DELETE_FAILED;
 import static mju.capstone.ddingconnect.global.response.code.status.ErrorStatus._FILE_PRESIGN_FAILED;
-import static mju.capstone.ddingconnect.global.response.code.status.ErrorStatus._FILE_TOO_LARGE;
 import static mju.capstone.ddingconnect.global.response.code.status.ErrorStatus._FILE_TYPE_NOT_ALLOWED;
 import static mju.capstone.ddingconnect.global.response.code.status.ErrorStatus._FILE_UPLOAD_FAILED;
 
@@ -33,8 +32,8 @@ import static mju.capstone.ddingconnect.global.response.code.status.ErrorStatus.
 /**
  * S3와 연동하여 파일 업로드 및 삭제 기능을 제공하는 서비스 클래스입니다.
  *
- * - {@link #uploadImage(MultipartFile)}: content-type 검증 없는 원본 패턴(회원가입 증명서 흐름이 PDF 도 이 메서드로 업로드 중이므로 유지). 신규 호출처는 가능한 한 {@link #uploadFile} 을 쓴다.
- * - {@link #uploadFile(MultipartFile, Set, long)}: content-type 화이트리스트 + 크기 제한을 진입부에서 검증하는 일반 파일 업로드 — TODO O 신설.
+ * - {@link #uploadImage(MultipartFile)}: content-type 검증 없는 원본 패턴(회원가입 증명서 흐름이 PDF 도 이 메서드로 업로드 중이므로 유지).
+ * - {@link #createUploadPresign(String, String, Set)}: 브라우저가 S3 로 직접 PUT 하는 presigned 업로드 URL 발급(프로필 사진·명함·포트폴리오 공통). 사용자 파일 업로드는 이 2-step 경로로 일원화한다.
  */
 @Service
 @RequiredArgsConstructor
@@ -56,56 +55,9 @@ public class S3Service {
 
 
     /**
-     * MultipartFile 을 S3 버킷에 업로드합니다 (일반 파일 — 이미지/PDF 등 공통).
-     * 진입부에서 content-type 화이트리스트와 크기 제한을 검증한 뒤 업로드합니다.
-     *
-     * @param file               업로드할 파일
-     * @param allowedContentTypes 허용 content-type 집합 (예: {@code Set.of("application/pdf")})
-     * @param maxBytes           허용 최대 바이트 수
-     * @return 업로드된 객체의 public URL
-     */
-    public String uploadFile(MultipartFile file, Set<String> allowedContentTypes, long maxBytes) {
-        validate(file, allowedContentTypes, maxBytes);
-
-        String key = convertToSaveName(file.getOriginalFilename());
-
-        try {
-            PutObjectRequest request = PutObjectRequest.builder()
-                    .bucket(publicBucketName)
-                    .key(key)
-                    .contentType(file.getContentType())
-                    .build();
-            RequestBody requestBody = RequestBody.fromInputStream(file.getInputStream(), file.getSize());
-            s3Client.putObject(request, requestBody);
-        } catch (IOException e) {
-            throw new S3Handler(_FILE_UPLOAD_FAILED);
-        }
-        return getUrl(key);
-    }
-
-    /**
-     * 파일 검증 (content-type 화이트리스트 + 크기 제한).
-     * - null/빈 파일 → _FILE_UPLOAD_FAILED
-     * - content-type 미지원 → _FILE_TYPE_NOT_ALLOWED
-     * - 크기 초과 → _FILE_TOO_LARGE
-     */
-    private void validate(MultipartFile file, Set<String> allowedContentTypes, long maxBytes) {
-        if (file == null || file.isEmpty()) {
-            throw new S3Handler(_FILE_UPLOAD_FAILED);
-        }
-        String contentType = file.getContentType();
-        if (contentType == null || !allowedContentTypes.contains(contentType)) {
-            throw new S3Handler(_FILE_TYPE_NOT_ALLOWED);
-        }
-        if (file.getSize() > maxBytes) {
-            throw new S3Handler(_FILE_TOO_LARGE);
-        }
-    }
-
-    /**
      * MultipartFile 형태의 이미지를 S3 버킷에 업로드합니다.
      * <b>content-type 검증 없는 원본 패턴</b> — 회원가입 증명서 흐름(`AuthServiceImpl.signup`)이 PDF 도 이 메서드로 업로드 중이므로 유지.
-     * 신규 호출처는 가능한 한 {@link #uploadFile(MultipartFile, Set, long)} 을 사용해 content-type 화이트리스트를 명시한다.
+     * 사용자 파일 업로드(프로필 사진·명함·포트폴리오)는 멀티파트 대신 {@link #createUploadPresign(String, String, Set)} presigned 발급 경로를 사용한다.
      *
      * @param image 업로드할 파일 (이름은 image 이지만 실제로는 PDF 도 통과)
      * @return 업로드된 파일의 public URL
