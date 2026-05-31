@@ -10,3 +10,7 @@ matching:
 
 data:
   base-url: ${DATA_BASE_URL:http://localhost:8000}
+
+crawling:
+  sync:
+    cron: ${CRAWLING_SYNC_CRON:0 0 2 * * *}

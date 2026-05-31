@@ -16,4 +16,5 @@ public final class SuccessMessage {
     public static final String QUESTION_DELETED = "질문이 삭제되었습니다.";
     public static final String ROADMAP_DELETED = "로드맵이 삭제되었습니다.";
     public static final String ALARM_MARKED_AS_READ = "알람이 읽음 처리되었습니다.";
+    public static final String CRAWLING_SYNC_TRIGGERED = "크롤링 싱크 요청이 완료되었습니다.";
 }
