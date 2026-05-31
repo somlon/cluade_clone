@@ -34,10 +34,12 @@ import mju.capstone.ddingconnect.domain.roadmap.domain.repository.RoadmapReposit
 import mju.capstone.ddingconnect.domain.roadmap.service.RoadmapService;
 import mju.capstone.ddingconnect.domain.techstack.domain.repository.TechStackRepository;
 import mju.capstone.ddingconnect.global.aws.S3Service;
+import mju.capstone.ddingconnect.global.aws.UploadType;
+import mju.capstone.ddingconnect.global.aws.dto.PresignedUploadRequest;
+import mju.capstone.ddingconnect.global.aws.dto.PresignedUploadResponse;
 import mju.capstone.ddingconnect.global.response.code.status.ErrorStatus;
 import mju.capstone.ddingconnect.global.response.exception.handler.MemberHandler;
 import mju.capstone.ddingconnect.global.response.exception.handler.S3Handler;
-import org.springframework.mock.web.MockMultipartFile;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -52,7 +54,6 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -443,241 +444,98 @@ class MemberServiceImplTest {
         verify(coffeeChatRepository, times(1)).delete(dual);
     }
 
-    // ── 프로필 사진 업로드 (updateProfileImage) ──────────────────────
+    // ── 프로필 사진·명함·포트폴리오 presigned 업로드 URL 발급 ─────────────
 
-    private MockMultipartFile pngImage(long sizeBytes) {
-        byte[] content = new byte[(int) sizeBytes];
-        return new MockMultipartFile("image", "profile.png", "image/png", content);
+    private PresignedUploadResponse presignFixture(String key) {
+        String fileUrl = "https://bucket.s3.region.amazonaws.com/" + key;
+        return new PresignedUploadResponse(fileUrl + "?X-Amz-Signature=sig", fileUrl, key,
+                java.time.LocalDateTime.now().plusMinutes(5));
     }
 
     @Test
-    @DisplayName("updateProfileImage - 기존 이미지 없으면 S3 업로드 후 Member.profileImage 갱신, deleteImage 미호출")
-    void updateProfileImageWithoutExisting() {
-        Member member = buildStudentMember(); // profileImage = null
-        MockMultipartFile image = pngImage(1024L);
-        String newUrl = "https://bucket.s3.region.amazonaws.com/profile-xyz.png";
+    @DisplayName("createProfileImageUploadUrl - IMAGE 화이트리스트로 presigned 발급을 S3Service 에 위임한다")
+    void createProfileImageUploadUrlDelegates() {
+        PresignedUploadResponse fixture = presignFixture("profile-uuid.png");
+        when(s3Service.createUploadPresign(eq("profile.png"), eq("image/png"),
+                eq(UploadType.IMAGE.allowedContentTypes()))).thenReturn(fixture);
 
-        when(s3Service.uploadImage(image)).thenReturn(newUrl);
-        when(studentRepository.findByMemberId(1L)).thenReturn(Optional.empty());
+        PresignedUploadResponse result = memberService.createProfileImageUploadUrl(
+                new PresignedUploadRequest("profile.png", "image/png"));
 
-        MemberResponse response = memberService.updateProfileImage(member, image);
-
-        verify(s3Service, never()).deleteImage(any());
-        verify(s3Service).uploadImage(image);
-
-        ArgumentCaptor<Member> captor = ArgumentCaptor.forClass(Member.class);
-        verify(memberRepository).save(captor.capture());
-        assertThat(captor.getValue().getProfileImage()).isEqualTo(newUrl);
-        assertThat(response.profileImage()).isEqualTo(newUrl);
+        assertThat(result).isSameAs(fixture);
+        verify(s3Service).createUploadPresign("profile.png", "image/png",
+                UploadType.IMAGE.allowedContentTypes());
     }
 
     @Test
-    @DisplayName("updateProfileImage - 기존 이미지가 있으면 deleteImage 후 uploadImage 호출 (순서 보장)")
-    void updateProfileImageReplacesExisting() {
-        Member member = Member.builder().id(1L).email("s@mju.ac.kr").role(MemberRole.STUDENT)
-                .profileImage("https://bucket.s3.region.amazonaws.com/old.png").build();
-        MockMultipartFile image = pngImage(2048L);
-        String newUrl = "https://bucket.s3.region.amazonaws.com/new.png";
+    @DisplayName("createPortfolioUploadUrl - PORTFOLIO 화이트리스트(application/pdf)로 발급을 위임한다")
+    void createPortfolioUploadUrlDelegates() {
+        PresignedUploadResponse fixture = presignFixture("resume-uuid.pdf");
+        when(s3Service.createUploadPresign(eq("resume.pdf"), eq("application/pdf"),
+                eq(UploadType.PORTFOLIO.allowedContentTypes()))).thenReturn(fixture);
 
-        when(s3Service.uploadImage(image)).thenReturn(newUrl);
-        when(studentRepository.findByMemberId(1L)).thenReturn(Optional.empty());
+        PresignedUploadResponse result = memberService.createPortfolioUploadUrl(
+                new PresignedUploadRequest("resume.pdf", "application/pdf"));
 
-        memberService.updateProfileImage(member, image);
-
-        org.mockito.InOrder order = org.mockito.Mockito.inOrder(s3Service);
-        order.verify(s3Service).deleteImage("https://bucket.s3.region.amazonaws.com/old.png");
-        order.verify(s3Service).uploadImage(image);
+        assertThat(result).isSameAs(fixture);
+        verify(s3Service).createUploadPresign("resume.pdf", "application/pdf",
+                UploadType.PORTFOLIO.allowedContentTypes());
     }
 
     @Test
-    @DisplayName("updateProfileImage - null/빈 파일은 _FILE_UPLOAD_FAILED 로 거부")
-    void updateProfileImageRejectsEmpty() {
-        Member member = buildStudentMember();
-        MockMultipartFile empty = new MockMultipartFile("image", "p.png", "image/png", new byte[0]);
-
-        assertThatThrownBy(() -> memberService.updateProfileImage(member, empty))
-                .isInstanceOf(S3Handler.class)
-                .matches(e -> ((S3Handler) e).getErrorReasonHttpStatus().getCode()
-                        .equals(ErrorStatus._FILE_UPLOAD_FAILED.getCode()));
-
-        verify(s3Service, never()).uploadImage(any());
-    }
-
-    @Test
-    @DisplayName("updateProfileImage - 허용 외 content-type 은 _FILE_TYPE_NOT_ALLOWED 로 거부")
-    void updateProfileImageRejectsBadContentType() {
-        Member member = buildStudentMember();
-        MockMultipartFile bad = new MockMultipartFile("image", "f.gif", "image/gif", new byte[]{1, 2, 3});
-
-        assertThatThrownBy(() -> memberService.updateProfileImage(member, bad))
-                .isInstanceOf(S3Handler.class)
-                .matches(e -> ((S3Handler) e).getErrorReasonHttpStatus().getCode()
-                        .equals(ErrorStatus._FILE_TYPE_NOT_ALLOWED.getCode()));
-    }
-
-    @Test
-    @DisplayName("updateProfileImage - 크기 초과(5MB 초과)는 _FILE_TOO_LARGE 로 거부")
-    void updateProfileImageRejectsOversized() {
-        Member member = buildStudentMember();
-        MockMultipartFile big = pngImage(MemberServiceImpl.PROFILE_IMAGE_MAX_BYTES + 1);
-
-        assertThatThrownBy(() -> memberService.updateProfileImage(member, big))
-                .isInstanceOf(S3Handler.class)
-                .matches(e -> ((S3Handler) e).getErrorReasonHttpStatus().getCode()
-                        .equals(ErrorStatus._FILE_TOO_LARGE.getCode()));
-    }
-
-    // ── 졸업생 명함 이미지 업로드 (updateBusinessCard) ───────────────
-
-    @Test
-    @DisplayName("updateBusinessCard - 기존 명함 없으면 S3 업로드 후 Graduate.businessCardImage 갱신")
-    void updateBusinessCardWithoutExisting() {
+    @DisplayName("createBusinessCardUploadUrl - GRADUATE 면 IMAGE 화이트리스트로 발급을 위임한다")
+    void createBusinessCardUploadUrlDelegatesForGraduate() {
         Member member = buildGraduateMember();
-        Graduate graduate = Graduate.builder().id(10L).member(member)
-                .businessCardImage(null).jobType(JobType.BACKEND).company("네이버").careerYear(3).build();
-        MockMultipartFile image = pngImage(1024L);
-        String newUrl = "https://bucket.s3.region.amazonaws.com/card-xyz.png";
+        PresignedUploadResponse fixture = presignFixture("card-uuid.png");
+        when(s3Service.createUploadPresign(eq("card.png"), eq("image/png"),
+                eq(UploadType.IMAGE.allowedContentTypes()))).thenReturn(fixture);
 
-        when(graduateRepository.findByMemberId(2L)).thenReturn(Optional.of(graduate));
-        when(s3Service.uploadImage(image)).thenReturn(newUrl);
-        when(graduateRepository.save(any(Graduate.class))).thenAnswer(inv -> inv.getArgument(0));
+        PresignedUploadResponse result = memberService.createBusinessCardUploadUrl(
+                member, new PresignedUploadRequest("card.png", "image/png"));
 
-        MemberResponse response = memberService.updateBusinessCard(member, image);
-
-        verify(s3Service, never()).deleteImage(any());
-        verify(s3Service).uploadImage(image);
-
-        ArgumentCaptor<Graduate> captor = ArgumentCaptor.forClass(Graduate.class);
-        verify(graduateRepository).save(captor.capture());
-        assertThat(captor.getValue().getBusinessCardImage()).isEqualTo(newUrl);
-        // 다른 GRADUATE 전용 필드는 보존
-        assertThat(captor.getValue().getJobType()).isEqualTo(JobType.BACKEND);
-        assertThat(captor.getValue().getCompany()).isEqualTo("네이버");
-        assertThat(captor.getValue().getCareerYear()).isEqualTo(3);
-        assertThat(response.businessCardImage()).isEqualTo(newUrl);
+        assertThat(result).isSameAs(fixture);
+        verify(s3Service).createUploadPresign("card.png", "image/png",
+                UploadType.IMAGE.allowedContentTypes());
     }
 
     @Test
-    @DisplayName("updateBusinessCard - 기존 명함이 있으면 deleteImage → uploadImage 순서 보장")
-    void updateBusinessCardReplacesExisting() {
-        Member member = buildGraduateMember();
-        Graduate graduate = Graduate.builder().id(10L).member(member)
-                .businessCardImage("https://bucket.s3.region.amazonaws.com/old-card.png")
-                .jobType(JobType.BACKEND).company("네이버").careerYear(3).build();
-        MockMultipartFile image = pngImage(2048L);
-
-        when(graduateRepository.findByMemberId(2L)).thenReturn(Optional.of(graduate));
-        when(s3Service.uploadImage(image)).thenReturn("https://bucket.s3.region.amazonaws.com/new-card.png");
-        when(graduateRepository.save(any(Graduate.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        memberService.updateBusinessCard(member, image);
-
-        org.mockito.InOrder order = org.mockito.Mockito.inOrder(s3Service);
-        order.verify(s3Service).deleteImage("https://bucket.s3.region.amazonaws.com/old-card.png");
-        order.verify(s3Service).uploadImage(image);
-    }
-
-    @Test
-    @DisplayName("updateBusinessCard - STUDENT 호출 시 MEMBER_FIELD_ROLE_MISMATCH 로 거부, S3 미호출")
-    void updateBusinessCardRejectsStudent() {
+    @DisplayName("createBusinessCardUploadUrl - STUDENT 호출 시 MEMBER_FIELD_ROLE_MISMATCH 로 거부, S3 미호출")
+    void createBusinessCardUploadUrlRejectsStudent() {
         Member member = buildStudentMember();
-        MockMultipartFile image = pngImage(1024L);
 
-        assertThatThrownBy(() -> memberService.updateBusinessCard(member, image))
+        assertThatThrownBy(() -> memberService.createBusinessCardUploadUrl(
+                member, new PresignedUploadRequest("card.png", "image/png")))
                 .isInstanceOf(MemberHandler.class)
                 .matches(e -> ((MemberHandler) e).getErrorReasonHttpStatus().getCode()
                         .equals(ErrorStatus.MEMBER_FIELD_ROLE_MISMATCH.getCode()));
 
-        verify(s3Service, never()).uploadImage(any());
-        verify(graduateRepository, never()).save(any());
+        verify(s3Service, never()).createUploadPresign(any(), any(), any());
     }
 
     @Test
-    @DisplayName("updateBusinessCard - 허용 외 content-type 은 _FILE_TYPE_NOT_ALLOWED 로 거부")
-    void updateBusinessCardRejectsBadContentType() {
-        Member member = buildGraduateMember();
-        MockMultipartFile bad = new MockMultipartFile("image", "f.gif", "image/gif", new byte[]{1, 2});
+    @DisplayName("createBusinessCardUploadUrl - UNKNOWN 호출도 MEMBER_FIELD_ROLE_MISMATCH 로 거부")
+    void createBusinessCardUploadUrlRejectsUnknown() {
+        Member member = buildUnknownMember();
 
-        assertThatThrownBy(() -> memberService.updateBusinessCard(member, bad))
-                .isInstanceOf(S3Handler.class)
-                .matches(e -> ((S3Handler) e).getErrorReasonHttpStatus().getCode()
-                        .equals(ErrorStatus._FILE_TYPE_NOT_ALLOWED.getCode()));
+        assertThatThrownBy(() -> memberService.createBusinessCardUploadUrl(
+                member, new PresignedUploadRequest("card.png", "image/png")))
+                .isInstanceOf(MemberHandler.class)
+                .matches(e -> ((MemberHandler) e).getErrorReasonHttpStatus().getCode()
+                        .equals(ErrorStatus.MEMBER_FIELD_ROLE_MISMATCH.getCode()));
+
+        verify(s3Service, never()).createUploadPresign(any(), any(), any());
     }
 
     @Test
-    @DisplayName("updateBusinessCard - 크기 초과(5MB 초과)는 _FILE_TOO_LARGE 로 거부")
-    void updateBusinessCardRejectsOversized() {
-        Member member = buildGraduateMember();
-        MockMultipartFile big = pngImage(MemberServiceImpl.BUSINESS_CARD_MAX_BYTES + 1);
-
-        assertThatThrownBy(() -> memberService.updateBusinessCard(member, big))
-                .isInstanceOf(S3Handler.class)
-                .matches(e -> ((S3Handler) e).getErrorReasonHttpStatus().getCode()
-                        .equals(ErrorStatus._FILE_TOO_LARGE.getCode()));
-    }
-
-    // ── 포트폴리오 PDF 업로드 (updatePortfolio) ──────────────────────
-
-    private MockMultipartFile pdfFile(long sizeBytes) {
-        byte[] content = new byte[(int) sizeBytes];
-        return new MockMultipartFile("file", "portfolio.pdf", "application/pdf", content);
-    }
-
-    @Test
-    @DisplayName("updatePortfolio - 기존 포트폴리오 없으면 S3Service.uploadFile 위임 후 Member.portfolio 갱신, deleteImage 미호출")
-    void updatePortfolioWithoutExisting() {
-        Member member = buildStudentMember(); // portfolio = null
-        MockMultipartFile pdf = pdfFile(2048L);
-        String newUrl = "https://bucket.s3.region.amazonaws.com/portfolio-xyz.pdf";
-
-        when(s3Service.uploadFile(eq(pdf),
-                eq(MemberServiceImpl.PORTFOLIO_CONTENT_TYPES),
-                eq(MemberServiceImpl.PORTFOLIO_MAX_BYTES))).thenReturn(newUrl);
-        when(studentRepository.findByMemberId(1L)).thenReturn(Optional.empty());
-
-        MemberResponse response = memberService.updatePortfolio(member, pdf);
-
-        verify(s3Service, never()).deleteImage(any());
-        ArgumentCaptor<Member> captor = ArgumentCaptor.forClass(Member.class);
-        verify(memberRepository).save(captor.capture());
-        assertThat(captor.getValue().getPortfolio()).isEqualTo(newUrl);
-        assertThat(response.portfolio()).isEqualTo(newUrl);
-    }
-
-    @Test
-    @DisplayName("updatePortfolio - 기존 포트폴리오가 있으면 deleteImage → uploadFile 순서 보장")
-    void updatePortfolioReplacesExisting() {
-        Member member = Member.builder().id(1L).email("s@mju.ac.kr").role(MemberRole.STUDENT)
-                .portfolio("https://bucket.s3.region.amazonaws.com/old.pdf").build();
-        MockMultipartFile pdf = pdfFile(4096L);
-        String newUrl = "https://bucket.s3.region.amazonaws.com/new.pdf";
-
-        when(s3Service.uploadFile(any(), any(), anyLong())).thenReturn(newUrl);
-        when(studentRepository.findByMemberId(1L)).thenReturn(Optional.empty());
-
-        memberService.updatePortfolio(member, pdf);
-
-        org.mockito.InOrder order = org.mockito.Mockito.inOrder(s3Service);
-        order.verify(s3Service).deleteImage("https://bucket.s3.region.amazonaws.com/old.pdf");
-        order.verify(s3Service).uploadFile(eq(pdf),
-                eq(MemberServiceImpl.PORTFOLIO_CONTENT_TYPES),
-                eq(MemberServiceImpl.PORTFOLIO_MAX_BYTES));
-    }
-
-    @Test
-    @DisplayName("updatePortfolio - S3Service.uploadFile 가 검증 실패로 예외 던지면 전파한다")
-    void updatePortfolioPropagatesValidationFailure() {
-        Member member = buildStudentMember();
-        MockMultipartFile bad = new MockMultipartFile("file", "x.txt", "text/plain", new byte[]{1});
-
-        when(s3Service.uploadFile(any(), any(), anyLong()))
+    @DisplayName("create*UploadUrl - 비허용 content-type 은 S3Service 가 _FILE_TYPE_NOT_ALLOWED 를 전파한다")
+    void createUploadUrlPropagatesDisallowedContentType() {
+        when(s3Service.createUploadPresign(any(), any(), any()))
                 .thenThrow(new S3Handler(ErrorStatus._FILE_TYPE_NOT_ALLOWED));
 
-        assertThatThrownBy(() -> memberService.updatePortfolio(member, bad))
+        assertThatThrownBy(() -> memberService.createProfileImageUploadUrl(
+                new PresignedUploadRequest("x.gif", "image/gif")))
                 .isInstanceOf(S3Handler.class)
                 .matches(e -> ((S3Handler) e).getErrorReasonHttpStatus().getCode()
                         .equals(ErrorStatus._FILE_TYPE_NOT_ALLOWED.getCode()));
-
-        verify(memberRepository, never()).save(any());
     }
 }

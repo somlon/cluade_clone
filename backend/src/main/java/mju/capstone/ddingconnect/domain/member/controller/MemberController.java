@@ -12,11 +12,11 @@ import mju.capstone.ddingconnect.domain.member.dto.response.MyPageResponse;
 import mju.capstone.ddingconnect.domain.member.service.MemberService;
 import mju.capstone.ddingconnect.domain.member.service.MyPageService;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMember;
+import mju.capstone.ddingconnect.global.aws.dto.PresignedUploadRequest;
+import mju.capstone.ddingconnect.global.aws.dto.PresignedUploadResponse;
 import mju.capstone.ddingconnect.global.common.SuccessMessage;
 import mju.capstone.ddingconnect.global.response.exception.handler.ApiResponse;
-import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/v1/members")
@@ -79,27 +79,27 @@ public class MemberController implements MemberSwagger {
         return ApiResponse.onSuccess(myPageService.updateGraduateMyPage(member, request));
     }
 
-    /** 프로필 사진 업로드/교체 (Update) — multipart/form-data */
-    @PatchMapping(value = "/me/profile-image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ApiResponse<MemberResponse> updateProfileImage(
+    /** 프로필 사진 업로드용 presigned URL 발급 (2-step ①) — 발급받은 fileUrl 을 PATCH /me 의 profileImage 에 저장 */
+    @PostMapping("/me/profile-image/presigned-url")
+    public ApiResponse<PresignedUploadResponse> createProfileImageUploadUrl(
             @Parameter(hidden = true) @LoginMember Member member,
-            @RequestPart("image") MultipartFile image) {
-        return ApiResponse.onSuccess(memberService.updateProfileImage(member, image));
+            @Valid @RequestBody PresignedUploadRequest request) {
+        return ApiResponse.onSuccess(memberService.createProfileImageUploadUrl(request));
     }
 
-    /** 졸업생 명함 이미지 업로드/교체 (Update) — GRADUATE 전용, multipart/form-data */
-    @PatchMapping(value = "/me/business-card", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ApiResponse<MemberResponse> updateBusinessCard(
+    /** 졸업생 명함 사진 업로드용 presigned URL 발급 (GRADUATE 전용, 2-step ①) — fileUrl 을 PATCH /mypage/graduate 의 businessCardImage 에 저장 */
+    @PostMapping("/me/business-card/presigned-url")
+    public ApiResponse<PresignedUploadResponse> createBusinessCardUploadUrl(
             @Parameter(hidden = true) @LoginMember Member member,
-            @RequestPart("image") MultipartFile image) {
-        return ApiResponse.onSuccess(memberService.updateBusinessCard(member, image));
+            @Valid @RequestBody PresignedUploadRequest request) {
+        return ApiResponse.onSuccess(memberService.createBusinessCardUploadUrl(member, request));
     }
 
-    /** 포트폴리오 PDF 업로드/교체 (Update) — multipart/form-data */
-    @PatchMapping(value = "/me/portfolio", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ApiResponse<MemberResponse> updatePortfolio(
+    /** 포트폴리오 파일 업로드용 presigned URL 발급 (2-step ①) — fileUrl 을 PATCH /me 의 portfolio 에 저장 */
+    @PostMapping("/me/portfolio/presigned-url")
+    public ApiResponse<PresignedUploadResponse> createPortfolioUploadUrl(
             @Parameter(hidden = true) @LoginMember Member member,
-            @RequestPart("file") MultipartFile file) {
-        return ApiResponse.onSuccess(memberService.updatePortfolio(member, file));
+            @Valid @RequestBody PresignedUploadRequest request) {
+        return ApiResponse.onSuccess(memberService.createPortfolioUploadUrl(request));
     }
 }

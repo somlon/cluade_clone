@@ -15,6 +15,8 @@ import mju.capstone.ddingconnect.domain.member.service.MemberService;
 import mju.capstone.ddingconnect.domain.member.service.MyPageService;
 import mju.capstone.ddingconnect.domain.techstack.domain.TechStackName;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMemberArgumentResolver;
+import mju.capstone.ddingconnect.global.aws.dto.PresignedUploadRequest;
+import mju.capstone.ddingconnect.global.aws.dto.PresignedUploadResponse;
 import mju.capstone.ddingconnect.global.common.SuccessMessage;
 import mju.capstone.ddingconnect.global.config.WebMvcConfig;
 import mju.capstone.ddingconnect.support.WithMockLoginMember;
@@ -30,6 +32,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -309,70 +312,75 @@ class MemberControllerTest {
     }
 
     @Test
-    @DisplayName("PATCH /api/v1/members/me/profile-image - multipart 업로드 → MemberService.updateProfileImage 위임")
-    void updateProfileImageDelegates() throws Exception {
-        org.springframework.mock.web.MockMultipartFile image =
-                new org.springframework.mock.web.MockMultipartFile(
-                        "image", "p.png", "image/png", new byte[]{1, 2, 3});
-        MemberResponse res = new MemberResponse(1L, "test@mju.ac.kr", null, "테스터",
-                null, null, null, null, null,
-                "https://bucket.s3.region.amazonaws.com/new.png",
-                0L, MemberRole.STUDENT, 3, null, null, null, null);
-        given(memberService.updateProfileImage(any(), any())).willReturn(res);
+    @DisplayName("POST /api/v1/members/me/profile-image/presigned-url - presigned URL 발급 → MemberService.createProfileImageUploadUrl 위임")
+    void createProfileImageUploadUrlDelegates() throws Exception {
+        PresignedUploadResponse res = new PresignedUploadResponse(
+                "https://bucket.s3.region.amazonaws.com/p-uuid.png?X-Amz-Signature=sig",
+                "https://bucket.s3.region.amazonaws.com/p-uuid.png",
+                "p-uuid.png", LocalDateTime.now().plusMinutes(5));
+        given(memberService.createProfileImageUploadUrl(any())).willReturn(res);
 
-        mockMvc.perform(multipart(BASE_URL + "/me/profile-image")
-                        .file(image)
-                        .with(req -> { req.setMethod("PATCH"); return req; }))
+        mockMvc.perform(post(BASE_URL + "/me/profile-image/presigned-url")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new PresignedUploadRequest("profile.png", "image/png"))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result.profileImage")
-                        .value("https://bucket.s3.region.amazonaws.com/new.png"));
+                .andExpect(jsonPath("$.result.uploadUrl").value(res.uploadUrl()))
+                .andExpect(jsonPath("$.result.fileUrl").value(res.fileUrl()))
+                .andExpect(jsonPath("$.result.key").value("p-uuid.png"));
 
-        verify(memberService).updateProfileImage(any(), any());
+        verify(memberService).createProfileImageUploadUrl(any());
     }
 
     @Test
-    @DisplayName("PATCH /api/v1/members/me/business-card - multipart 업로드 → MemberService.updateBusinessCard 위임")
-    void updateBusinessCardDelegates() throws Exception {
+    @DisplayName("POST /api/v1/members/me/business-card/presigned-url - presigned URL 발급 → MemberService.createBusinessCardUploadUrl 위임")
+    void createBusinessCardUploadUrlDelegates() throws Exception {
         WithMockLoginMember.loginAsGraduate();
-        org.springframework.mock.web.MockMultipartFile image =
-                new org.springframework.mock.web.MockMultipartFile(
-                        "image", "card.png", "image/png", new byte[]{1, 2, 3});
-        MemberResponse res = new MemberResponse(2L, "g@mju.ac.kr", null, "졸업생",
-                null, null, null, null, null, null,
-                0L, MemberRole.GRADUATE, null,
-                "https://bucket.s3.region.amazonaws.com/card.png",
-                null, "네이버", 3);
-        given(memberService.updateBusinessCard(any(), any())).willReturn(res);
+        PresignedUploadResponse res = new PresignedUploadResponse(
+                "https://bucket.s3.region.amazonaws.com/card-uuid.png?X-Amz-Signature=sig",
+                "https://bucket.s3.region.amazonaws.com/card-uuid.png",
+                "card-uuid.png", LocalDateTime.now().plusMinutes(5));
+        given(memberService.createBusinessCardUploadUrl(any(), any())).willReturn(res);
 
-        mockMvc.perform(multipart(BASE_URL + "/me/business-card")
-                        .file(image)
-                        .with(req -> { req.setMethod("PATCH"); return req; }))
+        mockMvc.perform(post(BASE_URL + "/me/business-card/presigned-url")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new PresignedUploadRequest("card.png", "image/png"))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result.businessCardImage")
-                        .value("https://bucket.s3.region.amazonaws.com/card.png"));
+                .andExpect(jsonPath("$.result.uploadUrl").value(res.uploadUrl()))
+                .andExpect(jsonPath("$.result.fileUrl").value(res.fileUrl()));
 
-        verify(memberService).updateBusinessCard(any(), any());
+        verify(memberService).createBusinessCardUploadUrl(any(), any());
     }
 
     @Test
-    @DisplayName("PATCH /api/v1/members/me/portfolio - multipart PDF 업로드 → MemberService.updatePortfolio 위임")
-    void updatePortfolioDelegates() throws Exception {
-        org.springframework.mock.web.MockMultipartFile file =
-                new org.springframework.mock.web.MockMultipartFile(
-                        "file", "portfolio.pdf", "application/pdf", new byte[]{1, 2, 3});
-        MemberResponse res = new MemberResponse(1L, "test@mju.ac.kr", null, "테스터",
-                null, null, null, null,
-                "https://bucket.s3.region.amazonaws.com/portfolio.pdf", null,
-                0L, MemberRole.STUDENT, 3, null, null, null, null);
-        given(memberService.updatePortfolio(any(), any())).willReturn(res);
+    @DisplayName("POST /api/v1/members/me/portfolio/presigned-url - presigned URL 발급 → MemberService.createPortfolioUploadUrl 위임")
+    void createPortfolioUploadUrlDelegates() throws Exception {
+        PresignedUploadResponse res = new PresignedUploadResponse(
+                "https://bucket.s3.region.amazonaws.com/resume-uuid.pdf?X-Amz-Signature=sig",
+                "https://bucket.s3.region.amazonaws.com/resume-uuid.pdf",
+                "resume-uuid.pdf", LocalDateTime.now().plusMinutes(5));
+        given(memberService.createPortfolioUploadUrl(any())).willReturn(res);
 
-        mockMvc.perform(multipart(BASE_URL + "/me/portfolio")
-                        .file(file)
-                        .with(req -> { req.setMethod("PATCH"); return req; }))
+        mockMvc.perform(post(BASE_URL + "/me/portfolio/presigned-url")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new PresignedUploadRequest("resume.pdf", "application/pdf"))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result.portfolio")
-                        .value("https://bucket.s3.region.amazonaws.com/portfolio.pdf"));
+                .andExpect(jsonPath("$.result.fileUrl").value(res.fileUrl()));
 
-        verify(memberService).updatePortfolio(any(), any());
+        verify(memberService).createPortfolioUploadUrl(any());
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/members/me/profile-image/presigned-url - fileName 공백 등 검증 실패는 400 (서비스 미호출)")
+    void createUploadUrlRejectsInvalidRequest() throws Exception {
+        mockMvc.perform(post(BASE_URL + "/me/profile-image/presigned-url")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new PresignedUploadRequest("  ", "image/png"))))
+                .andExpect(status().isBadRequest());
+
+        verify(memberService, never()).createProfileImageUploadUrl(any());
     }
 }

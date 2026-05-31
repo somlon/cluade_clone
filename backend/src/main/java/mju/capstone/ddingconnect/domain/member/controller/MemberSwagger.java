@@ -3,6 +3,7 @@ package mju.capstone.ddingconnect.domain.member.controller;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import mju.capstone.ddingconnect.domain.member.domain.Member;
 import mju.capstone.ddingconnect.domain.member.dto.request.UpdateGraduateMyPageRequest;
 import mju.capstone.ddingconnect.domain.member.dto.request.UpdateMemberRequest;
@@ -10,10 +11,10 @@ import mju.capstone.ddingconnect.domain.member.dto.request.UpdateStudentMyPageRe
 import mju.capstone.ddingconnect.domain.member.dto.response.MemberResponse;
 import mju.capstone.ddingconnect.domain.member.dto.response.MyPageResponse;
 import mju.capstone.ddingconnect.global.auth.annotation.LoginMember;
+import mju.capstone.ddingconnect.global.aws.dto.PresignedUploadRequest;
+import mju.capstone.ddingconnect.global.aws.dto.PresignedUploadResponse;
 import mju.capstone.ddingconnect.global.response.exception.handler.ApiResponse;
-import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
 @Tag(name = "회원", description = "회원 컨트롤러 — 프로필 조회/수정/탈퇴(소프트 삭제), 마이페이지 조회 엔드포인트를 제공합니다. (회원가입은 인증 API에서 담당)")
 public interface MemberSwagger {
@@ -114,53 +115,51 @@ public interface MemberSwagger {
 
 
     @Operation(
-            summary = "프로필 사진 업로드/교체",
-            description = "마이페이지 상단 프로필 사진(동그라미)을 업로드해 교체합니다. "
-                    + "multipart/form-data 로 `image` 파트에 파일을 전송합니다. "
-                    + "허용 content-type: image/png, image/jpeg, image/webp. 크기 제한: 5MB. "
-                    + "위반 시 400(`_FILE_TYPE_NOT_ALLOWED` / `_FILE_TOO_LARGE`)으로 거부합니다. "
-                    + "기존 프로필 사진이 있으면 S3 에서 먼저 삭제한 후 새 사진을 업로드합니다. "
-                    + "응답은 갱신된 회원 정보(`MemberResponse`) 입니다."
+            summary = "프로필 사진 업로드용 presigned URL 발급",
+            description = "마이페이지 프로필 사진을 교체하기 위한 presigned PUT URL 을 발급합니다(로그인 필수). "
+                    + "요청 본문 `{fileName, contentType}`, 허용 content-type: image/png, image/jpeg, image/webp. "
+                    + "비허용 content-type 은 400(S3400)으로 거부됩니다.\n\n"
+                    + "2-step 플로우: ① 발급받은 `uploadUrl` 에 파일 바이트를 PUT(헤더 Content-Type 은 요청의 contentType 과 동일) "
+                    + "→ ② 업로드 성공 후 `fileUrl` 을 `PATCH /api/v1/members/me` 의 profileImage 필드에 저장합니다. "
+                    + "presigned PUT 은 서버측 크기 강제가 불가하므로 파일 크기 제한은 프론트에서 검증합니다."
     )
-    @PatchMapping(value = "/me/profile-image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    ApiResponse<MemberResponse> updateProfileImage(
+    @PostMapping("/me/profile-image/presigned-url")
+    ApiResponse<PresignedUploadResponse> createProfileImageUploadUrl(
             @Parameter(hidden = true) @LoginMember Member member,
-            @Parameter(description = "업로드할 프로필 이미지 파일 (image/png, image/jpeg, image/webp)")
-            @RequestPart("image") MultipartFile image);
+            @Parameter(description = "업로드 요청 (fileName, contentType)")
+            @Valid @RequestBody PresignedUploadRequest request);
 
 
 
 
     @Operation(
-            summary = "졸업생 명함 이미지 업로드/교체 (GRADUATE 전용)",
-            description = "졸업생 마이페이지의 명함 영역에 사진을 업로드해 표시/교체합니다. "
-                    + "multipart/form-data 로 `image` 파트에 파일을 전송합니다. "
+            summary = "졸업생 명함 사진 업로드용 presigned URL 발급 (GRADUATE 전용)",
+            description = "졸업생 마이페이지의 명함 사진을 교체하기 위한 presigned PUT URL 을 발급합니다(로그인 필수). "
                     + "GRADUATE 가 아니면 400(`MEMBER_FIELD_ROLE_MISMATCH`)으로 거부합니다(STUDENT/UNKNOWN 모두 거부). "
-                    + "허용 content-type: image/png, image/jpeg, image/webp. 크기 제한: 5MB. "
-                    + "위반 시 400(`_FILE_TYPE_NOT_ALLOWED` / `_FILE_TOO_LARGE`)으로 거부합니다. "
-                    + "기존 명함 이미지가 있으면 S3 에서 먼저 삭제한 후 새 이미지를 업로드합니다."
+                    + "허용 content-type: image/png, image/jpeg, image/webp.\n\n"
+                    + "2-step 플로우: ① 발급받은 `uploadUrl` 에 파일 바이트 PUT → ② `fileUrl` 을 "
+                    + "`PATCH /api/v1/members/mypage/graduate` 의 businessCardImage 필드에 저장합니다."
     )
-    @PatchMapping(value = "/me/business-card", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    ApiResponse<MemberResponse> updateBusinessCard(
+    @PostMapping("/me/business-card/presigned-url")
+    ApiResponse<PresignedUploadResponse> createBusinessCardUploadUrl(
             @Parameter(hidden = true) @LoginMember Member member,
-            @Parameter(description = "업로드할 명함 이미지 파일 (image/png, image/jpeg, image/webp)")
-            @RequestPart("image") MultipartFile image);
+            @Parameter(description = "업로드 요청 (fileName, contentType)")
+            @Valid @RequestBody PresignedUploadRequest request);
 
 
 
 
     @Operation(
-            summary = "포트폴리오 PDF 업로드/교체",
-            description = "마이페이지 포트폴리오 영역에 PDF 파일을 업로드해 표시/교체합니다. "
-                    + "multipart/form-data 로 `file` 파트에 PDF 파일을 전송합니다. "
-                    + "허용 content-type: application/pdf. 크기 제한: 20MB. "
-                    + "위반 시 400(`_FILE_TYPE_NOT_ALLOWED` / `_FILE_TOO_LARGE`)으로 거부합니다. "
-                    + "기존 포트폴리오가 있으면 S3 에서 먼저 삭제한 후 새 PDF 를 업로드합니다."
+            summary = "포트폴리오 파일 업로드용 presigned URL 발급",
+            description = "마이페이지 포트폴리오 파일을 교체하기 위한 presigned PUT URL 을 발급합니다(로그인 필수). "
+                    + "허용 content-type: application/pdf. 비허용 content-type 은 400(S3400)으로 거부됩니다.\n\n"
+                    + "2-step 플로우: ① 발급받은 `uploadUrl` 에 파일 바이트 PUT → ② `fileUrl` 을 "
+                    + "`PATCH /api/v1/members/me` 의 portfolio 필드에 저장합니다."
     )
-    @PatchMapping(value = "/me/portfolio", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    ApiResponse<MemberResponse> updatePortfolio(
+    @PostMapping("/me/portfolio/presigned-url")
+    ApiResponse<PresignedUploadResponse> createPortfolioUploadUrl(
             @Parameter(hidden = true) @LoginMember Member member,
-            @Parameter(description = "업로드할 포트폴리오 PDF 파일 (application/pdf)")
-            @RequestPart("file") MultipartFile file);
+            @Parameter(description = "업로드 요청 (fileName, contentType)")
+            @Valid @RequestBody PresignedUploadRequest request);
 
 }
