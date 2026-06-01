@@ -38,4 +38,23 @@ public interface MemberService {
      * - 발급만 수행(2-step): fileUrl 을 {@code PATCH /me} 의 portfolio 필드에 저장한다.
      */
     PresignedUploadResponse createPortfolioUploadUrl(PresignedUploadRequest request);
+
+    /**
+     * 프로필 사진 삭제 — S3 객체 best-effort 삭제 + {@code Member.profileImage} 을 null 로 갱신.
+     * 이미 비어 있으면 no-op (200, 변경 없이 현재 프로필 반환) — idempotent.
+     * S3 삭제 실패는 로그만 남기고 DB 클리어는 그대로 진행한다(dangling S3 객체보다 사용자 자산 정리 우선).
+     */
+    MemberResponse deleteProfileImage(Member member);
+
+    /**
+     * 졸업생 명함 사진 삭제 (GRADUATE 전용) — S3 객체 best-effort 삭제 + {@code Graduate.businessCardImage} 을 null 로 갱신.
+     * STUDENT/UNKNOWN 호출 시 MEMBER_FIELD_ROLE_MISMATCH 로 거부. 이미 비어 있으면 no-op.
+     */
+    MemberResponse deleteBusinessCard(Member member);
+
+    /**
+     * 포트폴리오 삭제 — S3 객체 best-effort 삭제 + {@code Member.portfolio} 을 null 로 갱신.
+     * 이미 비어 있으면 no-op.
+     */
+    MemberResponse deletePortfolio(Member member);
 }

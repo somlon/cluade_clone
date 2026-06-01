@@ -1,6 +1,7 @@
 package mju.capstone.ddingconnect.domain.member.service;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import mju.capstone.ddingconnect.domain.coffeechat.domain.CoffeeChat;
 import mju.capstone.ddingconnect.domain.coffeechat.domain.repository.CoffeeChatAlarmRepository;
 import mju.capstone.ddingconnect.domain.coffeechat.domain.repository.CoffeeChatRepository;
@@ -46,6 +47,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class MemberServiceImpl implements MemberService {
@@ -180,6 +182,120 @@ public class MemberServiceImpl implements MemberService {
     public PresignedUploadResponse createPortfolioUploadUrl(PresignedUploadRequest request) {
         return s3Service.createUploadPresign(
                 request.fileName(), request.contentType(), UploadType.PORTFOLIO.allowedContentTypes());
+    }
+
+    /**
+     * 프로필 사진 삭제 — S3 객체 best-effort 삭제 + Member.profileImage = null.
+     * 이미 비어 있으면 no-op 으로 현재 프로필을 그대로 반환(idempotent, 200).
+     */
+    @Override
+    @Transactional
+    public MemberResponse deleteProfileImage(Member member) {
+        String currentUrl = member.getProfileImage();
+        if (currentUrl == null || currentUrl.isBlank()) {
+            return buildMemberResponse(member);
+        }
+        safeDeleteFromS3(currentUrl);
+        Member updated = rebuildMemberWith(member, null, member.getPortfolio());
+        memberRepository.save(updated);
+        return buildMemberResponse(updated);
+    }
+
+    /**
+     * 졸업생 명함 사진 삭제 (GRADUATE 전용) — S3 객체 best-effort 삭제 + Graduate.businessCardImage = null.
+     * STUDENT/UNKNOWN 호출 시 MEMBER_FIELD_ROLE_MISMATCH 로 거부 (presigned 발급과 동일 가드).
+     */
+    @Override
+    @Transactional
+    public MemberResponse deleteBusinessCard(Member member) {
+        if (member.getRole() != MemberRole.GRADUATE) {
+            throw new MemberHandler(ErrorStatus.MEMBER_FIELD_ROLE_MISMATCH);
+        }
+        Graduate graduate = graduateRepository.findByMemberId(member.getId())
+                .orElseThrow(() -> new MemberHandler(ErrorStatus.MEMBER_NOT_FOUND));
+        String currentUrl = graduate.getBusinessCardImage();
+        if (currentUrl == null || currentUrl.isBlank()) {
+            return MemberResponse.from(member, graduate);
+        }
+        safeDeleteFromS3(currentUrl);
+        Graduate updated = Graduate.builder()
+                .id(graduate.getId())
+                .member(graduate.getMember())
+                .businessCardImage(null)
+                .jobType(graduate.getJobType())
+                .company(graduate.getCompany())
+                .careerYear(graduate.getCareerYear())
+                .build();
+        Graduate saved = graduateRepository.save(updated);
+        return MemberResponse.from(member, saved);
+    }
+
+    /**
+     * 포트폴리오 삭제 — S3 객체 best-effort 삭제 + Member.portfolio = null.
+     */
+    @Override
+    @Transactional
+    public MemberResponse deletePortfolio(Member member) {
+        String currentUrl = member.getPortfolio();
+        if (currentUrl == null || currentUrl.isBlank()) {
+            return buildMemberResponse(member);
+        }
+        safeDeleteFromS3(currentUrl);
+        Member updated = rebuildMemberWith(member, member.getProfileImage(), null);
+        memberRepository.save(updated);
+        return buildMemberResponse(updated);
+    }
+
+    /**
+     * Member 엔티티를 portfolio·profileImage 만 교체해 재구성.
+     * 다른 필드는 모두 기존값 유지(부분 수정 패턴 — `updateMyProfile` 의 빌더 reconstruction 과 동일).
+     */
+    private Member rebuildMemberWith(Member member, String profileImage, String portfolio) {
+        return Member.builder()
+                .id(member.getId())
+                .email(member.getEmail())
+                .password(member.getPassword())
+                .role(member.getRole())
+                .isDeleted(member.getIsDeleted())
+                .point(member.getPoint())
+                .certificate(member.getCertificate())
+                .name(member.getName())
+                .nickname(member.getNickname())
+                .studentNumber(member.getStudentNumber())
+                .department(member.getDepartment())
+                .githubLink(member.getGithubLink())
+                .linkedinLink(member.getLinkedinLink())
+                .portfolio(portfolio)
+                .profileImage(profileImage)
+                .build();
+    }
+
+    /**
+     * 역할별 부가 정보(Student/Graduate)를 조회해 MemberResponse 로 조립.
+     * `getMyProfile` 과 동일 로직이지만 같은 트랜잭션 내부 사용을 위한 내부 헬퍼로 분리.
+     */
+    private MemberResponse buildMemberResponse(Member member) {
+        if (member.getRole() == MemberRole.STUDENT) {
+            Student student = studentRepository.findByMemberId(member.getId()).orElse(null);
+            return MemberResponse.from(member, student);
+        }
+        if (member.getRole() == MemberRole.GRADUATE) {
+            Graduate graduate = graduateRepository.findByMemberId(member.getId()).orElse(null);
+            return MemberResponse.from(member, graduate);
+        }
+        return MemberResponse.from(member, (Student) null);
+    }
+
+    /**
+     * S3 객체 삭제(best-effort) — 실패는 로그만 남기고 트랜잭션에 영향 없음.
+     * dangling S3 객체보다 사용자 자산 DB 클리어를 우선시한다(RoadmapServiceImpl.delete 와 동일 패턴).
+     */
+    private void safeDeleteFromS3(String url) {
+        try {
+            s3Service.deleteImage(url);
+        } catch (Exception e) {
+            log.warn("S3 객체 삭제 실패: {} — DB 클리어는 그대로 진행", url, e);
+        }
     }
 
     /**

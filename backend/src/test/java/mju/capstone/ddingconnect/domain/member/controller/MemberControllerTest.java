@@ -436,6 +436,54 @@ class MemberControllerTest {
     }
 
     @Test
+    @DisplayName("DELETE /api/v1/members/me/profile-image - MemberService.deleteProfileImage 위임, 갱신된 프로필 반환")
+    void deleteProfileImageDelegates() throws Exception {
+        MemberResponse res = new MemberResponse(1L, "test@mju.ac.kr", "테스터", "재학생",
+                "60201234", "컴퓨터공학과", null, null, null, null, 0L,
+                MemberRole.STUDENT, 3, null, null, null, null);
+        given(memberService.deleteProfileImage(any())).willReturn(res);
+
+        mockMvc.perform(delete(BASE_URL + "/me/profile-image"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.profileImage").doesNotExist())
+                .andExpect(jsonPath("$.result.name").value("테스터"));
+
+        verify(memberService).deleteProfileImage(any());
+    }
+
+    @Test
+    @DisplayName("DELETE /api/v1/members/me/business-card - MemberService.deleteBusinessCard 위임 (GRADUATE)")
+    void deleteBusinessCardDelegates() throws Exception {
+        WithMockLoginMember.loginAsGraduate();
+        MemberResponse res = new MemberResponse(2L, "g@mju.ac.kr", "박졸업", "졸업생",
+                "60150001", "컴퓨터공학과", null, null, null, null, 0L,
+                MemberRole.GRADUATE, null, null, null, "카카오", 3);
+        given(memberService.deleteBusinessCard(any())).willReturn(res);
+
+        mockMvc.perform(delete(BASE_URL + "/me/business-card"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.businessCardImage").doesNotExist())
+                .andExpect(jsonPath("$.result.company").value("카카오"));
+
+        verify(memberService).deleteBusinessCard(any());
+    }
+
+    @Test
+    @DisplayName("DELETE /api/v1/members/me/portfolio - MemberService.deletePortfolio 위임")
+    void deletePortfolioDelegates() throws Exception {
+        MemberResponse res = new MemberResponse(1L, "test@mju.ac.kr", "테스터", "재학생",
+                "60201234", "컴퓨터공학과", null, null, null, null, 0L,
+                MemberRole.STUDENT, 3, null, null, null, null);
+        given(memberService.deletePortfolio(any())).willReturn(res);
+
+        mockMvc.perform(delete(BASE_URL + "/me/portfolio"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.portfolio").doesNotExist());
+
+        verify(memberService).deletePortfolio(any());
+    }
+
+    @Test
     @DisplayName("GET /api/v1/members/me/point - 로그인 회원의 보유 P 반환")
     void getMyPoint() throws Exception {
         WithMockLoginMember.loginAs(10L, MemberRole.STUDENT);
