@@ -538,4 +538,165 @@ class MemberServiceImplTest {
                 .matches(e -> ((S3Handler) e).getErrorReasonHttpStatus().getCode()
                         .equals(ErrorStatus._FILE_TYPE_NOT_ALLOWED.getCode()));
     }
+
+    @Test
+    @DisplayName("deleteProfileImage - 기존 URL 이 있으면 S3 객체 삭제 + Member.profileImage = null 로 저장")
+    void deleteProfileImageClearsField() {
+        Member member = Member.builder().id(1L).email("s@mju.ac.kr").name("김재학").nickname("재학생")
+                .role(MemberRole.STUDENT).studentNumber("60201234").department("컴퓨터공학과")
+                .point(0L).isDeleted(false)
+                .profileImage("https://bucket.s3.region.amazonaws.com/profile-old.png")
+                .portfolio("https://bucket.s3.region.amazonaws.com/resume-keep.pdf")
+                .build();
+        Student student = Student.builder().id(11L).member(member).grade(3).build();
+        when(studentRepository.findByMemberId(1L)).thenReturn(Optional.of(student));
+
+        MemberResponse response = memberService.deleteProfileImage(member);
+
+        verify(s3Service).deleteImage("https://bucket.s3.region.amazonaws.com/profile-old.png");
+        ArgumentCaptor<Member> captor = ArgumentCaptor.forClass(Member.class);
+        verify(memberRepository).save(captor.capture());
+        assertThat(captor.getValue().getProfileImage()).isNull();
+        // 포트폴리오는 건드리지 않음
+        assertThat(captor.getValue().getPortfolio()).isEqualTo("https://bucket.s3.region.amazonaws.com/resume-keep.pdf");
+        assertThat(response.profileImage()).isNull();
+        assertThat(response.role()).isEqualTo(MemberRole.STUDENT);
+    }
+
+    @Test
+    @DisplayName("deleteProfileImage - 이미 비어 있으면 S3·save 호출 없이 현재 프로필을 그대로 반환 (idempotent)")
+    void deleteProfileImageNoopWhenAlreadyEmpty() {
+        Member member = buildStudentMember();
+        Student student = Student.builder().id(11L).member(member).grade(3).build();
+        when(studentRepository.findByMemberId(1L)).thenReturn(Optional.of(student));
+
+        MemberResponse response = memberService.deleteProfileImage(member);
+
+        verify(s3Service, never()).deleteImage(any());
+        verify(memberRepository, never()).save(any());
+        assertThat(response.profileImage()).isNull();
+    }
+
+    @Test
+    @DisplayName("deleteProfileImage - S3 삭제 실패는 swallowing 되고 DB 클리어는 그대로 진행된다")
+    void deleteProfileImageSwallowsS3Failure() {
+        Member member = Member.builder().id(1L).email("s@mju.ac.kr").name("김재학").nickname("재학생")
+                .role(MemberRole.STUDENT).point(0L).isDeleted(false)
+                .profileImage("https://bucket.s3.region.amazonaws.com/profile-broken.png")
+                .build();
+        Student student = Student.builder().id(11L).member(member).grade(3).build();
+        when(studentRepository.findByMemberId(1L)).thenReturn(Optional.of(student));
+        org.mockito.Mockito.doThrow(new S3Handler(ErrorStatus._FILE_DELETE_FAILED))
+                .when(s3Service).deleteImage(any());
+
+        MemberResponse response = memberService.deleteProfileImage(member);
+
+        ArgumentCaptor<Member> captor = ArgumentCaptor.forClass(Member.class);
+        verify(memberRepository).save(captor.capture());
+        assertThat(captor.getValue().getProfileImage()).isNull();
+        assertThat(response.profileImage()).isNull();
+    }
+
+    @Test
+    @DisplayName("deleteBusinessCard - GRADUATE 가 명함을 가지고 있으면 S3 삭제 + Graduate.businessCardImage = null 저장")
+    void deleteBusinessCardClearsFieldForGraduate() {
+        Member member = buildGraduateMember();
+        Graduate graduate = Graduate.builder().id(22L).member(member)
+                .businessCardImage("https://bucket.s3.region.amazonaws.com/card-old.png")
+                .jobType(JobType.BACKEND).company("카카오").careerYear(3).build();
+        when(graduateRepository.findByMemberId(2L)).thenReturn(Optional.of(graduate));
+        when(graduateRepository.save(any(Graduate.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        MemberResponse response = memberService.deleteBusinessCard(member);
+
+        verify(s3Service).deleteImage("https://bucket.s3.region.amazonaws.com/card-old.png");
+        ArgumentCaptor<Graduate> captor = ArgumentCaptor.forClass(Graduate.class);
+        verify(graduateRepository).save(captor.capture());
+        assertThat(captor.getValue().getBusinessCardImage()).isNull();
+        // 다른 GRADUATE 필드는 보존
+        assertThat(captor.getValue().getJobType()).isEqualTo(JobType.BACKEND);
+        assertThat(captor.getValue().getCompany()).isEqualTo("카카오");
+        assertThat(captor.getValue().getCareerYear()).isEqualTo(3);
+        assertThat(response.businessCardImage()).isNull();
+        assertThat(response.role()).isEqualTo(MemberRole.GRADUATE);
+        // Member 자체는 갱신 안 함
+        verify(memberRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("deleteBusinessCard - STUDENT 호출 시 MEMBER_FIELD_ROLE_MISMATCH 로 거부, S3·DB 미호출")
+    void deleteBusinessCardRejectsStudent() {
+        Member member = buildStudentMember();
+
+        assertThatThrownBy(() -> memberService.deleteBusinessCard(member))
+                .isInstanceOf(MemberHandler.class)
+                .matches(e -> ((MemberHandler) e).getErrorReasonHttpStatus().getCode()
+                        .equals(ErrorStatus.MEMBER_FIELD_ROLE_MISMATCH.getCode()));
+
+        verify(s3Service, never()).deleteImage(any());
+        verify(graduateRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("deleteBusinessCard - UNKNOWN 호출도 MEMBER_FIELD_ROLE_MISMATCH 로 거부")
+    void deleteBusinessCardRejectsUnknown() {
+        Member member = buildUnknownMember();
+
+        assertThatThrownBy(() -> memberService.deleteBusinessCard(member))
+                .isInstanceOf(MemberHandler.class)
+                .matches(e -> ((MemberHandler) e).getErrorReasonHttpStatus().getCode()
+                        .equals(ErrorStatus.MEMBER_FIELD_ROLE_MISMATCH.getCode()));
+    }
+
+    @Test
+    @DisplayName("deleteBusinessCard - 이미 비어 있으면 S3·save 호출 없이 현재 프로필 반환 (idempotent)")
+    void deleteBusinessCardNoopWhenAlreadyEmpty() {
+        Member member = buildGraduateMember();
+        Graduate graduate = Graduate.builder().id(22L).member(member)
+                .businessCardImage(null).jobType(JobType.BACKEND).company("카카오").careerYear(3).build();
+        when(graduateRepository.findByMemberId(2L)).thenReturn(Optional.of(graduate));
+
+        MemberResponse response = memberService.deleteBusinessCard(member);
+
+        verify(s3Service, never()).deleteImage(any());
+        verify(graduateRepository, never()).save(any());
+        assertThat(response.businessCardImage()).isNull();
+        assertThat(response.company()).isEqualTo("카카오");
+    }
+
+    @Test
+    @DisplayName("deletePortfolio - 기존 URL 이 있으면 S3 객체 삭제 + Member.portfolio = null 로 저장")
+    void deletePortfolioClearsField() {
+        Member member = Member.builder().id(1L).email("s@mju.ac.kr").name("김재학").nickname("재학생")
+                .role(MemberRole.STUDENT).point(0L).isDeleted(false)
+                .portfolio("https://bucket.s3.region.amazonaws.com/resume-old.pdf")
+                .profileImage("https://bucket.s3.region.amazonaws.com/profile-keep.png")
+                .build();
+        Student student = Student.builder().id(11L).member(member).grade(3).build();
+        when(studentRepository.findByMemberId(1L)).thenReturn(Optional.of(student));
+
+        MemberResponse response = memberService.deletePortfolio(member);
+
+        verify(s3Service).deleteImage("https://bucket.s3.region.amazonaws.com/resume-old.pdf");
+        ArgumentCaptor<Member> captor = ArgumentCaptor.forClass(Member.class);
+        verify(memberRepository).save(captor.capture());
+        assertThat(captor.getValue().getPortfolio()).isNull();
+        // 프로필 사진은 건드리지 않음
+        assertThat(captor.getValue().getProfileImage()).isEqualTo("https://bucket.s3.region.amazonaws.com/profile-keep.png");
+        assertThat(response.portfolio()).isNull();
+    }
+
+    @Test
+    @DisplayName("deletePortfolio - 이미 비어 있으면 S3·save 호출 없이 현재 프로필 반환 (idempotent)")
+    void deletePortfolioNoopWhenAlreadyEmpty() {
+        Member member = buildStudentMember();
+        Student student = Student.builder().id(11L).member(member).grade(3).build();
+        when(studentRepository.findByMemberId(1L)).thenReturn(Optional.of(student));
+
+        MemberResponse response = memberService.deletePortfolio(member);
+
+        verify(s3Service, never()).deleteImage(any());
+        verify(memberRepository, never()).save(any());
+        assertThat(response.portfolio()).isNull();
+    }
 }

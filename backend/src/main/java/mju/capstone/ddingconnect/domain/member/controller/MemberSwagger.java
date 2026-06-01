@@ -208,4 +208,44 @@ public interface MemberSwagger {
             @Parameter(description = "업로드 요청 (fileName, contentType)")
             @Valid @RequestBody PresignedUploadRequest request);
 
+
+
+
+    @Operation(
+            summary = "프로필 사진 삭제",
+            description = "로그인된 회원의 프로필 사진을 삭제합니다. S3 객체를 best-effort 로 삭제한 뒤 "
+                    + "`Member.profileImage` 를 null 로 갱신합니다. 이미 비어 있으면 변경 없이 현재 프로필을 그대로 반환합니다(idempotent, 200). "
+                    + "S3 객체 삭제가 실패해도 DB 클리어는 그대로 진행됩니다(로그만 기록). 갱신된 회원 프로필을 반환합니다."
+    )
+    @DeleteMapping("/me/profile-image")
+    ApiResponse<MemberResponse> deleteProfileImage(
+            @Parameter(hidden = true) @LoginMember Member member);
+
+
+
+
+    @Operation(
+            summary = "졸업생 명함 사진 삭제 (GRADUATE 전용)",
+            description = "로그인된 졸업생의 명함 사진을 삭제합니다. S3 객체를 best-effort 로 삭제한 뒤 "
+                    + "`Graduate.businessCardImage` 를 null 로 갱신합니다. "
+                    + "GRADUATE 가 아니면 400(`MEMBER_FIELD_ROLE_MISMATCH`)으로 거부합니다(STUDENT/UNKNOWN 모두 거부). "
+                    + "이미 비어 있으면 변경 없이 현재 프로필을 그대로 반환합니다(idempotent, 200)."
+    )
+    @DeleteMapping("/me/business-card")
+    ApiResponse<MemberResponse> deleteBusinessCard(
+            @Parameter(hidden = true) @LoginMember Member member);
+
+
+
+
+    @Operation(
+            summary = "포트폴리오 삭제",
+            description = "로그인된 회원의 포트폴리오 파일을 삭제합니다. S3 객체를 best-effort 로 삭제한 뒤 "
+                    + "`Member.portfolio` 를 null 로 갱신합니다. 이미 비어 있으면 변경 없이 현재 프로필을 그대로 반환합니다(idempotent, 200). "
+                    + "S3 객체 삭제가 실패해도 DB 클리어는 그대로 진행됩니다(로그만 기록)."
+    )
+    @DeleteMapping("/me/portfolio")
+    ApiResponse<MemberResponse> deletePortfolio(
+            @Parameter(hidden = true) @LoginMember Member member);
+
 }

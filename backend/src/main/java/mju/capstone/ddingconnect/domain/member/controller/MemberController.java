@@ -128,4 +128,25 @@ public class MemberController implements MemberSwagger {
             @Valid @RequestBody PresignedUploadRequest request) {
         return ApiResponse.onSuccess(memberService.createPortfolioUploadUrl(request));
     }
+
+    /** 프로필 사진 삭제 (Delete) — S3 객체 + DB Member.profileImage 클리어, 갱신된 프로필 반환 */
+    @DeleteMapping("/me/profile-image")
+    public ApiResponse<MemberResponse> deleteProfileImage(
+            @Parameter(hidden = true) @LoginMember Member member) {
+        return ApiResponse.onSuccess(memberService.deleteProfileImage(member));
+    }
+
+    /** 졸업생 명함 사진 삭제 (Delete) — GRADUATE 전용, S3 객체 + DB Graduate.businessCardImage 클리어 */
+    @DeleteMapping("/me/business-card")
+    public ApiResponse<MemberResponse> deleteBusinessCard(
+            @Parameter(hidden = true) @LoginMember Member member) {
+        return ApiResponse.onSuccess(memberService.deleteBusinessCard(member));
+    }
+
+    /** 포트폴리오 삭제 (Delete) — S3 객체 + DB Member.portfolio 클리어 */
+    @DeleteMapping("/me/portfolio")
+    public ApiResponse<MemberResponse> deletePortfolio(
+            @Parameter(hidden = true) @LoginMember Member member) {
+        return ApiResponse.onSuccess(memberService.deletePortfolio(member));
+    }
 }
