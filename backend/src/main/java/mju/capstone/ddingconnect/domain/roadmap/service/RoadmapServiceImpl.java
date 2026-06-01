@@ -57,7 +57,7 @@ public class RoadmapServiceImpl implements RoadmapService {
 
     @Override
     @Transactional
-    public RoadmapResponse create(Long memberId, CreateRoadmapRequest request) {
+    public List<RoadmapListResponse> create(Long memberId, CreateRoadmapRequest request) {
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new MemberHandler(ErrorStatus.MEMBER_NOT_FOUND));
 
@@ -85,7 +85,10 @@ public class RoadmapServiceImpl implements RoadmapService {
         eventPublisher.publishEvent(new AlarmNotificationEvent(
                 member, AlarmType.ROADMAP, ROADMAP_ALARM_CONTENT));
 
-        return RoadmapResponse.from(saved);
+        // 생성 직후 "생성된 로드맵" 카드 목록을 그대로 반환 — 프론트가 단일 호출로 화면 렌더.
+        // 같은 트랜잭션 내 findBy* 호출은 JPA 가 pending save 를 flush 한 뒤 실행하므로 방금 만든 로드맵이 최상단에 포함된다.
+        return roadmapRepository.findByMemberIdOrderByCreatedAtDesc(memberId)
+                .stream().map(RoadmapListResponse::from).toList();
     }
 
     /** 데이터 파트 AI 응답 본문 검증 — null/blank 면 INVALID_CONTENT. */
