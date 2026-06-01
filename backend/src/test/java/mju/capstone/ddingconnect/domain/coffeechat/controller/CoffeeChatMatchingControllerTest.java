@@ -68,16 +68,4 @@ class CoffeeChatMatchingControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result.memberId").value(CANDIDATE_ID_1.intValue()));
     }
-
-    @Test
-    @DisplayName("GET /api/v1/coffeechat/my-activity - 수락된 커피챗 상대 리스트 반환")
-    void getMyActivity() throws Exception {
-        given(coffeeChatMatchingService.getMyActivity(any()))
-                .willReturn(List.of(candidateDetail(CANDIDATE_ID_1)));
-
-        mockMvc.perform(get(MY_ACTIVITY_URL))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result").isArray())
-                .andExpect(jsonPath("$.result[0].memberId").value(CANDIDATE_ID_1.intValue()));
-    }
 }

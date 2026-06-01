@@ -19,7 +19,6 @@ public final class CoffeeChatMatchingTestConstants {
     // 엔드포인트
     public static final String BASE_URL = "/api/v1/coffeechat";
     public static final String MATCHING_URL = BASE_URL + "/matching";
-    public static final String MY_ACTIVITY_URL = BASE_URL + "/my-activity";
 
     // 매칭 폼 6필드
     public static final Integer FORM_GRADE = 3;

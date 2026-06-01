@@ -1,8 +1,5 @@
 package mju.capstone.ddingconnect.domain.coffeechat.service;
 
-import mju.capstone.ddingconnect.domain.coffeechat.domain.CoffeeChat;
-import mju.capstone.ddingconnect.domain.coffeechat.domain.CoffeeChatStatus;
-import mju.capstone.ddingconnect.domain.coffeechat.domain.repository.CoffeeChatRepository;
 import mju.capstone.ddingconnect.domain.coffeechat.dto.request.MatchingRequest;
 import mju.capstone.ddingconnect.domain.coffeechat.dto.response.MatchedCandidateDetailResponse;
 import mju.capstone.ddingconnect.domain.coffeechat.dto.response.MatchedCandidateResponse;
@@ -32,7 +29,6 @@ class CoffeeChatMatchingServiceImplTest {
 
     @Mock MatchingAlgorithmClient matchingAlgorithmClient;
     @Mock CandidateProfileAssembler candidateProfileAssembler;
-    @Mock CoffeeChatRepository coffeeChatRepository;
     @InjectMocks CoffeeChatMatchingServiceImpl matchingService;
 
     private Member requester;
@@ -81,38 +77,5 @@ class CoffeeChatMatchingServiceImplTest {
 
         assertThat(result.memberId()).isEqualTo(CANDIDATE_ID_1);
         verify(candidateProfileAssembler).assembleDetail(CANDIDATE_ID_1);
-    }
-
-    @Test
-    @DisplayName("getMyActivity - 신청자=본인 & status=ACCEPTED 커피챗의 수신자를 상세 DTO 로 조립한다")
-    void getMyActivityReturnsAcceptedReceiverDetails() {
-        Member candidate1 = Member.builder().id(CANDIDATE_ID_1).build();
-        Member candidate2 = Member.builder().id(CANDIDATE_ID_2).build();
-        CoffeeChat chat1 = CoffeeChat.builder().requester(requester).receiver(candidate1)
-                .status(CoffeeChatStatus.ACCEPTED).build();
-        CoffeeChat chat2 = CoffeeChat.builder().requester(requester).receiver(candidate2)
-                .status(CoffeeChatStatus.ACCEPTED).build();
-        when(coffeeChatRepository.findByRequesterIdAndStatus(REQUESTER_ID, CoffeeChatStatus.ACCEPTED))
-                .thenReturn(List.of(chat1, chat2));
-        when(candidateProfileAssembler.assembleDetail(CANDIDATE_ID_1))
-                .thenReturn(candidateDetail(CANDIDATE_ID_1));
-        when(candidateProfileAssembler.assembleDetail(CANDIDATE_ID_2))
-                .thenReturn(candidateDetail(CANDIDATE_ID_2));
-
-        List<MatchedCandidateDetailResponse> result = matchingService.getMyActivity(requester);
-
-        assertThat(result).extracting(MatchedCandidateDetailResponse::memberId)
-                .containsExactly(CANDIDATE_ID_1, CANDIDATE_ID_2);
-    }
-
-    @Test
-    @DisplayName("getMyActivity - 수락된 커피챗이 없으면 빈 리스트를 반환한다")
-    void getMyActivityReturnsEmptyWhenNone() {
-        when(coffeeChatRepository.findByRequesterIdAndStatus(REQUESTER_ID, CoffeeChatStatus.ACCEPTED))
-                .thenReturn(List.of());
-
-        List<MatchedCandidateDetailResponse> result = matchingService.getMyActivity(requester);
-
-        assertThat(result).isEmpty();
     }
 }

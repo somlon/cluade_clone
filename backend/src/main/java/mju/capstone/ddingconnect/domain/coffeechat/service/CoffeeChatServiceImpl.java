@@ -243,8 +243,9 @@ public class CoffeeChatServiceImpl implements CoffeeChatService {
     }
 
     /**
-     * 나의 활동 페이지 — 본인이 요청자/수신자로 참여한 모든 커피챗을 합쳐 상대방 카드 리스트로 반환.
+     * 나의 활동 페이지 — 본인이 요청자/수신자로 참여한 커피챗 중 ACCEPTED 만 합쳐 상대방 카드 리스트로 반환.
      * - sent(findByRequesterId) + received(findByReceiverId) 합쳐 coffeeChat.id 기준 중복 제거
+     * - status != ACCEPTED 인 row 는 스킵 (PENDING/REJECTED 는 마이페이지 활동 통계 카운트 기준과 동일하게 제외)
      * - 카드당 상대방(본인 아닌 쪽) 의 닉네임/학과 + 관심직무(TargetJob)/기술스택(TechStack) 을 묶어 응답
      */
     @Override
@@ -257,6 +258,7 @@ public class CoffeeChatServiceImpl implements CoffeeChatService {
         Set<Long> seen = new HashSet<>();
         List<CoffeeChatPartnerResponse> result = new ArrayList<>();
         for (CoffeeChat cc : concat(sent, received)) {
+            if (cc.getStatus() != CoffeeChatStatus.ACCEPTED) continue;
             if (!seen.add(cc.getId())) continue;
             Member partner = cc.getRequester().getId().equals(memberId)
                     ? cc.getReceiver()

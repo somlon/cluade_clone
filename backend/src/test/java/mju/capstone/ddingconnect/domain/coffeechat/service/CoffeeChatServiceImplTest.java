@@ -369,14 +369,14 @@ class CoffeeChatServiceImplTest {
     }
 
     @Test
-    @DisplayName("getMyActivities - 요청자/수신자 양방향 합치고 중복 제거 + 상대방 정보로 카드 조립")
+    @DisplayName("getMyActivities - 요청자/수신자 양방향 합치고 중복 제거 + 상대방 정보로 카드 조립 (ACCEPTED 만)")
     void getMyActivitiesAssemblesPartnerCards() {
         Long memberId = studentRequester.getId();
 
         // sent: studentRequester → graduateReceiver
         CoffeeChat sent = CoffeeChat.builder().id(101L)
                 .requester(studentRequester).receiver(graduateReceiver)
-                .status(mju.capstone.ddingconnect.domain.coffeechat.domain.CoffeeChatStatus.PENDING)
+                .status(mju.capstone.ddingconnect.domain.coffeechat.domain.CoffeeChatStatus.ACCEPTED)
                 .build();
         // received: other → studentRequester
         CoffeeChat received = CoffeeChat.builder().id(102L)
@@ -418,7 +418,7 @@ class CoffeeChatServiceImplTest {
         Long memberId = studentRequester.getId();
         CoffeeChat dup = CoffeeChat.builder().id(200L)
                 .requester(studentRequester).receiver(graduateReceiver)
-                .status(mju.capstone.ddingconnect.domain.coffeechat.domain.CoffeeChatStatus.PENDING)
+                .status(mju.capstone.ddingconnect.domain.coffeechat.domain.CoffeeChatStatus.ACCEPTED)
                 .build();
 
         when(coffeeChatRepository.findByRequesterId(memberId)).thenReturn(List.of(dup));
@@ -430,5 +430,36 @@ class CoffeeChatServiceImplTest {
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).coffeeChatId()).isEqualTo(200L);
+    }
+
+    @Test
+    @DisplayName("getMyActivities - PENDING/REJECTED 는 제외하고 ACCEPTED 만 응답")
+    void getMyActivitiesFiltersAcceptedOnly() {
+        Long memberId = studentRequester.getId();
+
+        CoffeeChat pending = CoffeeChat.builder().id(301L)
+                .requester(studentRequester).receiver(graduateReceiver)
+                .status(mju.capstone.ddingconnect.domain.coffeechat.domain.CoffeeChatStatus.PENDING)
+                .build();
+        CoffeeChat rejected = CoffeeChat.builder().id(302L)
+                .requester(studentRequester).receiver(other)
+                .status(mju.capstone.ddingconnect.domain.coffeechat.domain.CoffeeChatStatus.REJECTED)
+                .build();
+        CoffeeChat accepted = CoffeeChat.builder().id(303L)
+                .requester(other).receiver(studentRequester)
+                .status(mju.capstone.ddingconnect.domain.coffeechat.domain.CoffeeChatStatus.ACCEPTED)
+                .build();
+
+        when(coffeeChatRepository.findByRequesterId(memberId)).thenReturn(List.of(pending, rejected));
+        when(coffeeChatRepository.findByReceiverId(memberId)).thenReturn(List.of(accepted));
+        when(targetJobRepository.findByMemberId(other.getId())).thenReturn(List.of());
+        when(techStackRepository.findByMemberId(other.getId())).thenReturn(List.of());
+
+        var result = coffeeChatService.getMyActivities(studentRequester);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).coffeeChatId()).isEqualTo(303L);
+        assertThat(result.get(0).status())
+                .isEqualTo(mju.capstone.ddingconnect.domain.coffeechat.domain.CoffeeChatStatus.ACCEPTED);
     }
 }
