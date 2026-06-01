@@ -11,12 +11,14 @@ import java.util.List;
 public interface RoadmapService {
 
     /**
-     * 입력 폼 6필드로 데이터 파트 AI 를 호출해 로드맵을 생성·저장한다.
+     * 입력 폼 6필드로 데이터 파트 AI 를 호출해 로드맵을 생성·저장한 뒤,
+     * "생성된 로드맵" 카드 목록을 그대로 반환한다(방금 만든 로드맵이 최신순 정렬에 의해 최상단).
+     * 프론트는 이 응답 한 번으로 생성 직후 화면(입력 폼 + 카드 리스트)을 렌더할 수 있다.
      *
-     * @param memberId 로드맵을 생성할 회원 ID (URL 로 전달)
+     * @param memberId 로드맵을 생성할 회원 ID
      * @param request  로드맵 입력 폼 6필드
      */
-    RoadmapResponse create(Long memberId, CreateRoadmapRequest request);
+    List<RoadmapListResponse> create(Long memberId, CreateRoadmapRequest request);
 
     /**
      * 로그인 회원이 생성한 로드맵 목록을 최신순으로 조회한다.

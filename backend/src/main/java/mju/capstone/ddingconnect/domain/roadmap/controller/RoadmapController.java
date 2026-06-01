@@ -25,9 +25,10 @@ public class RoadmapController implements RoadmapSwagger {
 
     private final RoadmapService roadmapService;
 
-    /** 로드맵 생성 (Create) — 로그인 회원과 입력 폼 6필드로 데이터 파트 AI 호출 후 저장 */
+    /** 로드맵 생성 (Create) — 로그인 회원과 입력 폼 6필드로 데이터 파트 AI 호출 후 저장.
+     *  응답으로 "생성된 로드맵" 카드 목록(방금 만든 항목 포함, 최신순)을 그대로 반환해 프론트가 단일 호출로 화면을 렌더한다. */
     @PostMapping
-    public ApiResponse<RoadmapResponse> createRoadmap(
+    public ApiResponse<List<RoadmapListResponse>> createRoadmap(
             @Parameter(hidden = true) @LoginMember Member member,
             @RequestBody CreateRoadmapRequest request) {
         return ApiResponse.onSuccess(roadmapService.create(member.getId(), request));

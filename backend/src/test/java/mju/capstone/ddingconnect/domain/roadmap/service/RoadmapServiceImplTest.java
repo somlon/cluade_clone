@@ -80,18 +80,23 @@ class RoadmapServiceImplTest {
     }
 
     @Test
-    @DisplayName("create - 데이터 파트 AI 를 호출해 응답을 저장하고 본인에게 RoadmapAlarm 1건 발행한다")
+    @DisplayName("create - AI 호출 후 RoadmapAlarm 1건 발행하고, 본인 카드 목록(최신순, 방금 만든 항목 포함)을 반환한다")
     void createCallsAiClientAndPublishesAlarm() {
         CreateRoadmapRequest req = sampleRequest();
         when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(author));
         when(roadmapAiClient.generate(req, MEMBER_ID)).thenReturn(GENERATED_CONTENT);
         when(roadmapRepository.save(any(Roadmap.class))).thenReturn(roadmap);
         when(roadmapPdfRenderer.render(GENERATED_CONTENT)).thenReturn(FAKE_PDF);
+        // 생성 직후 재조회 — 방금 만든 항목이 최신순 정렬에 의해 최상단에 들어간 상태를 시뮬레이션
+        when(roadmapRepository.findByMemberIdOrderByCreatedAtDesc(MEMBER_ID))
+                .thenReturn(List.of(roadmap));
 
-        RoadmapResponse response = roadmapService.create(MEMBER_ID, req);
+        List<RoadmapListResponse> response = roadmapService.create(MEMBER_ID, req);
 
-        assertThat(response.id()).isEqualTo(ROADMAP_ID);
-        assertThat(response.content()).isEqualTo(GENERATED_CONTENT);
+        // 단일 호출로 카드 목록을 받아 사진 화면(취업로드맵 최종 생성 결과)을 렌더할 수 있다
+        assertThat(response).hasSize(1);
+        assertThat(response.get(0).id()).isEqualTo(ROADMAP_ID);
+        assertThat(response.get(0).title()).isEqualTo("백엔드 개발자 로드맵");
         verify(roadmapAiClient).generate(req, MEMBER_ID);
 
         // 저장된 Roadmap.content 는 요청값이 아닌 데이터 파트 AI 응답값이어야 한다

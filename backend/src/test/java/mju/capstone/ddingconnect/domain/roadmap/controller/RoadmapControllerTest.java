@@ -58,19 +58,25 @@ class RoadmapControllerTest {
     void tearDown() { WithMockLoginMember.clear(); }
 
     @Test
-    @DisplayName("POST /api/v1/roadmaps - 입력 폼으로 로드맵 생성 (로그인 회원 식별)")
+    @DisplayName("POST /api/v1/roadmaps - 입력 폼으로 로드맵 생성 후 카드 목록(최신순, 방금 만든 항목 최상단)을 반환")
     void createRoadmap() throws Exception {
         CreateRoadmapRequest req = new CreateRoadmapRequest(3, 4.0, "응용소프트웨어학과",
                 TargetJobCategory.BACKEND, List.of(TechStackName.JAVA, TechStackName.SPRING), "카카오");
         given(roadmapService.create(eq(WithMockLoginMember.STUDENT_ID), any()))
-                .willReturn(new RoadmapResponse(1L, MEMBER_ID, GENERATED_CONTENT, CREATED_AT));
+                .willReturn(List.of(
+                        new RoadmapListResponse(3L, "백엔드 개발자 로드맵", CREATED_AT.plusSeconds(1)),
+                        new RoadmapListResponse(2L, "이전 로드맵", CREATED_AT)));
 
         mockMvc.perform(post(BASE_URL)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result.id").value(1L))
-                .andExpect(jsonPath("$.result.content").value(GENERATED_CONTENT));
+                .andExpect(jsonPath("$.result").isArray())
+                .andExpect(jsonPath("$.result[0].id").value(3L))
+                .andExpect(jsonPath("$.result[0].title").value("백엔드 개발자 로드맵"))
+                .andExpect(jsonPath("$.result[0].createdAt").exists())
+                .andExpect(jsonPath("$.result[0].content").doesNotExist())
+                .andExpect(jsonPath("$.result[1].id").value(2L));
 
         verify(roadmapService).create(eq(WithMockLoginMember.STUDENT_ID), any(CreateRoadmapRequest.class));
     }

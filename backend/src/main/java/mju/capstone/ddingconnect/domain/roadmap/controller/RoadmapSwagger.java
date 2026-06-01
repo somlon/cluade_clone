@@ -23,11 +23,13 @@ public interface RoadmapSwagger {
     @Operation(
             summary = "로드맵 생성",
             description = "입력 폼 6필드를 받아 데이터 파트 AI 로 로드맵을 생성·저장합니다. " +
-                    "회원은 JWT 로그인 정보(@LoginMember)로 식별합니다. " +
-                    "응답으로 받은 로드맵 ID 로 상세 조회(GET /api/v1/roadmaps/{roadmapId})를 호출하면 생성 결과를 볼 수 있습니다."
+                    "회원은 JWT 로그인 정보(@LoginMember)로 식별합니다.\n\n" +
+                    "응답은 **\"생성된 로드맵\" 카드 목록**(`id` / `title` / `createdAt` 3 필드, 최신순)으로, " +
+                    "방금 만든 로드맵이 최상단에 포함됩니다 — 프론트는 단일 호출로 \"취업로드맵 최종 생성 결과\" 화면을 렌더할 수 있습니다.\n\n" +
+                    "방금 만든 로드맵의 전체 본문(`content`)이 필요하면 카드의 `id` 로 단건 조회(`GET /api/v1/roadmaps/{roadmapId}`)를 호출하세요."
     )
     @PostMapping
-    ApiResponse<RoadmapResponse> createRoadmap(
+    ApiResponse<List<RoadmapListResponse>> createRoadmap(
             @Parameter(hidden = true) @LoginMember Member member,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                     description = "로드맵 생성 입력 폼 (6필드)",
