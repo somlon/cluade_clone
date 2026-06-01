@@ -32,12 +32,4 @@ public interface CoffeeChatMatchingService {
      * @return 후보 상세 응답
      */
     MatchedCandidateDetailResponse getCandidateDetail(Long memberId);
-
-    /**
-     * "나의 활동 › 커피챗" — 로그인 회원이 신청자이고 status=ACCEPTED 인 커피챗 상대 목록을 반환한다.
-     *
-     * @param member 로그인 회원(신청자)
-     * @return 수락된 커피챗 상대의 상세 응답 리스트, 없으면 빈 리스트
-     */
-    List<MatchedCandidateDetailResponse> getMyActivity(Member member);
 }

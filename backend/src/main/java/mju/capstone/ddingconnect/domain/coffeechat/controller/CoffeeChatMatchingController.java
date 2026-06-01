@@ -34,11 +34,4 @@ public class CoffeeChatMatchingController implements CoffeeChatMatchingSwagger {
             @PathVariable Long memberId) {
         return ApiResponse.onSuccess(coffeeChatMatchingService.getCandidateDetail(memberId));
     }
-
-    /** 나의 활동 › 커피챗 조회 */
-    @GetMapping("/my-activity")
-    public ApiResponse<List<MatchedCandidateDetailResponse>> getMyActivity(
-            @Parameter(hidden = true) @LoginMember Member member) {
-        return ApiResponse.onSuccess(coffeeChatMatchingService.getMyActivity(member));
-    }
 }

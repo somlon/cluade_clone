@@ -20,8 +20,6 @@ public interface CoffeeChatRepository extends JpaRepository<CoffeeChat, Long> {
 
     List<CoffeeChat> findByReceiverIdAndStatus(Long receiverId, CoffeeChatStatus status);
 
-    List<CoffeeChat> findByRequesterIdAndStatus(Long requesterId, CoffeeChatStatus status);
-
     boolean existsByRequesterIdAndReceiverIdAndStatusIn(
             Long requesterId, Long receiverId, Collection<CoffeeChatStatus> statuses);
 

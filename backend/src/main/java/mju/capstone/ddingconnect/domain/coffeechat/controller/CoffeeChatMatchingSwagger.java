@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-@Tag(name = "커피챗 매칭", description = "커피챗 매칭 컨트롤러 — 매칭 정보 입력으로 후보 추천/매칭 상대 상세 조회/나의 활동(수락된 커피챗) 조회 엔드포인트를 제공합니다.")
+@Tag(name = "커피챗 매칭", description = "커피챗 매칭 컨트롤러 — 매칭 정보 입력으로 후보 추천 / 매칭 상대 상세 조회 엔드포인트를 제공합니다.")
 public interface CoffeeChatMatchingSwagger {
 
     @Operation(
@@ -37,16 +37,5 @@ public interface CoffeeChatMatchingSwagger {
     ApiResponse<MatchedCandidateDetailResponse> getCandidateDetail(
             @Parameter(description = "상세를 조회할 후보 회원 ID")
             @PathVariable Long memberId);
-
-
-
-
-    @Operation(
-            summary = "나의 활동 › 커피챗 조회",
-            description = "로그인된 회원이 신청자이고 수락(ACCEPTED)된 커피챗 상대 목록을 상세 프로필로 조회합니다. 없으면 빈 리스트를 반환합니다."
-    )
-    @GetMapping("/my-activity")
-    ApiResponse<List<MatchedCandidateDetailResponse>> getMyActivity(
-            @Parameter(hidden = true) @LoginMember Member member);
 
 }
